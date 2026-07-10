@@ -1,0 +1,44 @@
+{
+  "name": "social-radar",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.109.1",
+    "@electric-sql/pglite": "^0.5.4",
+    "@neondatabase/serverless": "^1.1.0",
+    "date-fns": "^4.4.0",
+    "docx": "^9.7.1",
+    "drizzle-orm": "^0.45.2",
+    "exceljs": "^4.4.0",
+    "fast-xml-parser": "^5.9.3",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.23.0",
+    "marked": "^18.0.5",
+    "modern-screenshot": "^4.7.0",
+    "next": "16.2.10",
+    "pdfkit": "^0.19.1",
+    "pptxgenjs": "^4.0.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "recharts": "^3.9.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/pdfkit": "^0.17.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10",
+    "tailwindcss": "^4",
+    "tsx": "^4.22.5",
+    "typescript": "^5"
+  }
+}

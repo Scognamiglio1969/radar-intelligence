@@ -1,0 +1,342 @@
+import { NextResponse } from 'next/server';
+import PDFDocument from 'pdfkit';
+import { getCurrentProject } from '@/lib/data';
+import {
+  collectExportData, parseExportOptions, slugify, sourceLabel, todayStamp, briefToBlocks,
+} from '@/lib/export-data';
+import { SOURCE_META } from '@/lib/connectors';
+
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
+const ACCENT = '#0284c7';
+const TEXT = '#0f172a';
+const MUTED = '#64748b';
+const BORDER = '#e2e8f0';
+const PANEL = '#f1f5f9';
+const SENT: Record<string, string> = { positivo: '#16a34a', neutro: '#64748b', negativo: '#dc2626' };
+const ENTITY = ['#0284c7', '#7c3aed', '#059669', '#d97706', '#dc2626', '#db2777', '#0891b2'];
+
+// pdfkit con font standard (Helvetica) codifica in WinAnsi: rimuovo i caratteri
+// fuori da Latin-1 (emoji, CJK, arabo) per evitare crash di rendering.
+function sanitize(s: string | null | undefined): string {
+  return (s ?? '').replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+export async function GET(req: Request) {
+  const project = await getCurrentProject();
+  if (!project) return NextResponse.json({ error: 'nessun progetto' }, { status: 404 });
+  const { sections, days } = parseExportOptions(new URL(req.url));
+  const data = await collectExportData(project, days);
+  const has = (s: string) => sections.has(s as never);
+
+  const doc = new PDFDocument({
+    size: 'A4',
+    bufferPages: true,
+    margins: { top: 56, bottom: 64, left: 56, right: 56 },
+    info: { Title: `Radar — ${sanitize(project.name)}`, Author: 'Radar By Scognamiglio 2026' },
+  });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c) => chunks.push(c as Buffer));
+  const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
+
+  const M = doc.page.margins;
+  const left = M.left;
+  const right = doc.page.width - M.right;
+  const contentW = right - left;
+  const bottomLimit = () => doc.page.height - M.bottom;
+
+  const ensure = (h: number) => { if (doc.y + h > bottomLimit()) doc.addPage(); };
+
+  const heading = (text: string) => {
+    ensure(40);
+    doc.moveDown(0.6);
+    doc.fillColor(ACCENT).font('Helvetica-Bold').fontSize(15).text(sanitize(text), left, doc.y);
+    const y = doc.y + 3;
+    doc.moveTo(left, y).lineTo(right, y).lineWidth(1).strokeColor(BORDER).stroke();
+    doc.moveDown(0.5);
+    doc.fillColor(TEXT);
+  };
+
+  const para = (text: string, opts: { size?: number; color?: string; bold?: boolean; gap?: number } = {}) => {
+    ensure(20);
+    doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(opts.size ?? 10)
+      .fillColor(opts.color ?? TEXT).text(sanitize(text), left, doc.y, { width: contentW });
+    doc.moveDown(opts.gap ?? 0.3);
+  };
+
+  // Barre orizzontali con etichetta e valore
+  const hbars = (items: { label: string; value: number; color?: string; sub?: string }[], color = ACCENT) => {
+    const max = Math.max(1, ...items.map((i) => i.value));
+    for (const it of items) {
+      ensure(20);
+      const y = doc.y;
+      doc.font('Helvetica').fontSize(9).fillColor(TEXT).text(sanitize(it.label), left, y, { width: contentW * 0.42, ellipsis: true });
+      doc.fillColor(MUTED).text(`${it.value.toLocaleString('it-IT')}${it.sub ? ` · ${it.sub}` : ''}`, right - 120, y, { width: 120, align: 'right' });
+      const barY = y + 12;
+      const barW = contentW * 0.42;
+      const trackX = left + contentW * 0.44;
+      const trackW = contentW - contentW * 0.44 - 130;
+      doc.roundedRect(trackX, barY, trackW, 5, 2.5).fill(PANEL);
+      doc.roundedRect(trackX, barY, Math.max(2, (it.value / max) * trackW), 5, 2.5).fill(it.color ?? color);
+      doc.fillColor(TEXT);
+      doc.y = barY + 12;
+    }
+  };
+
+  // Tabella con intestazione
+  const table = (headers: string[], rows: string[][], widths: number[], align: ('left' | 'right' | 'center')[] = []) => {
+    const colX = (i: number) => left + widths.slice(0, i).reduce((s, w) => s + w * contentW, 0);
+    const drawHeader = () => {
+      ensure(24);
+      const y = doc.y;
+      doc.rect(left, y, contentW, 18).fill(PANEL);
+      doc.font('Helvetica-Bold').fontSize(8.5).fillColor(MUTED);
+      headers.forEach((h, i) => doc.text(sanitize(h).toUpperCase(), colX(i) + 4, y + 5, { width: widths[i] * contentW - 8, align: align[i] ?? 'left' }));
+      doc.y = y + 18;
+      doc.fillColor(TEXT);
+    };
+    drawHeader();
+    doc.font('Helvetica').fontSize(9);
+    for (const r of rows) {
+      const cellH = Math.max(...r.map((c, i) => doc.heightOfString(sanitize(c), { width: widths[i] * contentW - 8 }))) + 8;
+      if (doc.y + cellH > bottomLimit()) { doc.addPage(); drawHeader(); doc.font('Helvetica').fontSize(9); }
+      const y = doc.y;
+      r.forEach((c, i) => doc.fillColor(TEXT).text(sanitize(c), colX(i) + 4, y + 4, { width: widths[i] * contentW - 8, align: align[i] ?? 'left' }));
+      doc.moveTo(left, y + cellH).lineTo(right, y + cellH).lineWidth(0.5).strokeColor(BORDER).stroke();
+      doc.y = y + cellH;
+    }
+    doc.moveDown(0.5);
+  };
+
+  // Grafico a barre impilate (volume per fonte nel tempo)
+  const stackedBars = (rows: { day: string; source: string; n: number }[]) => {
+    const days = [...new Set(rows.map((r) => r.day))].sort();
+    const sources = [...new Set(rows.map((r) => r.source))];
+    const totals = days.map((d) => rows.filter((r) => r.day === d).reduce((s, r) => s + r.n, 0));
+    const max = Math.max(1, ...totals);
+    const chartH = 150;
+    ensure(chartH + 40);
+    const top = doc.y;
+    const baseY = top + chartH;
+    const slot = contentW / days.length;
+    const barW = Math.min(26, slot * 0.6);
+    days.forEach((d, di) => {
+      const cx = left + slot * di + slot / 2;
+      let y = baseY;
+      for (const src of sources) {
+        const n = rows.find((r) => r.day === d && r.source === src)?.n ?? 0;
+        if (!n) continue;
+        const h = (n / max) * chartH;
+        y -= h;
+        doc.rect(cx - barW / 2, y, barW, h).fill((SOURCE_META[src]?.color ?? '#94a3b8'));
+      }
+      if (di % Math.ceil(days.length / 8) === 0) {
+        doc.font('Helvetica').fontSize(6.5).fillColor(MUTED)
+          .text(d.slice(5), cx - slot / 2, baseY + 4, { width: slot, align: 'center' });
+      }
+    });
+    doc.moveTo(left, baseY).lineTo(right, baseY).lineWidth(0.5).strokeColor(BORDER).stroke();
+    doc.y = baseY + 16;
+    // Legenda
+    let lx = left;
+    doc.fontSize(7.5);
+    for (const src of sources) {
+      const label = sourceLabel(src);
+      const w = doc.widthOfString(label) + 16;
+      if (lx + w > right) { lx = left; doc.moveDown(0.8); }
+      doc.roundedRect(lx, doc.y + 1, 7, 7, 1.5).fill(SOURCE_META[src]?.color ?? '#94a3b8');
+      doc.fillColor(MUTED).text(label, lx + 10, doc.y, { continued: false });
+      lx += w + 4;
+      doc.y -= doc.currentLineHeight();
+    }
+    doc.moveDown(1.4);
+    doc.fillColor(TEXT);
+  };
+
+  // ---- Copertina ----
+  doc.moveDown(6);
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(ACCENT).text('RADAR', { align: 'center', characterSpacing: 3 });
+  doc.font('Helvetica').fontSize(9).fillColor(MUTED).text('BY SCOGNAMIGLIO 2026', { align: 'center', characterSpacing: 2 });
+  doc.moveDown(2);
+  doc.font('Helvetica-Bold').fontSize(30).fillColor(TEXT).text(sanitize(project.name), { align: 'center' });
+  doc.moveDown(0.5);
+  doc.font('Helvetica').fontSize(13).fillColor(MUTED).text('Report di media intelligence', { align: 'center' });
+  doc.moveDown(0.5);
+  doc.fontSize(10).text(new Date().toLocaleDateString('it-IT', { dateStyle: 'full' }), { align: 'center' });
+  doc.fontSize(9).text(`Dati degli ultimi ${days} giorni · Query: ${sanitize(project.keywords.join(', '))}`, { align: 'center' });
+  doc.addPage();
+
+  const kpi = data.dashboard.kpi;
+  const sentimentLabel = kpi.avgSentiment === null ? 'in attesa'
+    : kpi.avgSentiment > 0.15 ? 'positivo' : kpi.avgSentiment < -0.15 ? 'negativo' : 'neutro';
+
+  // ---- KPI ----
+  if (has('kpi')) {
+    heading('Sintesi');
+    const cards: [string, string][] = [
+      ['Mention (7 giorni)', kpi.total7.toLocaleString('it-IT')],
+      ['Sentiment medio', sentimentLabel],
+      ['Fonti attive', String(kpi.sources)],
+      ['Temi rilevati', String(data.dashboard.topTopics.length)],
+    ];
+    ensure(70);
+    const cw = (contentW - 24) / 4;
+    const y0 = doc.y;
+    cards.forEach(([label, value], i) => {
+      const x = left + i * (cw + 8);
+      doc.roundedRect(x, y0, cw, 60, 6).fillAndStroke(PANEL, BORDER);
+      doc.font('Helvetica').fontSize(7.5).fillColor(MUTED).text(label.toUpperCase(), x + 8, y0 + 10, { width: cw - 16 });
+      doc.font('Helvetica-Bold').fontSize(18).fillColor(TEXT).text(value, x + 8, y0 + 26, { width: cw - 16 });
+    });
+    doc.y = y0 + 72;
+  }
+
+  // ---- Trend ----
+  if (has('trends') && data.trends.length) {
+    heading('Trend emergenti (ultime 24 ore)');
+    for (const t of data.trends.slice(0, 6)) {
+      para(`x${t.score.toFixed(0)}  ${t.topic}  —  ${t.n24} mention/24h`, { bold: true, size: 10, gap: 0.1 });
+      if (t.explanation) para(t.explanation, { size: 9, color: MUTED, gap: 0.4 });
+    }
+  }
+
+  // ---- Volume ----
+  if (has('volume') && data.dashboard.volumeByDay.length) {
+    heading('Volume per fonte');
+    stackedBars(data.dashboard.volumeByDay.map((r) => ({ ...r, n: Number(r.n) })));
+  }
+
+  // ---- Sentiment ----
+  if (has('sentiment') && data.dashboard.sentimentDist.length) {
+    heading('Sentiment');
+    const tot = data.dashboard.sentimentDist.reduce((s, r) => s + r.n, 0) || 1;
+    hbars(data.dashboard.sentimentDist.map((r) => ({
+      label: r.sentiment, value: r.n, color: SENT[r.sentiment] ?? MUTED,
+      sub: `${Math.round((r.n / tot) * 100)}%`,
+    })));
+  }
+
+  // ---- Temi ----
+  if (has('topics') && data.dashboard.topTopics.length) {
+    heading('Temi principali');
+    hbars(data.dashboard.topTopics.slice(0, 12).map((t) => ({ label: t.topic, value: Number(t.n) })));
+  }
+
+  // ---- Benchmark ----
+  if (has('benchmark') && data.benchmark.length) {
+    heading('Benchmark — share of voice');
+    const tot = data.benchmark.reduce((s, r) => s + r.total, 0) || 1;
+    table(
+      ['Entità', 'Mention', 'Share of voice', 'Sentiment'],
+      data.benchmark.map((r) => [
+        r.entity.name, String(r.total), `${((r.total / tot) * 100).toFixed(1)}%`,
+        r.avgSentiment === null ? '—' : r.avgSentiment.toFixed(2),
+      ]),
+      [0.4, 0.2, 0.22, 0.18], ['left', 'right', 'right', 'right'],
+    );
+  }
+
+  // ---- Audience ----
+  if (has('audience') && data.audience.communities.length) {
+    heading('Audience — dove si discute');
+    hbars(data.audience.communities.slice(0, 10).map((c) => ({
+      label: `${c.community ?? '—'} (${sourceLabel(c.source)})`, value: c.n,
+    })), '#7c3aed');
+    if (data.audience.languages.length) {
+      doc.moveDown(0.3);
+      para('Lingue: ' + data.audience.languages.map((l) => `${l.language.toUpperCase()} (${l.n})`).join('  ·  '), { size: 9, color: MUTED });
+    }
+  }
+
+  // ---- Contenuti top ----
+  if (has('content') && data.ratings.length) {
+    heading('Contenuti top per engagement');
+    table(
+      ['Contenuto', 'Fonte', 'Engagement', 'AI', 'Rischio'],
+      data.ratings.slice(0, 15).map((r) => [
+        (r.title || r.content).slice(0, 110), sourceLabel(r.source),
+        String(Math.round(r.engagementScore)), r.quality ? String(r.quality.score) : '—', r.quality?.risk ?? '—',
+      ]),
+      [0.46, 0.16, 0.16, 0.1, 0.12], ['left', 'left', 'right', 'right', 'left'],
+    );
+  }
+
+  // ---- Narrazioni ----
+  if (has('narratives') && data.narratives.length) {
+    heading('Narrazioni');
+    for (const n of data.narratives) {
+      para(`${n.title}  [${n.stance ?? 'neutra'}${n.coordinated ? ', coordinata' : ''}]  · ${n.mentionCount} post`, { bold: true, size: 10, gap: 0.1 });
+      if (n.description) para(n.description, { size: 9, color: MUTED, gap: 0.4 });
+    }
+  }
+
+  // ---- Timeline ----
+  if (has('timeline') && data.timeline.length) {
+    heading('Timeline del settore');
+    for (const e of data.timeline.slice(0, 25)) {
+      para(`${new Date(e.eventDate).toLocaleDateString('it-IT')} — ${e.title}${e.importance === 3 ? '  (svolta)' : ''}`, { bold: true, size: 9.5, gap: 0.1 });
+      if (e.description) para(e.description, { size: 9, color: MUTED, gap: 0.4 });
+    }
+  }
+
+  // ---- Alert ----
+  if (has('alerts') && data.alerts.length) {
+    heading('Alert recenti');
+    for (const a of data.alerts.slice(0, 12)) {
+      para(`[${new Date(a.createdAt).toLocaleDateString('it-IT')}] ${a.message}`, { size: 9.5, bold: true, gap: 0.1 });
+      const ex = (a.data as { explanation?: string } | null)?.explanation;
+      if (ex) para(ex, { size: 9, color: MUTED, gap: 0.4 });
+    }
+  }
+
+  // ---- Brief ----
+  if (has('brief') && data.briefs[0]) {
+    heading(`Daily brief — ${new Date(data.briefs[0].briefDate).toLocaleDateString('it-IT')}`);
+    for (const b of briefToBlocks(data.briefs[0].content)) {
+      if (b.type === 'h2') para(b.text, { bold: true, size: 11, color: ACCENT, gap: 0.2 });
+      else if (b.type === 'bullet') para(`•  ${b.text}`, { size: 9.5, gap: 0.2 });
+      else para(b.text, { size: 9.5, gap: 0.3 });
+    }
+  }
+
+  // ---- Elenco mention ----
+  if (has('mentions') && data.allMentions.length) {
+    heading(`Elenco mention (${Math.min(data.allMentions.length, 150)} più recenti)`);
+    table(
+      ['Data', 'Fonte', 'Titolo / testo', 'Sent.'],
+      data.allMentions.slice(0, 150).map((m) => {
+        const txt = sanitize(m.title ?? m.content);
+        return [
+          new Date(m.publishedAt).toLocaleDateString('it-IT'), sourceLabel(m.source),
+          txt || '[contenuto in lingua non latina — vedi originale]', m.sentiment ?? '—',
+        ];
+      }),
+      [0.13, 0.15, 0.58, 0.14], ['left', 'left', 'left', 'left'],
+    );
+  }
+
+  // ---- Piè di pagina con numeri di pagina ----
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(range.start + i);
+    // Azzerare il margine inferiore evita che il testo nel margine faccia
+    // credere a pdfkit di dover impaginare, generando pagine vuote.
+    doc.page.margins.bottom = 0;
+    const fy = doc.page.height - 40;
+    doc.font('Helvetica').fontSize(8).fillColor(MUTED);
+    doc.text(`Radar · By Scognamiglio 2026 — ${sanitize(project.name)}`, left, fy, { width: contentW * 0.7, lineBreak: false });
+    doc.text(`pag. ${i + 1} / ${range.count}`, right - 120, fy, { width: 120, align: 'right', lineBreak: false });
+  }
+
+  doc.end();
+  const buffer = await done;
+
+  const parts = [...sections].join('') === '' ? 'completo' : (sections.size >= 13 ? 'completo' : 'selezione');
+  return new NextResponse(new Uint8Array(buffer), {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="radar-${slugify(project.name)}-${parts}-${todayStamp()}.pdf"`,
+    },
+  });
+}

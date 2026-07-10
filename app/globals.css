@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0f1f;
+  --foreground: #e2e8f0;
+  --panel: #10172e;
+  --panel-2: #16203c;
+  --border: #1e2a4a;
+  --muted: #7c8cab;
+  --accent: #38bdf8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+::selection { background: #38bdf855; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+/* --- War Room --- */
+@keyframes tvfade {
+  from { opacity: 0; transform: translateY(28px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tvprogress { from { width: 0%; } to { width: 100%; } }
+@keyframes radarsweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.tv-slide { animation: tvfade 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.tv-stagger > * { animation: tvfade 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.tv-stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.tv-stagger > *:nth-child(2) { animation-delay: 0.15s; }
+.tv-stagger > *:nth-child(3) { animation-delay: 0.25s; }
+.tv-stagger > *:nth-child(4) { animation-delay: 0.35s; }
+.tv-stagger > *:nth-child(5) { animation-delay: 0.45s; }
+.tv-stagger > *:nth-child(6) { animation-delay: 0.55s; }
+
+/* Ingresso 3D delle card (prospettiva) */
+@keyframes tv3din {
+  from { opacity: 0; transform: perspective(900px) rotateX(18deg) translateY(50px) scale(0.94); }
+  to { opacity: 1; transform: perspective(900px) rotateX(0deg) translateY(0) scale(1); }
+}
+.tv-3d > * { animation: tv3din 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; transform-style: preserve-3d; }
+.tv-3d > *:nth-child(1) { animation-delay: 0.05s; }
+.tv-3d > *:nth-child(2) { animation-delay: 0.2s; }
+.tv-3d > *:nth-child(3) { animation-delay: 0.35s; }
+.tv-3d > *:nth-child(4) { animation-delay: 0.5s; }
+.tv-3d > *:nth-child(5) { animation-delay: 0.65s; }
+
+/* Fluttuazione continua delle card */
+@keyframes tvfloat {
+  0%, 100% { transform: perspective(900px) rotateX(1.5deg) rotateY(-1deg) translateY(0); }
+  50% { transform: perspective(900px) rotateX(-1.5deg) rotateY(1deg) translateY(-8px); }
+}
+.tv-float { animation: tvfloat 7s ease-in-out infinite; will-change: transform; }
+.tv-float:nth-child(2) { animation-delay: 1.2s; }
+.tv-float:nth-child(3) { animation-delay: 2.4s; }
+
+/* Riflesso che attraversa le card */
+@keyframes tvshine { from { transform: translateX(-120%) skewX(-18deg); } to { transform: translateX(240%) skewX(-18deg); } }
+.tv-shine { position: relative; overflow: hidden; }
+.tv-shine::after {
+  content: '';
+  position: absolute; top: 0; bottom: 0; width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(125, 211, 252, 0.09), transparent);
+  animation: tvshine 4.5s ease-in-out infinite;
+}
+
+/* Blip del radar */
+@keyframes tvblip {
+  0% { r: 5; opacity: 1; }
+  70% { r: 22; opacity: 0; }
+  100% { r: 22; opacity: 0; }
+}
+.tv-blip { animation: tvblip 2.2s ease-out infinite; transform-origin: center; }
+
+/* Pavimento prospettico */
+@keyframes tvgrid { from { background-position-y: 0; } to { background-position-y: 46px; } }
+.tv-floor {
+  position: absolute; left: -20%; right: -20%; bottom: -12%; height: 45%;
+  transform: perspective(500px) rotateX(62deg);
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.14) 1px, transparent 1px);
+  background-size: 46px 46px;
+  animation: tvgrid 2.6s linear infinite;
+  mask-image: linear-gradient(to top, black 30%, transparent 95%);
+}
+
+/* Ticker verticale (feed) e orizzontale (striscia temi) */
+@keyframes tvtickerY { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+.tv-ticker-y { animation: tvtickerY 26s linear infinite; }
+@keyframes tvtickerX { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.tv-ticker-x { animation: tvtickerX 30s linear infinite; }
+
+/* Aurora sullo sfondo */
+@keyframes tvaurora {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(6vw, -4vh) scale(1.15); }
+  66% { transform: translate(-5vw, 3vh) scale(0.9); }
+}
+.tv-aurora { animation: tvaurora 18s ease-in-out infinite; will-change: transform; }
+
+/* --- Timeline --- */
+@keyframes tlin {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+.tl-item { animation: tlin 0.5s ease-out both; }
+.tl-item:nth-child(1) { animation-delay: 0.05s; }
+.tl-item:nth-child(2) { animation-delay: 0.12s; }
+.tl-item:nth-child(3) { animation-delay: 0.19s; }
+.tl-item:nth-child(4) { animation-delay: 0.26s; }
+.tl-item:nth-child(5) { animation-delay: 0.33s; }
+.tl-item:nth-child(n+6) { animation-delay: 0.4s; }
+
+.brief-md h2 { font-size: 1rem; font-weight: 700; color: #bae6fd; margin: 1.1rem 0 0.4rem; }
+.brief-md h3 { font-size: 0.9rem; font-weight: 600; margin: 0.8rem 0 0.3rem; }
+.brief-md p { margin: 0.4rem 0; line-height: 1.55; }
+.brief-md ul { list-style: disc; padding-left: 1.25rem; margin: 0.4rem 0; }
+.brief-md li { margin: 0.25rem 0; line-height: 1.5; }
+.brief-md strong { color: #f1f5f9; }
