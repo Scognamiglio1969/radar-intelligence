@@ -16,22 +16,22 @@ export type CredField = { env: string; label: string; hint?: string; secret: boo
  */
 export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   reddit: [
-    { env: 'REDDIT_CLIENT_ID', label: 'Client ID', hint: 'app Reddit tipo "script", stringa sotto il nome', secret: true },
-    { env: 'REDDIT_CLIENT_SECRET', label: 'Client Secret', hint: 'campo "secret" dell’app', secret: true },
+    { env: 'REDDIT_CLIENT_ID', label: 'Client ID', hint: 'Reddit app of type "script", the string under the name', secret: true },
+    { env: 'REDDIT_CLIENT_SECRET', label: 'Client Secret', hint: 'the app’s "secret" field', secret: true },
   ],
   youtube: [
-    { env: 'YOUTUBE_API_KEY', label: 'API Key', hint: 'chiave gratuita da Google Cloud Console (YouTube Data API v3)', secret: true },
+    { env: 'YOUTUBE_API_KEY', label: 'API Key', hint: 'free key from Google Cloud Console (YouTube Data API v3)', secret: true },
   ],
   x: [
-    { env: 'X_BEARER_TOKEN', label: 'Bearer Token', hint: 'X API v2, piano Basic', secret: true },
+    { env: 'X_BEARER_TOKEN', label: 'Bearer Token', hint: 'X API v2, Basic plan', secret: true },
   ],
   instagram: [
-    { env: 'META_ACCESS_TOKEN', label: 'Meta Access Token', hint: 'App Meta + account Instagram Business', secret: true },
+    { env: 'META_ACCESS_TOKEN', label: 'Meta Access Token', hint: 'Meta app + Instagram Business account', secret: true },
     { env: 'INSTAGRAM_USER_ID', label: 'Instagram User ID', secret: false },
   ],
   facebook: [
-    { env: 'META_ACCESS_TOKEN', label: 'Meta Access Token', hint: 'Lo stesso token dell’app Meta', secret: true },
-    { env: 'FACEBOOK_PAGE_ID', label: 'ID Pagina Facebook', hint: 'una o più, separate da virgola', secret: false },
+    { env: 'META_ACCESS_TOKEN', label: 'Meta Access Token', hint: 'The same token as the Meta app', secret: true },
+    { env: 'FACEBOOK_PAGE_ID', label: 'Facebook Page ID', hint: 'one or more, comma-separated', secret: false },
   ],
   tiktok: [
     { env: 'TIKTOK_CLIENT_KEY', label: 'Client Key', hint: 'TikTok Research API', secret: true },
@@ -39,7 +39,7 @@ export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   ],
   linkedin: [
     { env: 'LINKEDIN_ACCESS_TOKEN', label: 'Access Token', hint: 'Community Management API', secret: true },
-    { env: 'LINKEDIN_ORG_ID', label: 'ID Organizzazione', secret: false },
+    { env: 'LINKEDIN_ORG_ID', label: 'Organization ID', secret: false },
   ],
   newsapi: [
     { env: 'NEWSAPI_KEY', label: 'API Key', hint: 'newsapi.org', secret: true },

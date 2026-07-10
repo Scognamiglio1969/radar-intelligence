@@ -27,7 +27,7 @@ export default async function TeamPage() {
     <>
       <PageHeader
         title="Team"
-        subtitle="Gestisci gli accessi. I membri con AI «in attesa» raccolgono dati ma non consumano API finché non li attivi (serve budget)."
+        subtitle="Manage access. Members with AI on “hold” collect data but don’t consume API until you enable them (requires budget)."
       />
       <TeamManager users={rows.map((r) => ({ ...r, projectCount: countByOwner.get(r.id) ?? 0 }))} />
     </>

@@ -4,30 +4,30 @@ import { claudeAvailable } from '@/lib/claude';
 import { getMeta } from '@/lib/db';
 import { GenerateMd } from '@/components/generate-md';
 
-export const metadata = { title: 'Cosa è cambiato' };
+export const metadata = { title: 'What changed' };
 
 export default async function ChangesPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const cached = await getMeta<string>(`compare:${project.id}:${new Date().toISOString().slice(0, 10)}`);
 
   return (
     <>
       <PageHeader
-        title="Cosa è cambiato"
-        subtitle="Confronto intelligente: gli ultimi 7 giorni contro i 7 precedenti, spiegato in italiano"
+        title="What changed"
+        subtitle="Smart comparison: the last 7 days vs the previous 7, explained in English"
       />
       {claudeAvailable() ? (
         <GenerateMd
           endpoint="/api/compare"
           responseKey="comparison"
-          buttonLabel="Genera il confronto settimanale"
-          busyLabel="Sto confrontando le due settimane…"
-          hint="Il confronto viene calcolato una volta al giorno (~2 centesimi); le richieste successive sono gratis."
+          buttonLabel="Generate the weekly comparison"
+          busyLabel="Comparing the two weeks…"
+          hint="The comparison is computed once a day (~2 cents); later requests are free."
           initial={cached ?? null}
         />
       ) : (
-        <EmptyState message="Serve la API key Claude per il confronto intelligente." />
+        <EmptyState message="You need the Claude API key for the smart comparison." />
       )}
     </>
   );

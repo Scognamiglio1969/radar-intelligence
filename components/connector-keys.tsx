@@ -34,7 +34,7 @@ export function ConnectorKeys({ connectorId, fields }: {
         }`}
       >
         {configured ? <Check className="size-3" /> : <KeyRound className="size-3" />}
-        {configured ? 'Chiavi impostate · modifica' : 'Inserisci chiavi API'}
+        {configured ? 'Keys set · edit' : 'Enter API keys'}
       </button>
 
       {open && (
@@ -58,28 +58,28 @@ export function ConnectorKeys({ connectorId, fields }: {
                 autoComplete="off"
                 spellCheck={false}
                 defaultValue={f.secret ? '' : (f.display ?? '')}
-                placeholder={f.secret ? (f.set ? `${f.display ?? 'impostato'} · lascia vuoto per non cambiare` : 'incolla il valore') : 'incolla il valore'}
+                placeholder={f.secret ? (f.set ? `${f.display ?? 'set'} · leave blank to keep` : 'paste the value') : 'paste the value'}
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-xs outline-none placeholder:text-slate-600 focus:border-sky-500/50"
               />
             </label>
           ))}
           <div className="flex items-center gap-2 pt-1">
             <SubmitButton
-              pendingLabel="Salvo…"
+              pendingLabel="Saving…"
               className="rounded-md bg-sky-500 px-3 py-1 text-xs font-semibold text-slate-950 transition hover:bg-sky-400"
             >
-              Salva chiavi
+              Save keys
             </SubmitButton>
             <button
               type="button"
               onClick={() => setOpen(false)}
               className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-500 transition hover:text-slate-300"
             >
-              <X className="size-3" /> Annulla
+              <X className="size-3" /> Cancel
             </button>
           </div>
           <p className="text-[10px] leading-relaxed text-slate-600">
-            Le chiavi sono salvate cifrate e valgono per tutto l’account. Non vengono mai mostrate in chiaro.
+            Keys are stored encrypted and apply to the whole account. They are never shown in clear text.
           </p>
         </form>
       )}

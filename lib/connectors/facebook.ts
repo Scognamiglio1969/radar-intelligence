@@ -40,7 +40,7 @@ export const facebook: Connector = {
   label: 'Facebook',
   tier: 'premium',
   enabled: () => Boolean(cfg('META_ACCESS_TOKEN') && cfg('FACEBOOK_PAGE_ID')),
-  disabledReason: 'Servono Meta Access Token e ID Pagina Facebook (Graph API): inseriscili qui',
+  disabledReason: 'Requires Meta Access Token and Facebook Page ID (Graph API): enter them here',
   async fetchMentions() {
     const pages = (cfg('FACEBOOK_PAGE_ID') ?? '').split(',').filter(Boolean).slice(0, 5);
     const results = await Promise.allSettled(pages.map(pagePosts));

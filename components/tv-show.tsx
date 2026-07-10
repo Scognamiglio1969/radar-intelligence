@@ -39,7 +39,7 @@ function CountUp({ value, duration = 1600 }: { value: number; duration?: number 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
-  return <>{n.toLocaleString('it-IT')}</>;
+  return <>{n.toLocaleString('en-US')}</>;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ function SentimentGauge({ score }: { score: number | null }) {
   const s = score ?? 0;
   const angle = mounted ? s * 80 : -80; // -1..1 → -80°..80°
   const color = s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
-  const label = score === null ? 'in analisi' : s > 0.15 ? 'positivo' : s < -0.15 ? 'negativo' : 'neutro';
+  const label = score === null ? 'analyzing' : s > 0.15 ? 'positive' : s < -0.15 ? 'negative' : 'neutral';
 
   return (
     <div className="flex flex-col items-center">
@@ -162,7 +162,7 @@ export function TvShow(props: Props) {
   }, [next, slide]);
 
   useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    const tick = () => setClock(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
@@ -200,7 +200,7 @@ export function TvShow(props: Props) {
         </div>
         <div className="ml-auto flex items-center gap-5">
           <span className="font-mono text-xl tabular-nums text-slate-300 lg:text-2xl">{clock}</span>
-          <button onClick={() => router.push('/')} aria-label="Esci"
+          <button onClick={() => router.push('/')} aria-label="Exit"
             className="rounded-full border border-[var(--border)] p-2 text-slate-500 transition hover:text-slate-200">
             <X className="size-4" />
           </button>
@@ -264,7 +264,7 @@ function buildSlides(p: Props): React.ReactNode[] {
     <div className="flex flex-1 flex-col justify-center">
       <div className="tv-3d grid gap-6 lg:grid-cols-3">
         <div className={`tv-float ${card} px-8 py-9`}>
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Mention · 7 giorni</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Mentions · 7 days</p>
           <p className="mt-4 bg-gradient-to-r from-sky-300 to-cyan-200 bg-clip-text text-6xl font-black tracking-tight text-transparent lg:text-8xl">
             <CountUp value={p.kpi.total7} />
           </p>
@@ -277,7 +277,7 @@ function buildSlides(p: Props): React.ReactNode[] {
           <SentimentGauge score={p.kpi.avgSentiment} />
         </div>
         <div className={`tv-float ${card} px-8 py-9`}>
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Fonti attive</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Active sources</p>
           <p className="mt-4 bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-6xl font-black text-transparent lg:text-8xl">
             <CountUp value={p.kpi.sources} duration={2200} />
           </p>
@@ -295,7 +295,7 @@ function buildSlides(p: Props): React.ReactNode[] {
   if (p.trends.length > 0) {
     slides.push(
       <div className="flex min-h-0 flex-1 flex-col">
-        <SlideTitle icon={<Flame className="size-7 text-orange-400" />}>Radar — trend emergenti</SlideTitle>
+        <SlideTitle icon={<Flame className="size-7 text-orange-400" />}>Radar — emerging trends</SlideTitle>
         <div className="grid min-h-0 flex-1 items-center gap-8 lg:grid-cols-5">
           <div className="hidden min-h-0 lg:col-span-3 lg:block"><RadarScreen trends={p.trends} /></div>
           <div className="tv-3d flex flex-col gap-4 lg:col-span-2">
@@ -323,14 +323,14 @@ function buildSlides(p: Props): React.ReactNode[] {
   if (p.volumeByDay.length > 0) {
     slides.push(
       <div className="flex min-h-0 flex-1 flex-col">
-        <SlideTitle>Volume e sentiment</SlideTitle>
+        <SlideTitle>Volume and sentiment</SlideTitle>
         <div className="tv-3d grid min-h-0 flex-1 gap-6 lg:grid-cols-3">
           <div className={`${card} flex min-h-0 flex-col px-6 py-5 lg:col-span-2`}>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Mention per fonte · 14 giorni</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Mentions by source · 14 days</p>
             <div className="min-h-0 flex-1"><VolumeChart data={p.volumeByDay} /></div>
           </div>
           <div className={`${card} flex min-h-0 flex-col px-6 py-5`}>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Sentiment · 7 giorni</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Sentiment · 7 days</p>
             <div className="min-h-0 flex-1">
               {p.sentimentDist.length > 0 && <SentimentPie data={p.sentimentDist} />}
             </div>
@@ -344,7 +344,7 @@ function buildSlides(p: Props): React.ReactNode[] {
   if (p.narratives.length > 0 || p.alerts.length > 0) {
     slides.push(
       <div className="flex flex-1 flex-col">
-        <SlideTitle icon={<GitBranch className="size-7 text-sky-400" />}>Narrazioni e segnali</SlideTitle>
+        <SlideTitle icon={<GitBranch className="size-7 text-sky-400" />}>Narratives and signals</SlideTitle>
         <div className="tv-3d flex flex-1 flex-col justify-center gap-4">
           {p.alerts.slice(0, 2).map((a, i) => (
             <div key={`a${i}`} className="tv-shine flex items-center gap-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-6 py-4">
@@ -378,7 +378,7 @@ function buildSlides(p: Props): React.ReactNode[] {
     const feed = [...p.latest, ...p.latest];
     slides.push(
       <div className="flex min-h-0 flex-1 flex-col">
-        <SlideTitle>Ultime voci</SlideTitle>
+        <SlideTitle>Latest voices</SlideTitle>
         <div className="relative min-h-0 flex-1 overflow-hidden"
           style={{ maskImage: 'linear-gradient(to bottom, transparent, black 8%, black 88%, transparent)' }}>
           <div className="tv-ticker-y flex flex-col gap-4">
@@ -393,7 +393,7 @@ function buildSlides(p: Props): React.ReactNode[] {
                     </span>
                     {m.community && <span className="text-xs text-slate-600">{m.community}</span>}
                     {m.sentiment && (
-                      <span className={`ml-auto text-xs ${m.sentiment === 'positivo' ? 'text-emerald-400' : m.sentiment === 'negativo' ? 'text-red-400' : 'text-slate-500'}`}>
+                      <span className={`ml-auto text-xs ${m.sentiment === 'positive' ? 'text-emerald-400' : m.sentiment === 'negative' ? 'text-red-400' : 'text-slate-500'}`}>
                         ● {m.sentiment}
                       </span>
                     )}

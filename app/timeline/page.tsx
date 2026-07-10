@@ -8,14 +8,14 @@ export const metadata = { title: 'Timeline' };
 
 export default async function TimelinePage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const events = await getTimeline(project.id);
 
   return (
     <>
       <PageHeader
-        title="Timeline del settore"
-        subtitle="La memoria storica del monitoraggio: gli eventi salienti, estratti ogni giorno dall'AI. Cresce da sola nel tempo."
+        title="Sector timeline"
+        subtitle="The historical memory of your monitoring: salient events, extracted daily by AI. It grows on its own over time."
       />
       <TimelineView
         events={events.map((e) => ({

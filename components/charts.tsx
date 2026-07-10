@@ -41,7 +41,7 @@ export function VolumeChart({ data }: { data: { day: string; source: string; n: 
 }
 
 const SENTIMENT_COLORS: Record<string, string> = {
-  positivo: '#34d399', neutro: '#94a3b8', negativo: '#f87171', 'in attesa': '#475569',
+  positive: '#34d399', neutral: '#94a3b8', negative: '#f87171', 'analyzing': '#475569',
 };
 
 export function SentimentPie({ data }: { data: { sentiment: string; n: number }[] }) {

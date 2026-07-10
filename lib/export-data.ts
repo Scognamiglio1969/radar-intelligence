@@ -15,19 +15,19 @@ export type Project = typeof projects.$inferSelect;
 
 // Sezioni esportabili: id stabile + etichetta mostrata nel configuratore.
 export const EXPORT_SECTIONS = [
-  ['kpi', 'Sintesi (KPI)'],
-  ['trends', 'Trend emergenti'],
-  ['volume', 'Volume per fonte'],
+  ['kpi', 'Summary (KPIs)'],
+  ['trends', 'Emerging trends'],
+  ['volume', 'Volume by source'],
   ['sentiment', 'Sentiment'],
-  ['topics', 'Temi principali'],
+  ['topics', 'Top topics'],
   ['benchmark', 'Benchmark'],
   ['audience', 'Audience'],
-  ['content', 'Contenuti top'],
-  ['narratives', 'Narrazioni'],
-  ['timeline', 'Timeline eventi'],
-  ['alerts', 'Alert'],
+  ['content', 'Top content'],
+  ['narratives', 'Narratives'],
+  ['timeline', 'Event timeline'],
+  ['alerts', 'Alerts'],
   ['brief', 'Daily brief'],
-  ['mentions', 'Elenco mention'],
+  ['mentions', 'Mentions list'],
 ] as const;
 
 export type SectionId = (typeof EXPORT_SECTIONS)[number][0];

@@ -17,7 +17,7 @@ export function TopicSentimentBubble({ data }: { data: TopicPoint[] }) {
       <ScatterChart margin={{ top: 20, right: 30, bottom: 30, left: 10 }}>
         <XAxis type="number" dataKey="sentiment" name="Sentiment" domain={[-1, 1]}
           tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
-          label={{ value: '← negativo    Sentiment    positivo →', position: 'bottom', fill: '#64748b', fontSize: 11 }} />
+          label={{ value: '← negative    Sentiment    positive →', position: 'bottom', fill: '#64748b', fontSize: 11 }} />
         <YAxis type="number" dataKey="growth" name="Peso relativo" unit="%"
           domain={['dataMin', 'dataMax']}
           tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
@@ -78,7 +78,7 @@ export function Heatmap({ grid }: { grid: number[][] }) {
             </div>
           </div>
         ))}
-        <p className="mt-2 pl-10 text-[10px] text-slate-600">Ora locale (Italia). Colore = intensità delle conversazioni.</p>
+        <p className="mt-2 pl-10 text-[10px] text-slate-600">Local time. Color = intensity of conversations.</p>
       </div>
     </div>
   );
@@ -123,7 +123,7 @@ export function SentimentWaterfall({ steps }: { steps: WFStep[] }) {
 
 // ── 4. Cluster conversazionali (treemap) ──────────────────────────────────
 type Cluster = { family: string; share: number; sentiment: string; example: string };
-const cSent: Record<string, string> = { positivo: '#059669', neutro: '#475569', negativo: '#b91c1c' };
+const cSent: Record<string, string> = { positive: '#059669', neutral: '#475569', negative: '#b91c1c' };
 
 export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
   const data = clusters.map((c) => ({ name: c.family, size: Math.max(1, c.share), sentiment: c.sentiment }));
@@ -138,7 +138,7 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
 function TreemapCell(props: {
   x?: number; y?: number; width?: number; height?: number; name?: string; sentiment?: string; size?: number;
 }) {
-  const { x = 0, y = 0, width = 0, height = 0, name = '', sentiment = 'neutro', size = 0 } = props;
+  const { x = 0, y = 0, width = 0, height = 0, name = '', sentiment = 'neutral', size = 0 } = props;
   if (width < 2 || height < 2) return null;
   return (
     <g>

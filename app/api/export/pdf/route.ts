@@ -14,7 +14,7 @@ const TEXT = '#0f172a';
 const MUTED = '#64748b';
 const BORDER = '#e2e8f0';
 const PANEL = '#f1f5f9';
-const SENT: Record<string, string> = { positivo: '#16a34a', neutro: '#64748b', negativo: '#dc2626' };
+const SENT: Record<string, string> = { positive: '#16a34a', neutral: '#64748b', negative: '#dc2626' };
 const ENTITY = ['#0284c7', '#7c3aed', '#059669', '#d97706', '#dc2626', '#db2777', '#0891b2'];
 
 // pdfkit con font standard (Helvetica) codifica in WinAnsi: rimuovo i caratteri
@@ -25,7 +25,7 @@ function sanitize(s: string | null | undefined): string {
 
 export async function GET(req: Request) {
   const project = await getCurrentProject();
-  if (!project) return NextResponse.json({ error: 'nessun progetto' }, { status: 404 });
+  if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
   const { sections, days } = parseExportOptions(new URL(req.url));
   const data = await collectExportData(project, days);
   const has = (s: string) => sections.has(s as never);
@@ -72,7 +72,7 @@ export async function GET(req: Request) {
       ensure(20);
       const y = doc.y;
       doc.font('Helvetica').fontSize(9).fillColor(TEXT).text(sanitize(it.label), left, y, { width: contentW * 0.42, ellipsis: true });
-      doc.fillColor(MUTED).text(`${it.value.toLocaleString('it-IT')}${it.sub ? ` · ${it.sub}` : ''}`, right - 120, y, { width: 120, align: 'right' });
+      doc.fillColor(MUTED).text(`${it.value.toLocaleString('en-US')}${it.sub ? ` · ${it.sub}` : ''}`, right - 120, y, { width: 120, align: 'right' });
       const barY = y + 12;
       const barW = contentW * 0.42;
       const trackX = left + contentW * 0.44;
@@ -161,24 +161,24 @@ export async function GET(req: Request) {
   doc.moveDown(2);
   doc.font('Helvetica-Bold').fontSize(30).fillColor(TEXT).text(sanitize(project.name), { align: 'center' });
   doc.moveDown(0.5);
-  doc.font('Helvetica').fontSize(13).fillColor(MUTED).text('Report di media intelligence', { align: 'center' });
+  doc.font('Helvetica').fontSize(13).fillColor(MUTED).text('Media intelligence report', { align: 'center' });
   doc.moveDown(0.5);
-  doc.fontSize(10).text(new Date().toLocaleDateString('it-IT', { dateStyle: 'full' }), { align: 'center' });
-  doc.fontSize(9).text(`Dati degli ultimi ${days} giorni · Query: ${sanitize(project.keywords.join(', '))}`, { align: 'center' });
+  doc.fontSize(10).text(new Date().toLocaleDateString('en-US', { dateStyle: 'full' }), { align: 'center' });
+  doc.fontSize(9).text(`Data from the last ${days} days · Query: ${sanitize(project.keywords.join(', '))}`, { align: 'center' });
   doc.addPage();
 
   const kpi = data.dashboard.kpi;
-  const sentimentLabel = kpi.avgSentiment === null ? 'in attesa'
-    : kpi.avgSentiment > 0.15 ? 'positivo' : kpi.avgSentiment < -0.15 ? 'negativo' : 'neutro';
+  const sentimentLabel = kpi.avgSentiment === null ? 'analyzing'
+    : kpi.avgSentiment > 0.15 ? 'positive' : kpi.avgSentiment < -0.15 ? 'negative' : 'neutral';
 
   // ---- KPI ----
   if (has('kpi')) {
-    heading('Sintesi');
+    heading('Summary');
     const cards: [string, string][] = [
-      ['Mention (7 giorni)', kpi.total7.toLocaleString('it-IT')],
-      ['Sentiment medio', sentimentLabel],
-      ['Fonti attive', String(kpi.sources)],
-      ['Temi rilevati', String(data.dashboard.topTopics.length)],
+      ['Mentions (7 days)', kpi.total7.toLocaleString('en-US')],
+      ['Avg sentiment', sentimentLabel],
+      ['Active sources', String(kpi.sources)],
+      ['Topics detected', String(data.dashboard.topTopics.length)],
     ];
     ensure(70);
     const cw = (contentW - 24) / 4;
@@ -194,16 +194,16 @@ export async function GET(req: Request) {
 
   // ---- Trend ----
   if (has('trends') && data.trends.length) {
-    heading('Trend emergenti (ultime 24 ore)');
+    heading('Emerging trends (ultime 24 ore)');
     for (const t of data.trends.slice(0, 6)) {
-      para(`x${t.score.toFixed(0)}  ${t.topic}  —  ${t.n24} mention/24h`, { bold: true, size: 10, gap: 0.1 });
+      para(`x${t.score.toFixed(0)}  ${t.topic}  —  ${t.n24} mentions/24h`, { bold: true, size: 10, gap: 0.1 });
       if (t.explanation) para(t.explanation, { size: 9, color: MUTED, gap: 0.4 });
     }
   }
 
   // ---- Volume ----
   if (has('volume') && data.dashboard.volumeByDay.length) {
-    heading('Volume per fonte');
+    heading('Volume by source');
     stackedBars(data.dashboard.volumeByDay.map((r) => ({ ...r, n: Number(r.n) })));
   }
 
@@ -219,7 +219,7 @@ export async function GET(req: Request) {
 
   // ---- Temi ----
   if (has('topics') && data.dashboard.topTopics.length) {
-    heading('Temi principali');
+    heading('Top topics');
     hbars(data.dashboard.topTopics.slice(0, 12).map((t) => ({ label: t.topic, value: Number(t.n) })));
   }
 
@@ -228,7 +228,7 @@ export async function GET(req: Request) {
     heading('Benchmark — share of voice');
     const tot = data.benchmark.reduce((s, r) => s + r.total, 0) || 1;
     table(
-      ['Entità', 'Mention', 'Share of voice', 'Sentiment'],
+      ['Entity', 'Mentions', 'Share of voice', 'Sentiment'],
       data.benchmark.map((r) => [
         r.entity.name, String(r.total), `${((r.total / tot) * 100).toFixed(1)}%`,
         r.avgSentiment === null ? '—' : r.avgSentiment.toFixed(2),
@@ -251,9 +251,9 @@ export async function GET(req: Request) {
 
   // ---- Contenuti top ----
   if (has('content') && data.ratings.length) {
-    heading('Contenuti top per engagement');
+    heading('Top content by engagement');
     table(
-      ['Contenuto', 'Fonte', 'Engagement', 'AI', 'Rischio'],
+      ['Contenuto', 'Source', 'Engagement', 'AI', 'Risk'],
       data.ratings.slice(0, 15).map((r) => [
         (r.title || r.content).slice(0, 110), sourceLabel(r.source),
         String(Math.round(r.engagementScore)), r.quality ? String(r.quality.score) : '—', r.quality?.risk ?? '—',
@@ -264,18 +264,18 @@ export async function GET(req: Request) {
 
   // ---- Narrazioni ----
   if (has('narratives') && data.narratives.length) {
-    heading('Narrazioni');
+    heading('Narratives');
     for (const n of data.narratives) {
-      para(`${n.title}  [${n.stance ?? 'neutra'}${n.coordinated ? ', coordinata' : ''}]  · ${n.mentionCount} post`, { bold: true, size: 10, gap: 0.1 });
+      para(`${n.title}  [${n.stance ?? 'neutral'}${n.coordinated ? ', coordinated' : ''}]  · ${n.mentionCount} posts`, { bold: true, size: 10, gap: 0.1 });
       if (n.description) para(n.description, { size: 9, color: MUTED, gap: 0.4 });
     }
   }
 
   // ---- Timeline ----
   if (has('timeline') && data.timeline.length) {
-    heading('Timeline del settore');
+    heading('Sector timeline');
     for (const e of data.timeline.slice(0, 25)) {
-      para(`${new Date(e.eventDate).toLocaleDateString('it-IT')} — ${e.title}${e.importance === 3 ? '  (svolta)' : ''}`, { bold: true, size: 9.5, gap: 0.1 });
+      para(`${new Date(e.eventDate).toLocaleDateString('en-US')} — ${e.title}${e.importance === 3 ? '  (svolta)' : ''}`, { bold: true, size: 9.5, gap: 0.1 });
       if (e.description) para(e.description, { size: 9, color: MUTED, gap: 0.4 });
     }
   }
@@ -284,7 +284,7 @@ export async function GET(req: Request) {
   if (has('alerts') && data.alerts.length) {
     heading('Alert recenti');
     for (const a of data.alerts.slice(0, 12)) {
-      para(`[${new Date(a.createdAt).toLocaleDateString('it-IT')}] ${a.message}`, { size: 9.5, bold: true, gap: 0.1 });
+      para(`[${new Date(a.createdAt).toLocaleDateString('en-US')}] ${a.message}`, { size: 9.5, bold: true, gap: 0.1 });
       const ex = (a.data as { explanation?: string } | null)?.explanation;
       if (ex) para(ex, { size: 9, color: MUTED, gap: 0.4 });
     }
@@ -292,7 +292,7 @@ export async function GET(req: Request) {
 
   // ---- Brief ----
   if (has('brief') && data.briefs[0]) {
-    heading(`Daily brief — ${new Date(data.briefs[0].briefDate).toLocaleDateString('it-IT')}`);
+    heading(`Daily brief — ${new Date(data.briefs[0].briefDate).toLocaleDateString('en-US')}`);
     for (const b of briefToBlocks(data.briefs[0].content)) {
       if (b.type === 'h2') para(b.text, { bold: true, size: 11, color: ACCENT, gap: 0.2 });
       else if (b.type === 'bullet') para(`•  ${b.text}`, { size: 9.5, gap: 0.2 });
@@ -300,15 +300,15 @@ export async function GET(req: Request) {
     }
   }
 
-  // ---- Elenco mention ----
+  // ---- Mentions list ----
   if (has('mentions') && data.allMentions.length) {
-    heading(`Elenco mention (${Math.min(data.allMentions.length, 150)} più recenti)`);
+    heading(`Mentions list (${Math.min(data.allMentions.length, 150)} most recent)`);
     table(
-      ['Data', 'Fonte', 'Titolo / testo', 'Sent.'],
+      ['Date', 'Source', 'Title / text', 'Sent.'],
       data.allMentions.slice(0, 150).map((m) => {
         const txt = sanitize(m.title ?? m.content);
         return [
-          new Date(m.publishedAt).toLocaleDateString('it-IT'), sourceLabel(m.source),
+          new Date(m.publishedAt).toLocaleDateString('en-US'), sourceLabel(m.source),
           txt || '[contenuto in lingua non latina — vedi originale]', m.sentiment ?? '—',
         ];
       }),

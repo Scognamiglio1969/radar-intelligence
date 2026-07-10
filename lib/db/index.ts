@@ -201,14 +201,14 @@ async function ensureSchema(db: DB) {
   }
 }
 
-// Progetto dimostrativo al primo avvio: l'utente lo modifica dalle Impostazioni.
+// Demo project on first run: the user edits it from Settings.
 async function seed(db: DB) {
   const existing = await db.select({ id: schema.projects.id }).from(schema.projects).limit(1);
   if (existing.length > 0) return;
   const [proj] = await db.insert(schema.projects).values({
-    name: 'Intelligenza Artificiale',
-    keywords: ['intelligenza artificiale', 'artificial intelligence'],
-    languages: ['it', 'en'],
+    name: 'Artificial Intelligence',
+    keywords: ['artificial intelligence', 'generative AI'],
+    languages: ['en'],
   }).returning();
   await db.insert(schema.benchmarkEntities).values([
     { projectId: proj.id, name: 'OpenAI', keywords: ['OpenAI', 'ChatGPT', 'GPT-5'] },

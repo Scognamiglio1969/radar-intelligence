@@ -8,17 +8,17 @@ export const metadata = { title: 'Sentiment Waterfall' };
 
 export default async function WaterfallPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const { steps, swings } = await sentimentWaterfall(project.id, 14);
 
   return (
     <>
       <PageHeader
         title="Sentiment Waterfall"
-        subtitle="Come si è mosso il sentiment giorno per giorno: le barre verdi/rosse sono il contributo netto di ogni giorno, la linea azzurra il saldo cumulato. Sotto, i contenuti che hanno pesato di più nei giorni di svolta."
+        subtitle="How sentiment moved day by day: the green/red bars are each day's net contribution, the blue line the cumulative balance. Below, the content that weighed most on the turning-point days."
       />
       {steps.length < 2 ? (
-        <EmptyState message="Servono più giorni di dati con sentiment analizzato." />
+        <EmptyState message="More days of data with analyzed sentiment are needed." />
       ) : (
         <>
           <section className="panel px-4 py-5">
@@ -26,11 +26,11 @@ export default async function WaterfallPage() {
           </section>
           {swings.length > 0 && (
             <section className="panel mt-4 px-5 py-4">
-              <h2 className="mb-3 text-sm font-semibold text-slate-300">Cosa ha mosso il sentiment</h2>
+              <h2 className="mb-3 text-sm font-semibold text-slate-300">What moved the sentiment</h2>
               <div className="flex flex-col gap-2.5">
                 {swings.map((s, i) => (
                   <div key={i} className="flex items-start gap-2 text-sm">
-                    <span className="shrink-0 text-xs text-slate-500">{new Date(s.day).toLocaleDateString('it-IT')}</span>
+                    <span className="shrink-0 text-xs text-slate-500">{new Date(s.day).toLocaleDateString('en-US')}</span>
                     <SentimentBadge sentiment={s.sentiment} />
                     {s.url ? (
                       <a href={s.url} target="_blank" rel="noopener noreferrer"

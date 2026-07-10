@@ -7,31 +7,31 @@ import { SOURCE_META } from '@/lib/connectors';
 import { TrendingUp, TrendingDown, Bell, ExternalLink, Lightbulb } from 'lucide-react';
 
 const TYPE_META: Record<string, { label: string; icon: typeof Bell }> = {
-  picco_volume: { label: 'Picco di volume', icon: TrendingUp },
-  crollo_sentiment: { label: 'Crollo di sentiment', icon: TrendingDown },
+  volume_spike: { label: 'Volume spike', icon: TrendingUp },
+  sentiment_drop: { label: 'Sentiment drop', icon: TrendingDown },
 };
 
-export const metadata = { title: 'Alert' };
+export const metadata = { title: 'Alerts' };
 
 export default async function AlertsPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const rows = await getRecentAlerts(project.id);
 
   return (
     <>
       <PageHeader
-        title="Alert"
-        subtitle="A ogni aggiornamento Radar controlla se volume o tono delle conversazioni escono dalla norma della settimana. Quando scatta un alert, qui trovi cosa lo ha causato: la spiegazione, i temi, le fonti e le news chiave."
+        title="Alerts"
+        subtitle="On every update, Radar checks whether the volume or tone of conversations departs from the week's norm. When an alert fires, here you find what caused it: the explanation, topics, sources and key news."
       />
       {rows.length === 0 ? (
-        <EmptyState message="Nessun alert. Il controllo avviene a ogni aggiornamento dei dati." />
+        <EmptyState message="No alerts. The check runs on every data update." />
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map((a) => {
             const meta = TYPE_META[a.type] ?? { label: a.type, icon: Bell };
             const Icon = meta.icon;
-            const high = a.severity === 'alta';
+            const high = a.severity === 'high';
             const d = (a.data ?? {}) as AlertContext;
             return (
               <article key={a.id} className={`panel px-5 py-4 ${high ? 'border-red-500/40' : ''}`}>
@@ -43,7 +43,7 @@ export default async function AlertsPage() {
                     <p className="text-sm font-semibold">
                       {meta.label}
                       <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${high ? 'bg-red-500/15 text-red-400' : 'bg-amber-500/15 text-amber-400'}`}>
-                        severità {a.severity}
+                        severity {a.severity}
                       </span>
                       <span className="ml-2 text-xs font-normal text-slate-600">{fmtDate(a.createdAt)}</span>
                     </p>
@@ -62,7 +62,7 @@ export default async function AlertsPage() {
                       <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
                         {d.topics && d.topics.length > 0 && (
                           <span className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-slate-600">Temi:</span>
+                            <span className="text-slate-600">Topics:</span>
                             {d.topics.map((t) => (
                               <span key={t} className="rounded-full bg-sky-500/10 px-2 py-0.5 text-sky-300">{t}</span>
                             ))}
@@ -70,7 +70,7 @@ export default async function AlertsPage() {
                         )}
                         {d.bySource && d.bySource.length > 0 && (
                           <span className="text-slate-500">
-                            <span className="text-slate-600">Fonti: </span>
+                            <span className="text-slate-600">Sources: </span>
                             {d.bySource.map((s) => `${SOURCE_META[s.source]?.label ?? s.source} ${s.n}`).join(' · ')}
                           </span>
                         )}
@@ -80,11 +80,11 @@ export default async function AlertsPage() {
                     {/* Le news/contenuti che hanno pesato di più */}
                     {d.keyMentions && d.keyMentions.length > 0 && (
                       <div className="mt-2.5 flex flex-col gap-1.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Contenuti chiave</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Key content</p>
                         {d.keyMentions.map((m, i) => (
                           <div key={i} className="flex items-center gap-2 text-xs">
                             <SourceBadge source={m.source} />
-                            {m.sentiment === 'negativo' && <span className="shrink-0 text-red-400">●</span>}
+                            {m.sentiment === 'negative' && <span className="shrink-0 text-red-400">●</span>}
                             {m.url ? (
                               <a href={m.url} target="_blank" rel="noopener noreferrer"
                                 className="flex min-w-0 items-center gap-1 truncate text-slate-300 hover:text-sky-300">

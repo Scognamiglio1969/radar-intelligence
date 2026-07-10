@@ -60,9 +60,9 @@ export async function saveAndExpandProject(formData: FormData) {
       const langs = (data.languages.length ? data.languages : ['it', 'en']).join(', ');
       const text = await callClaude(
         MODELS.haiku, 'espansione_progetto',
-        `Trasforma la descrizione di un tema da monitorare in termini di ricerca EFFICACI per news e social, nelle lingue: ${langs}.
-Termini brevi (1-3 parole), concreti, che le persone scrivono davvero. Rispondi SOLO con un array JSON di 6-10 stringhe.`,
-        `Tema: ${data.semanticContext}`,
+        `Turn the description of a topic to monitor into EFFECTIVE search terms for news and social, in these languages: ${langs}.
+Short terms (1-3 words), concrete, the way people actually write. Respond ONLY with a JSON array of 6-10 strings.`,
+        `Topic: ${data.semanticContext}`,
         400,
       );
       if (text) {

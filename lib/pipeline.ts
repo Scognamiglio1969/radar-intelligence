@@ -33,7 +33,7 @@ export async function runPipeline(opts: { full?: boolean } = {}) {
 
   const lock = await getMeta<string>(LOCK_KEY);
   if (lock && Date.now() - new Date(lock).getTime() < LOCK_TTL_MS) {
-    return { skipped: true, reason: 'pipeline già in esecuzione' };
+    return { skipped: true, reason: 'pipeline already running' };
   }
   await setMeta(LOCK_KEY, new Date().toISOString());
 
@@ -100,7 +100,7 @@ export async function runPipeline(opts: { full?: boolean } = {}) {
           const topTrend = (await getTrends(project.id))[0]?.topic;
           await notifyDailyDigest(project.name, {
             mentions24h: Number(agg.n),
-            sentiment: avg === null ? 'in analisi' : avg > 0.15 ? 'positivo' : avg < -0.15 ? 'negativo' : 'neutro',
+            sentiment: avg === null ? 'in analisi' : avg > 0.15 ? 'positive' : avg < -0.15 ? 'negative' : 'neutral',
             topTrend,
           });
         }

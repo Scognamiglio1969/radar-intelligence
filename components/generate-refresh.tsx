@@ -19,7 +19,7 @@ export function GenerateRefresh({ endpoint, label, busyLabel }: {
       const res = await fetch(endpoint, { method: 'POST' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error ?? 'errore');
+        throw new Error(d.error ?? 'error');
       }
       router.refresh();
     } catch (e) {

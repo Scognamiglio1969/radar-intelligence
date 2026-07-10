@@ -31,7 +31,7 @@ async function buildAlertContext(projectId: number, kind: 'volume' | 'sentiment'
     title: mentions.title, content: mentions.content, url: mentions.url,
     source: mentions.source, sentiment: mentions.sentiment,
   }).from(mentions)
-    .where(kind === 'sentiment' ? and(base, eq(mentions.sentiment, 'negativo')) : base)
+    .where(kind === 'sentiment' ? and(base, eq(mentions.sentiment, 'negative')) : base)
     .orderBy(
       kind === 'sentiment'
         ? sql`${mentions.sentimentScore} ASC NULLS LAST`
@@ -50,9 +50,9 @@ async function buildAlertContext(projectId: number, kind: 'volume' | 'sentiment'
   let explanation: string | undefined;
   if (claudeAvailable()) {
     const text = await callClaude(
-      MODELS.haiku, 'spiegazione_alert',
-      `Sei un media analyst. Spiega in massimo 2 frasi in italiano cosa sta causando questo ${kind === 'volume' ? 'picco di conversazioni' : 'calo di sentiment'} e perché merita attenzione. Concreto, cita i fatti dai contenuti forniti. Rispondi solo con le 2 frasi.`,
-      `Temi delle ultime 24h: ${topics.join(', ') || 'n.d.'}\n\nContenuti chiave:\n${keyMentions.map((m) => `- [${m.source}] ${m.title}`).join('\n')}`,
+      MODELS.haiku, 'alert_explanation',
+      `You are a media analyst. Explain in at most 2 sentences in English what is causing this ${kind === 'volume' ? 'spike in conversations' : 'drop in sentiment'} and why it deserves attention. Be concrete, cite facts from the provided content. Respond only with the 2 sentences.`,
+      `Topics of the last 24h: ${topics.join(', ') || 'n/a'}\n\nKey content:\n${keyMentions.map((m) => `- [${m.source}] ${m.title}`).join('\n')}`,
       200,
     );
     if (text) explanation = text.trim();
@@ -94,13 +94,13 @@ export async function detectAlerts(projectId: number, opts: { aiContext?: boolea
 
   const last24 = Number(vol.last24);
   const avgDaily = Number(vol.prev7) / 7;
-  if (!hasRecent('picco_volume') && avgDaily >= 3 && last24 > Math.max(10, 2.5 * avgDaily)) {
+  if (!hasRecent('volume_spike') && avgDaily >= 3 && last24 > Math.max(10, 2.5 * avgDaily)) {
     const context = withAi ? await buildAlertContext(projectId, 'volume') : {};
     await db.insert(alerts).values({
       projectId,
-      type: 'picco_volume',
-      severity: last24 > 5 * avgDaily ? 'alta' : 'media',
-      message: `Picco di volume: ${last24} mention nelle ultime 24h contro una media di ${avgDaily.toFixed(0)}/giorno.`,
+      type: 'volume_spike',
+      severity: last24 > 5 * avgDaily ? 'high' : 'medium',
+      message: `Volume spike: ${last24} mentions in the last 24h vs an average of ${avgDaily.toFixed(0)}/day.`,
       data: { last24, avgDaily: Math.round(avgDaily), ...context },
     });
     created++;
@@ -116,14 +116,14 @@ export async function detectAlerts(projectId: number, opts: { aiContext?: boolea
 
   const avg24 = sent.avg24 === null ? null : Number(sent.avg24);
   const avgPrev = sent.avgPrev === null ? null : Number(sent.avgPrev);
-  if (!hasRecent('crollo_sentiment') && avg24 !== null && avgPrev !== null
+  if (!hasRecent('sentiment_drop') && avg24 !== null && avgPrev !== null
     && Number(sent.n24) >= 10 && avg24 < avgPrev - 0.25 && avg24 < 0) {
     const context = withAi ? await buildAlertContext(projectId, 'sentiment') : {};
     await db.insert(alerts).values({
       projectId,
-      type: 'crollo_sentiment',
-      severity: avg24 < avgPrev - 0.4 ? 'alta' : 'media',
-      message: `Sentiment in forte calo: media ${avg24.toFixed(2)} nelle ultime 24h (baseline ${avgPrev.toFixed(2)}).`,
+      type: 'sentiment_drop',
+      severity: avg24 < avgPrev - 0.4 ? 'high' : 'medium',
+      message: `Sharp sentiment drop: average ${avg24.toFixed(2)} in the last 24h (baseline ${avgPrev.toFixed(2)}).`,
       data: { avg24, avgPrev, ...context },
     });
     created++;

@@ -17,7 +17,7 @@ export function SubmitButton({ children, pendingLabel, className, formAction }: 
       {pending ? (
         <span className="flex items-center gap-2">
           <Loader2 className="size-4 animate-spin" />
-          {pendingLabel ?? 'Attendere…'}
+          {pendingLabel ?? 'Please wait…'}
         </span>
       ) : children}
     </button>

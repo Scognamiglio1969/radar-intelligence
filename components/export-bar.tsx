@@ -8,27 +8,27 @@ import {
 
 // Sezioni esportabili (allineate a lib/export-data EXPORT_SECTIONS)
 const SECTIONS: [string, string][] = [
-  ['kpi', 'Sintesi (KPI)'],
-  ['trends', 'Trend emergenti'],
-  ['volume', 'Volume per fonte'],
+  ['kpi', 'Summary (KPIs)'],
+  ['trends', 'Emerging trends'],
+  ['volume', 'Volume by source'],
   ['sentiment', 'Sentiment'],
-  ['topics', 'Temi principali'],
+  ['topics', 'Top topics'],
   ['benchmark', 'Benchmark'],
   ['audience', 'Audience'],
-  ['content', 'Contenuti top'],
-  ['narratives', 'Narrazioni'],
-  ['timeline', 'Timeline eventi'],
-  ['alerts', 'Alert'],
+  ['content', 'Top content'],
+  ['narratives', 'Narratives'],
+  ['timeline', 'Event timeline'],
+  ['alerts', 'Alerts'],
   ['brief', 'Daily brief'],
-  ['mentions', 'Elenco mention'],
+  ['mentions', 'Mentions list'],
 ];
 const ALL_IDS = SECTIONS.map(([id]) => id);
 
 const FORMATS = [
-  { id: 'pdf', label: 'PDF', icon: FileText, color: 'text-red-400', hint: 'Report impaginato' },
-  { id: 'xlsx', label: 'Excel', icon: FileSpreadsheet, color: 'text-emerald-400', hint: 'Dati in fogli' },
-  { id: 'docx', label: 'Word', icon: FileType2, color: 'text-sky-400', hint: 'Documento' },
-  { id: 'pptx', label: 'PowerPoint', icon: Presentation, color: 'text-orange-400', hint: 'Presentazione' },
+  { id: 'pdf', label: 'PDF', icon: FileText, color: 'text-red-400', hint: 'Formatted report' },
+  { id: 'xlsx', label: 'Excel', icon: FileSpreadsheet, color: 'text-emerald-400', hint: 'Data in sheets' },
+  { id: 'docx', label: 'Word', icon: FileType2, color: 'text-sky-400', hint: 'Document' },
+  { id: 'pptx', label: 'PowerPoint', icon: Presentation, color: 'text-orange-400', hint: 'Presentation' },
 ] as const;
 
 type Format = (typeof FORMATS)[number]['id'];
@@ -72,7 +72,7 @@ export function ExportBar() {
       if (ids.length === 0) { setBusy(false); return; }
       const qs = new URLSearchParams({ sections: ids.join(','), days: String(days) });
       const res = await fetch(`/api/export/${format}?${qs}`);
-      if (!res.ok) throw new Error('export fallito');
+      if (!res.ok) throw new Error('export failed');
       const blob = await res.blob();
       const name = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] ?? `radar.${format}`;
       const url = URL.createObjectURL(blob);
@@ -80,10 +80,10 @@ export function ExportBar() {
       a.href = url; a.download = name; a.click();
       URL.revokeObjectURL(url);
       setOpen(false);
-      setToast(`Export ${format.toUpperCase()} scaricato.`);
+      setToast(`${format.toUpperCase()} export downloaded.`);
       setTimeout(() => setToast(null), 5000);
     } catch {
-      setToast('Export non riuscito, riprova.');
+      setToast('Export failed, please retry.');
       setTimeout(() => setToast(null), 5000);
     } finally {
       setBusy(false);
@@ -97,7 +97,7 @@ export function ExportBar() {
       <div className="mb-5 flex justify-end">
         <button onClick={() => setOpen(true)}
           className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10">
-          <Download className="size-4 text-sky-400" /> Esporta
+          <Download className="size-4 text-sky-400" /> Export
         </button>
       </div>
 
@@ -108,7 +108,7 @@ export function ExportBar() {
           <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-[#0c1226] shadow-2xl sm:max-w-lg sm:rounded-2xl">
             <div className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3.5">
               <Download className="size-4 text-sky-400" />
-              <h2 className="text-sm font-semibold">Esporta report</h2>
+              <h2 className="text-sm font-semibold">Export report</h2>
               <button onClick={() => !busy && setOpen(false)} className="ml-auto rounded-lg p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200">
                 <X className="size-4" />
               </button>
@@ -116,7 +116,7 @@ export function ExportBar() {
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
               {/* Formato */}
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Formato</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Format</p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {FORMATS.map((f) => {
                   const active = format === f.id;
@@ -133,14 +133,14 @@ export function ExportBar() {
               </div>
 
               {/* Ambito */}
-              <p className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Cosa esportare</p>
+              <p className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">What to export</p>
               <div className="grid grid-cols-2 gap-2">
                 {(['complete', 'custom'] as const).map((s) => (
                   <button key={s} onClick={() => { setScope(s); persist({ scope: s }); }}
                     className={`rounded-lg border px-3 py-2 text-sm transition ${
                       scope === s ? 'border-sky-500/60 bg-sky-500/10 text-sky-200' : 'border-[var(--border)] text-slate-400 hover:bg-white/5'
                     }`}>
-                    {s === 'complete' ? 'Stato completo' : 'Personalizza'}
+                    {s === 'complete' ? 'Full state' : 'Customize'}
                   </button>
                 ))}
               </div>
@@ -149,10 +149,10 @@ export function ExportBar() {
               {scope === 'custom' && (
                 <div className="mt-3 rounded-lg border border-[var(--border)] p-2">
                   <div className="mb-1 flex items-center justify-between px-1">
-                    <span className="text-xs text-slate-500">{selected.size} sezioni selezionate</span>
+                    <span className="text-xs text-slate-500">{selected.size} sections selected</span>
                     <div className="flex gap-2 text-xs">
-                      <button onClick={() => { setSelected(new Set(ALL_IDS)); persist({ selected: ALL_IDS }); }} className="text-sky-400 hover:text-sky-300">tutte</button>
-                      <button onClick={() => { setSelected(new Set()); persist({ selected: [] }); }} className="text-slate-500 hover:text-slate-300">nessuna</button>
+                      <button onClick={() => { setSelected(new Set(ALL_IDS)); persist({ selected: ALL_IDS }); }} className="text-sky-400 hover:text-sky-300">all</button>
+                      <button onClick={() => { setSelected(new Set()); persist({ selected: [] }); }} className="text-slate-500 hover:text-slate-300">none</button>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
@@ -173,14 +173,14 @@ export function ExportBar() {
               )}
 
               {/* Periodo */}
-              <p className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Periodo dati</p>
+              <p className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Data period</p>
               <div className="flex gap-2">
                 {[7, 30, 90].map((d) => (
                   <button key={d} onClick={() => { setDays(d); persist({ days: d }); }}
                     className={`rounded-full px-4 py-1.5 text-sm transition ${
                       days === d ? 'bg-sky-500/20 text-sky-300' : 'bg-white/5 text-slate-400 hover:text-slate-200'
                     }`}>
-                    {d} giorni
+                    {d} days
                   </button>
                 ))}
               </div>
@@ -191,7 +191,7 @@ export function ExportBar() {
               <button onClick={generate} disabled={busy || (scope === 'custom' && selected.size === 0)}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50">
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <activeFormat.icon className="size-4" />}
-                {busy ? 'Genero il file…' : `Genera ${activeFormat.label}`}
+                {busy ? 'Generating file…' : `Generate ${activeFormat.label}`}
               </button>
             </div>
           </div>

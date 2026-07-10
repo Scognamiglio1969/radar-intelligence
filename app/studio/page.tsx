@@ -10,7 +10,7 @@ export const metadata = { title: 'Content Studio' };
 
 export default async function StudioPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
 
   const [trends, dashboard] = await Promise.all([getTrends(project.id), dashboardData(project.id)]);
   // Spunti: prima i trend emergenti, poi i temi principali
@@ -23,18 +23,18 @@ export default async function StudioPage() {
     <>
       <PageHeader
         title="Content Studio"
-        subtitle="Da un concetto a contenuti pronti per ogni canale: genera il kit multi-formato, esplora hook alternativi e rifinisci ogni bozza a voce."
+        subtitle="From a concept to content ready for every channel: generate the multi-format kit, explore alternative hooks and refine each draft by voice."
       />
       {!project.brandVoice && (
         <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300">
-          Suggerimento: imposta il «tono di voce del brand» in{' '}
-          <Link href="/settings" className="underline">Gestione progetti</Link> per bozze su misura.
+          Tip: set the “brand tone of voice” in{' '}
+          <Link href="/settings" className="underline">Projects</Link> for tailored drafts.
         </p>
       )}
       {claudeAvailable() ? (
         <ContentStudio suggestions={suggestions} />
       ) : (
-        <EmptyState message="Serve la API key Claude per il Content Studio." />
+        <EmptyState message="You need the Claude API key for Content Studio." />
       )}
     </>
   );

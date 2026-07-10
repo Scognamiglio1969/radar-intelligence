@@ -2,17 +2,17 @@ import { ExternalLink, Heart, MessageCircle, Repeat2, Star } from 'lucide-react'
 import { SOURCE_META } from '@/lib/connectors';
 import type { mentions } from '@/lib/db/schema';
 
-/** Stelle di rilevanza AI (1-5) con balloon esplicativo al passaggio del mouse. */
+/** AI relevance stars (1-5) with an explanatory tooltip on hover. */
 export function StarRating({ relevance, reason }: { relevance: number | null; reason?: string | null }) {
   if (!relevance) return null;
   return (
-    <span className="group relative inline-flex items-center gap-px" aria-label={`Rilevanza ${relevance} su 5`}>
+    <span className="group relative inline-flex items-center gap-px" aria-label={`Relevance ${relevance} of 5`}>
       {[1, 2, 3, 4, 5].map((i) => (
         <Star key={i} className={`size-3 ${i <= relevance ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-slate-700'}`} />
       ))}
       {reason && (
         <span className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-60 -translate-x-1/2 rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2 text-[11px] font-normal normal-case leading-snug text-slate-300 opacity-0 shadow-xl transition-opacity duration-150 group-hover:visible group-hover:opacity-100">
-          <span className="mb-0.5 block font-semibold text-amber-300">Rilevanza {relevance}/5</span>
+          <span className="mb-0.5 block font-semibold text-amber-300">Relevance {relevance}/5</span>
           {reason}
           <span className="absolute left-1/2 top-full -mt-1 size-2 -translate-x-1/2 rotate-45 border-b border-r border-[var(--border)] bg-[var(--panel-2)]" />
         </span>
@@ -32,7 +32,7 @@ export function PageHeader({ title, subtitle }: { title: string; subtitle?: stri
 
 export function KpiCard({ label, value, hint, exact }: {
   label: string; value: string; hint?: string;
-  /** Valore esatto mostrato al passaggio del mouse quando value è compattato */
+  /** Exact value shown on hover when the value is compacted */
   exact?: string;
 }) {
   return (
@@ -44,9 +44,9 @@ export function KpiCard({ label, value, hint, exact }: {
   );
 }
 
-/** 1234 → "1,2k", 1250000 → "1,3M" (con it-IT). */
+/** 1234 → "1.2k", 1250000 → "1.3M" (en-US). */
 export function fmtCompact(n: number): string {
-  return new Intl.NumberFormat('it-IT', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
 export function SourceBadge({ source }: { source: string }) {
@@ -62,38 +62,49 @@ export function SourceBadge({ source }: { source: string }) {
   );
 }
 
+// Sentiment styling and labels. Accepts both the current English values and
+// legacy Italian values (positivo/neutro/negativo) from previously analyzed data.
 const SENTIMENT_STYLE: Record<string, string> = {
-  positivo: 'bg-emerald-500/15 text-emerald-400',
-  neutro: 'bg-slate-500/15 text-slate-400',
-  negativo: 'bg-red-500/15 text-red-400',
+  positive: 'bg-emerald-500/15 text-emerald-400',
+  neutral: 'bg-slate-500/15 text-slate-400',
+  negative: 'bg-red-500/15 text-red-400',
 };
+
+function normSentiment(s: string): 'positive' | 'neutral' | 'negative' {
+  const map: Record<string, 'positive' | 'neutral' | 'negative'> = {
+    positivo: 'positive', neutro: 'neutral', negativo: 'negative',
+    positive: 'positive', neutral: 'neutral', negative: 'negative',
+  };
+  return map[s.toLowerCase()] ?? 'neutral';
+}
 
 export function SentimentBadge({ sentiment }: { sentiment: string | null }) {
   if (!sentiment) {
-    return <span className="rounded-full bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-500">in analisi</span>;
+    return <span className="rounded-full bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-500">analyzing</span>;
   }
+  const key = normSentiment(sentiment);
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SENTIMENT_STYLE[sentiment] ?? SENTIMENT_STYLE.neutro}`}>
-      {sentiment}
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SENTIMENT_STYLE[key]}`}>
+      {key}
     </span>
   );
 }
 
 export function fmtDate(d: Date | string) {
-  return new Date(d).toLocaleString('it-IT', {
+  return new Date(d).toLocaleString('en-US', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
 }
 
 export function fmtNum(n: number) {
-  return n.toLocaleString('it-IT');
+  return n.toLocaleString('en-US');
 }
 
 type Mention = typeof mentions.$inferSelect;
 
 export function MentionCard({ m, translated }: {
   m: Mention;
-  /** Testo tradotto nella lingua di lettura scelta dall'utente */
+  /** Text translated into the reading language chosen by the user */
   translated?: { title?: string; content: string };
 }) {
   const e = m.engagement;
@@ -107,8 +118,8 @@ export function MentionCard({ m, translated }: {
         <StarRating relevance={m.relevance} reason={m.relevanceReason} />
         {translated ? (
           <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-300"
-            title="Tradotto dall'AI — il link apre l'originale">
-            🌐 tradotto{m.language ? ` · orig. ${m.language.toUpperCase()}` : ''}
+            title="Translated by AI — the link opens the original">
+            🌐 translated{m.language ? ` · orig. ${m.language.toUpperCase()}` : ''}
           </span>
         ) : m.language && <span className="uppercase">{m.language}</span>}
         <span>{fmtDate(m.publishedAt)}</span>
@@ -145,7 +156,7 @@ export function MentionCard({ m, translated }: {
         {m.url && (
           <a href={m.url} target="_blank" rel="noopener noreferrer"
             className="ml-auto flex items-center gap-1 text-sky-400 hover:text-sky-300">
-            apri <ExternalLink className="size-3" />
+            open <ExternalLink className="size-3" />
           </a>
         )}
       </div>

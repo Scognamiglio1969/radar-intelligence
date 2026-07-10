@@ -6,13 +6,13 @@ import { NEWS_SOURCES } from '@/lib/connectors';
 
 export type TimelineEvent = typeof timelineEvents.$inferSelect;
 
-const SYSTEM = `Sei un analista che mantiene la cronologia storica di un settore.
-Ricevi i titoli delle news delle ultime 48 ore (con data). Estrai SOLO gli eventi salienti e databili:
-annunci, lanci, acquisizioni, decisioni normative, polemiche rilevanti, dati/numeri importanti.
-NON i temi generici, NON le opinioni. Massimo 3 eventi; se non c'è nulla di storico, restituisci [].
-Per ogni evento: { "date": "YYYY-MM-DD", "title": "titolo secco in italiano (max 10 parole)",
-"description": "1 frase di contesto in italiano", "importance": 1-3 (3 = svolta per il settore) }.
-Rispondi SOLO con l'array JSON.`;
+const SYSTEM = `You are an analyst maintaining the historical timeline of a sector.
+You receive the news headlines of the last 48 hours (with date). Extract ONLY the salient, datable events:
+announcements, launches, acquisitions, regulatory decisions, notable controversies, important data/figures.
+NOT generic topics, NOT opinions. At most 3 events; if there is nothing historic, return [].
+For each event: { "date": "YYYY-MM-DD", "title": "crisp title in English (max 10 words)",
+"description": "1 sentence of context in English", "importance": 1-3 (3 = turning point for the sector) }.
+Respond ONLY with the JSON array.`;
 
 /** Estrae gli eventi delle ultime 48h e li aggiunge alla cronologia (mai sostituita). */
 export async function extractTimelineEvents(projectId: number): Promise<number> {
@@ -49,7 +49,7 @@ export async function extractTimelineEvents(projectId: number): Promise<number> 
   }));
   const text = await callClaude(
     MODELS.haiku, 'timeline_eventi', SYSTEM,
-    `${existing.length ? `Eventi già registrati di recente (NON ripeterli): ${existing.map((e) => e.title).join(' | ')}\n\n` : ''}News:\n${JSON.stringify(payload).slice(0, 9000)}`,
+    `${existing.length ? `Events already recorded recently (do NOT repeat them): ${existing.map((e) => e.title).join(' | ')}\n\n` : ''}News:\n${JSON.stringify(payload).slice(0, 9000)}`,
     700,
   );
   if (!text) return 0;

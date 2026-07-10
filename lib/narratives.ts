@@ -6,16 +6,16 @@ import { NEWS_SOURCES } from '@/lib/connectors';
 
 export type Narrative = typeof narratives.$inferSelect;
 
-const SYSTEM = `Sei un analista di information intelligence. Ricevi post social (con autore) sullo stesso settore.
-Individua le NARRAZIONI: gruppi di messaggi che spingono la stessa tesi o inquadratura (anche in lingue diverse).
-Per ogni narrazione restituisci:
-- title: nome della narrazione in italiano (max 8 parole)
-- description: 1-2 frasi in italiano: qual è la tesi e come viene argomentata
-- stance: "positiva", "negativa", "neutra" o "polarizzante" rispetto al settore
-- coordinated: true SOLO se ci sono segnali di coordinamento (stessi messaggi quasi identici da account diversi, ripetizione innaturale); altrimenti false
-- accounts: gli autori più attivi nella narrazione (max 6 handle)
-- ids: gli id dei post appartenenti
-Includi solo narrazioni con almeno 3 post. Rispondi SOLO con un array JSON.`;
+const SYSTEM = `You are an information intelligence analyst. You receive social posts (with author) about the same sector.
+Identify the NARRATIVES: groups of messages pushing the same thesis or framing (even across different languages).
+For each narrative return:
+- title: narrative name in English (max 8 words)
+- description: 1-2 sentences in English: what the thesis is and how it is argued
+- stance: "positive", "negative", "neutral" or "polarizing" toward the sector
+- coordinated: true ONLY if there are signs of coordination (near-identical messages from different accounts, unnatural repetition); otherwise false
+- accounts: the most active authors in the narrative (max 6 handles)
+- ids: the ids of the posts that belong to it
+Include only narratives with at least 3 posts. Respond ONLY with a JSON array.`;
 
 function parseJson<T>(text: string | null): T | null {
   if (!text) return null;

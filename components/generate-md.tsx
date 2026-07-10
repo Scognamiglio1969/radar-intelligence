@@ -23,7 +23,7 @@ export function GenerateMd({ endpoint, responseKey, buttonLabel, busyLabel, hint
     try {
       const res = await fetch(endpoint, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'errore');
+      if (!res.ok) throw new Error(data.error ?? 'error');
       setContent(String(data[responseKey]));
     } catch (e) {
       setError((e as Error).message);

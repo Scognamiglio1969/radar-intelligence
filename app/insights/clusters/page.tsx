@@ -5,32 +5,32 @@ import { PageHeader, EmptyState } from '@/components/ui';
 import { ClusterTreemap } from '@/components/insight-charts';
 import { GenerateRefresh } from '@/components/generate-refresh';
 
-export const metadata = { title: 'Cluster conversazionali' };
+export const metadata = { title: 'Conversation clusters' };
 
 const SENT_STYLE: Record<string, string> = {
-  positivo: 'text-emerald-400', neutro: 'text-slate-400', negativo: 'text-red-400',
+  positive: 'text-emerald-400', neutral: 'text-slate-400', negative: 'text-red-400',
 };
 
 export default async function ClustersPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const clusters = await getClusters(project.id);
 
   return (
     <>
       <PageHeader
-        title="Cluster conversazionali"
-        subtitle="Le famiglie di discorso con cui si parla del tema: non il soggetto (i temi), ma il frame — prezzo, scandalo, ironia, qualità, politica, customer care… Dimensione = peso nella conversazione, colore = tono."
+        title="Conversation clusters"
+        subtitle="The families of discourse used to talk about the topic: not the subject (the topics), but the frame — price, scandal, irony, quality, politics, customer care… Size = weight in the conversation, color = tone."
       />
       {!clusters ? (
         <div className="panel flex flex-col items-center gap-3 px-6 py-12">
           <p className="text-sm text-slate-400">
             {claudeAvailable()
-              ? 'Genera la mappa delle famiglie di discorso (una volta al giorno, ~2 centesimi).'
-              : 'Serve la API key Claude per i cluster.'}
+              ? 'Generate the map of discourse families (once a day, ~2 cents).'
+              : 'You need the Claude API key for clusters.'}
           </p>
           {claudeAvailable() && (
-            <GenerateRefresh endpoint="/api/insights/clusters" label="Genera i cluster" busyLabel="Analizzo le conversazioni…" />
+            <GenerateRefresh endpoint="/api/insights/clusters" label="Generate clusters" busyLabel="Analyzing conversations…" />
           )}
         </div>
       ) : (
@@ -39,7 +39,7 @@ export default async function ClustersPage() {
             <ClusterTreemap clusters={clusters} />
           </section>
           <section className="panel px-5 py-4">
-            <h2 className="mb-3 text-sm font-semibold text-slate-300">Dettaglio famiglie</h2>
+            <h2 className="mb-3 text-sm font-semibold text-slate-300">Family detail</h2>
             <div className="flex flex-col gap-3">
               {clusters.map((c) => (
                 <div key={c.family}>
@@ -52,7 +52,7 @@ export default async function ClustersPage() {
               ))}
             </div>
             <div className="mt-4">
-              <GenerateRefresh endpoint="/api/insights/clusters" label="Rigenera" busyLabel="Rianalizzo…" />
+              <GenerateRefresh endpoint="/api/insights/clusters" label="Regenerate" busyLabel="Re-analyzing…" />
             </div>
           </section>
         </div>

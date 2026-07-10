@@ -8,19 +8,19 @@ import { callClaude, claudeAvailable, MODELS } from '@/lib/claude';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-const SYSTEM = `Sei l'analista di media intelligence di Radar. Rispondi in italiano alla domanda dell'utente basandoti SOLO sui dati forniti (aggregati + mention rilevanti).
-Regole:
-- Cita numeri concreti e, quando utile, riporta 2-3 mention come prova (fonte + citazione breve).
-- Se i dati non bastano per rispondere, dillo chiaramente e suggerisci cosa monitorare.
-- Sii diretto e sintetico (max 250 parole), usa il markdown con parsimonia (grassetti, elenchi).`;
+const SYSTEM = `You are Radar's media intelligence analyst. Answer the user's question in English, based ONLY on the provided data (aggregates + relevant mentions).
+Rules:
+- Cite concrete numbers and, when useful, quote 2-3 mentions as evidence (source + short quote).
+- If the data isn't enough to answer, say so clearly and suggest what to monitor.
+- Be direct and concise (max 250 words), use markdown sparingly (bold, lists).`;
 
 export async function POST(req: Request) {
   const project = await getCurrentProject();
-  if (!project) return NextResponse.json({ error: 'nessun progetto' }, { status: 404 });
-  if (!claudeAvailable()) return NextResponse.json({ error: 'API key Claude non configurata' }, { status: 400 });
+  if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
+  if (!claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
 
   const { question, history } = await req.json() as { question: string; history?: { q: string; a: string }[] };
-  if (!question?.trim()) return NextResponse.json({ error: 'domanda vuota' }, { status: 400 });
+  if (!question?.trim()) return NextResponse.json({ error: 'empty question' }, { status: 400 });
 
   const db = await getDb();
   const d14 = new Date(Date.now() - 14 * 86400_000);
@@ -56,26 +56,26 @@ export async function POST(req: Request) {
     .orderBy(desc(mentions.engagementScore)).limit(25);
 
   const context = {
-    progetto: project.name,
+    project: project.name,
     query: project.keywords,
-    volumePerGiornoEFonte: bySourceDay.rows,
-    temiPrincipali: topTopics.rows,
-    mentionRilevanti: relevant.map((m) => ({
-      fonte: m.source, dove: m.community, lingua: m.language, sentiment: m.sentiment,
-      data: m.publishedAt.toISOString().slice(0, 10),
-      testo: `${m.title ?? ''} ${m.content}`.slice(0, 220).trim(),
+    volumePerDayAndSource: bySourceDay.rows,
+    topTopics: topTopics.rows,
+    relevantMentions: relevant.map((m) => ({
+      source: m.source, where: m.community, language: m.language, sentiment: m.sentiment,
+      date: m.publishedAt.toISOString().slice(0, 10),
+      text: `${m.title ?? ''} ${m.content}`.slice(0, 220).trim(),
     })),
   };
 
   const historyText = (history ?? []).slice(-3)
-    .map((h) => `Domanda precedente: ${h.q}\nRisposta precedente: ${h.a.slice(0, 400)}`)
+    .map((h) => `Previous question: ${h.q}\nPrevious answer: ${h.a.slice(0, 400)}`)
     .join('\n\n');
 
   const answer = await callClaude(
-    MODELS.sonnet, 'chiedi_ai_dati', SYSTEM,
-    `${historyText ? historyText + '\n\n' : ''}DATI:\n${JSON.stringify(context).slice(0, 14000)}\n\nDOMANDA: ${question}`,
+    MODELS.sonnet, 'ask_the_data', SYSTEM,
+    `${historyText ? historyText + '\n\n' : ''}DATA:\n${JSON.stringify(context).slice(0, 14000)}\n\nQUESTION: ${question}`,
     1000,
   );
-  if (!answer) return NextResponse.json({ error: 'tetto di spesa raggiunto o errore API' }, { status: 429 });
+  if (!answer) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
   return NextResponse.json({ answer });
 }

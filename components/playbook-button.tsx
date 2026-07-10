@@ -21,7 +21,7 @@ export function PlaybookButton({ alertId, existing }: { alertId: number; existin
         body: JSON.stringify({ alertId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'errore');
+      if (!res.ok) throw new Error(data.error ?? 'error');
       setPlaybook(data.playbook);
       setOpen(true);
     } catch (e) {
@@ -36,7 +36,7 @@ export function PlaybookButton({ alertId, existing }: { alertId: number; existin
       <button onClick={generate} disabled={busy}
         className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 transition hover:bg-amber-500/20 disabled:opacity-60">
         {busy ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldAlert className="size-3.5" />}
-        {busy ? 'Genero il piano…' : playbook ? (open ? 'Nascondi piano di risposta' : 'Mostra piano di risposta') : 'Genera piano di risposta'}
+        {busy ? 'Generating plan…' : playbook ? (open ? 'Hide response plan' : 'Show response plan') : 'Generate response plan'}
       </button>
       {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
       {playbook && open && (

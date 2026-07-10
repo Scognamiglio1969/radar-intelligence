@@ -29,17 +29,17 @@ export function TranslateBar({ current, langs }: { current: string | null; langs
         value={current ?? 'off'}
         onChange={(e) => change(e.target.value)}
         disabled={pending}
-        title="Traduci i contenuti nella lingua scelta (la prima volta richiede qualche secondo, poi è istantaneo)"
+        title="Translate content into the chosen language (the first time takes a few seconds, then it's instant)"
         className={`rounded-full border px-2 py-1 text-xs outline-none transition ${
           current ? 'border-violet-500/50 bg-violet-500/15 text-violet-300' : 'border-[var(--border)] bg-white/5 text-slate-400'
         }`}
       >
-        <option value="off">lingua originale</option>
+        <option value="off">original language</option>
         {langs.map(([code, label]) => (
-          <option key={code} value={code}>traduci in {label}</option>
+          <option key={code} value={code}>translate to {label}</option>
         ))}
       </select>
-      {pending && <span className="text-[10px] text-violet-300">traduco…</span>}
+      {pending && <span className="text-[10px] text-violet-300">translating…</span>}
     </span>
   );
 }

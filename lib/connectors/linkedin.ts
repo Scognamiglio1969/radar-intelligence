@@ -15,7 +15,7 @@ export const linkedin: Connector = {
   label: 'LinkedIn',
   tier: 'premium',
   enabled: () => Boolean(cfg('LINKEDIN_ACCESS_TOKEN') && cfg('LINKEDIN_ORG_ID')),
-  disabledReason: 'Servono Access Token e ID Organizzazione LinkedIn (Community Management API): inseriscili qui',
+  disabledReason: 'Requires LinkedIn Access Token and Organization ID (Community Management API): enter them here',
   async fetchMentions() {
     const orgId = cfg('LINKEDIN_ORG_ID')!;
     const author = encodeURIComponent(`urn:li:organization:${orgId}`);

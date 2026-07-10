@@ -52,46 +52,46 @@ function table(headers: string[], rows: string[][]) {
 
 export async function GET(req: Request) {
   const project = await getCurrentProject();
-  if (!project) return NextResponse.json({ error: 'nessun progetto' }, { status: 404 });
+  if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
   const { sections, days } = parseExportOptions(new URL(req.url));
   const has = (s: string) => sections.has(s as never);
   const data = await collectExportData(project, days);
-  const today = new Date().toLocaleDateString('it-IT', { dateStyle: 'full' });
+  const today = new Date().toLocaleDateString('en-US', { dateStyle: 'full' });
 
   const kpi = data.dashboard.kpi;
   const sentimentLabel = kpi.avgSentiment === null ? 'in attesa di analisi'
-    : kpi.avgSentiment > 0.15 ? 'positivo' : kpi.avgSentiment < -0.15 ? 'negativo' : 'neutro';
+    : kpi.avgSentiment > 0.15 ? 'positive' : kpi.avgSentiment < -0.15 ? 'negative' : 'neutral';
   const totalBench = data.benchmark.reduce((s, r) => s + r.total, 0);
 
   const children: (Paragraph | Table)[] = [
     // Copertina
     new Paragraph({ spacing: { before: 2400, after: 200 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'RADAR', bold: true, size: 28, color: ACCENT }), new TextRun({ text: '  ·  By Scognamiglio 2026', size: 18, color: '64748B' })] }),
     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: project.name, bold: true, size: 56 })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: 'Report di media intelligence', size: 26, color: '64748B' })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: 'Media intelligence report', size: 26, color: '64748B' })] }),
     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: today, size: 22, color: '64748B' })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 2400 }, children: [new TextRun({ text: `Dati ultimi ${days} giorni · Query: ${project.keywords.join(', ')}`, size: 20, color: '64748B' })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 2400 }, children: [new TextRun({ text: `Data from the last ${days} days · Query: ${project.keywords.join(', ')}`, size: 20, color: '64748B' })] }),
   ];
 
   if (has('kpi')) {
     children.push(
-      h1('In sintesi'),
-      bullet(`${kpi.total7.toLocaleString('it-IT')} mention negli ultimi 7 giorni da ${kpi.sources} fonti attive`),
+      h1('At a glance'),
+      bullet(`${kpi.total7.toLocaleString('en-US')}  mentions in the last 7 days from ${kpi.sources} active sources`),
       bullet(`Sentiment complessivo: ${sentimentLabel}${kpi.avgSentiment !== null ? ` (score ${kpi.avgSentiment.toFixed(2)})` : ''}`),
       bullet(`${data.dashboard.topTopics.length} temi rilevati, ${data.alerts.length} alert recenti`),
     );
   }
 
-  // Trend emergenti
+  // Emerging trends
   if (has('trends') && data.trends.length) {
-    children.push(h1('Trend emergenti (ultime 24 ore)'));
+    children.push(h1('Emerging trends (ultime 24 ore)'));
     for (const t of data.trends.slice(0, 6)) {
-      children.push(bullet(`×${t.score.toFixed(0)} ${t.topic} — ${t.n24} mention/24h${t.explanation ? `: ${t.explanation}` : ''}`));
+      children.push(bullet(`×${t.score.toFixed(0)} ${t.topic} — ${t.n24} mentions/24h${t.explanation ? `: ${t.explanation}` : ''}`));
     }
   }
 
   // Brief più recente
   if (has('brief') && data.briefs[0]) {
-    children.push(h1(`Daily brief — ${new Date(data.briefs[0].briefDate).toLocaleDateString('it-IT')}`));
+    children.push(h1(`Daily brief — ${new Date(data.briefs[0].briefDate).toLocaleDateString('en-US')}`));
     for (const b of briefToBlocks(data.briefs[0].content)) {
       if (b.type === 'h2') children.push(h2(b.text));
       else if (b.type === 'bullet') children.push(bullet(b.text));
@@ -101,15 +101,15 @@ export async function GET(req: Request) {
 
   // Temi
   if (has('topics') && data.dashboard.topTopics.length) {
-    children.push(h1('Temi principali (7 giorni)'));
-    children.push(table(['Tema', 'Mention'], data.dashboard.topTopics.map((t) => [t.topic, String(t.n)])));
+    children.push(h1('Top topics (7 days)'));
+    children.push(table(['Tema', 'Mentions'], data.dashboard.topTopics.map((t) => [t.topic, String(t.n)])));
   }
 
   // Benchmark
   if (has('benchmark') && data.benchmark.length) {
-    children.push(h1('Benchmark — share of voice (14 giorni)'));
+    children.push(h1('Benchmark — share of voice (14 days)'));
     children.push(table(
-      ['Entità', 'Mention', 'Share of voice', 'Sentiment medio'],
+      ['Entity', 'Mentions', 'Share of voice', 'Avg sentiment'],
       data.benchmark.map((r) => [
         r.entity.name, String(r.total),
         totalBench ? `${((r.total / totalBench) * 100).toFixed(1)}%` : '—',
@@ -122,7 +122,7 @@ export async function GET(req: Request) {
   if (has('audience') && data.audience.communities.length) {
     children.push(h1('Audience — dove si discute'));
     children.push(table(
-      ['Community', 'Fonte', 'Mention'],
+      ['Community', 'Source', 'Mentions'],
       data.audience.communities.slice(0, 10).map((c) => [c.community ?? '—', sourceLabel(c.source), String(c.n)]),
     ));
     children.push(h2('Lingue delle conversazioni'));
@@ -132,9 +132,9 @@ export async function GET(req: Request) {
 
   // Top contenuti
   if (has('content') && data.ratings.length) {
-    children.push(h1('Contenuti top per engagement (7 giorni)'));
+    children.push(h1('Top content by engagement (7 days)'));
     children.push(table(
-      ['Contenuto', 'Fonte', 'Engagement', 'AI score', 'Rischio'],
+      ['Contenuto', 'Source', 'Engagement', 'AI score', 'Risk'],
       data.ratings.slice(0, 12).map((r) => [
         (r.title || r.content).slice(0, 90), sourceLabel(r.source),
         String(Math.round(r.engagementScore)),
@@ -145,17 +145,17 @@ export async function GET(req: Request) {
 
   // Narrazioni
   if (has('narratives') && data.narratives.length) {
-    children.push(h1('Narrazioni'));
+    children.push(h1('Narratives'));
     for (const n of data.narratives) {
-      children.push(bullet(`${n.title} [${n.stance ?? 'neutra'}${n.coordinated ? ', coordinata' : ''}] · ${n.mentionCount} post${n.description ? ` — ${n.description}` : ''}`));
+      children.push(bullet(`${n.title} [${n.stance ?? 'neutral'}${n.coordinated ? ', coordinated' : ''}] · ${n.mentionCount} posts${n.description ? ` — ${n.description}` : ''}`));
     }
   }
 
   // Timeline
   if (has('timeline') && data.timeline.length) {
-    children.push(h1('Timeline del settore'));
+    children.push(h1('Sector timeline'));
     for (const e of data.timeline.slice(0, 25)) {
-      children.push(bullet(`${new Date(e.eventDate).toLocaleDateString('it-IT')} — ${e.title}${e.description ? `: ${e.description}` : ''}`));
+      children.push(bullet(`${new Date(e.eventDate).toLocaleDateString('en-US')} — ${e.title}${e.description ? `: ${e.description}` : ''}`));
     }
   }
 
@@ -164,7 +164,7 @@ export async function GET(req: Request) {
     children.push(h1('Alert recenti'));
     for (const a of data.alerts.slice(0, 8)) {
       const ex = (a.data as { explanation?: string } | null)?.explanation;
-      children.push(bullet(`[${new Date(a.createdAt).toLocaleDateString('it-IT')}] ${a.message}${ex ? ` — ${ex}` : ''}`));
+      children.push(bullet(`[${new Date(a.createdAt).toLocaleDateString('en-US')}] ${a.message}${ex ? ` — ${ex}` : ''}`));
     }
   }
 

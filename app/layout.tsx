@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     default: 'Radar — By Scognamiglio 2026',
     template: '%s — Radar',
   },
-  description: 'Social listening e media intelligence',
+  description: 'Social listening and media intelligence',
 };
 
 // Tutte le pagine leggono dal database a ogni richiesta: niente prerender statico.

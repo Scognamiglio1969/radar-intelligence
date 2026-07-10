@@ -3,26 +3,26 @@ import { getCurrentProject } from '@/lib/data';
 import { claudeAvailable } from '@/lib/claude';
 import { AskChat } from '@/components/ask-chat';
 
-export const metadata = { title: 'Chiedi ai dati' };
+export const metadata = { title: 'Ask the data' };
 
 export default async function AskPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
 
   return (
     <>
       <PageHeader
-        title="Chiedi ai dati"
-        subtitle={`Fai domande in linguaggio naturale sui dati di «${project.name}»: l'analista AI risponde con numeri e prove`}
+        title="Ask the data"
+        subtitle={`Ask questions in plain language about the data for “${project.name}”: the AI analyst answers with numbers and evidence`}
       />
       {claudeAvailable()
         ? <AskChat suggestions={[
-            'Qual è stato il tema più discusso negli ultimi 3 giorni?',
-            'Il sentiment sta migliorando o peggiorando? Perché?',
-            'Cosa si dice in inglese di diverso rispetto all’italiano?',
-            'Quali fonti stanno crescendo di più questa settimana?',
+            'What was the most discussed topic in the last 3 days?',
+            'Is sentiment improving or worsening? Why?',
+            'What is said differently in English vs other languages?',
+            'Which sources are growing the most this week?',
           ]} />
-        : <EmptyState message="Serve la API key Claude per usare l'analista." />}
+        : <EmptyState message="You need the Claude API key to use the analyst." />}
     </>
   );
 }

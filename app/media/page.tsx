@@ -10,7 +10,7 @@ export const metadata = { title: 'Media' };
 
 export default async function MediaPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const data = await mediaData(project.id);
 
   const readLang = (await cookies()).get('sr_translate')?.value ?? null;
@@ -20,7 +20,7 @@ export default async function MediaPage() {
 
   return (
     <>
-      <PageHeader title="Media Monitoring" subtitle="News e stampa degli ultimi 7 giorni, raggruppate per storia" />
+      <PageHeader title="Media Monitoring" subtitle="News and press from the last 7 days, grouped by story" />
       <div className="mb-4 flex items-center gap-2 text-xs">
         <TranslateBar current={readLang} langs={TRANSLATE_LANGS} />
       </div>
@@ -29,7 +29,7 @@ export default async function MediaPage() {
         <div className="flex flex-col gap-4 lg:col-span-2">
           {data.stories.length > 0 && (
             <section>
-              <h2 className="mb-2 text-sm font-semibold text-slate-300">Storie principali</h2>
+              <h2 className="mb-2 text-sm font-semibold text-slate-300">Top stories</h2>
               <div className="flex flex-col gap-3">
                 {data.stories.map((story) => {
                   const items = data.storyMentions.filter((m) => m.storyId === story.id);
@@ -52,7 +52,7 @@ export default async function MediaPage() {
                           </li>
                         ))}
                       </ul>
-                      <p className="mt-2 text-[11px] text-slate-600">{items.length} articoli</p>
+                      <p className="mt-2 text-[11px] text-slate-600">{items.length} articles</p>
                     </article>
                   );
                 })}
@@ -61,21 +61,21 @@ export default async function MediaPage() {
           )}
 
           <section>
-            <h2 className="mb-2 text-sm font-semibold text-slate-300">Tutte le news</h2>
+            <h2 className="mb-2 text-sm font-semibold text-slate-300">All news</h2>
             <div className="flex flex-col gap-2">
               {data.news.length
                 ? data.news.map((m) => <MentionCard key={m.id} m={m} translated={translations.get(m.id)} />)
-                : <EmptyState message="Nessuna news raccolta negli ultimi 7 giorni." />}
+                : <EmptyState message="No news collected in the last 7 days." />}
             </div>
           </section>
         </div>
 
         <aside>
           <section className="panel sticky top-6 px-5 py-4">
-            <h2 className="mb-3 text-sm font-semibold text-slate-300">Testate più attive</h2>
+            <h2 className="mb-3 text-sm font-semibold text-slate-300">Most active outlets</h2>
             {data.topOutlets.length
               ? <HBars items={data.topOutlets.map((o) => ({ label: o.community ?? '?', value: Number(o.n) }))} color="#f59e0b" />
-              : <p className="text-sm text-slate-500">Nessun dato.</p>}
+              : <p className="text-sm text-slate-500">No data.</p>}
           </section>
         </aside>
       </div>

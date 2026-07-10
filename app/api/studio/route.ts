@@ -10,19 +10,19 @@ import { contentData, dashboardData } from '@/lib/data';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-const SYSTEM = `Sei un content strategist senior. Sulla base dei trend e delle conversazioni reali del giorno, proponi contenuti da pubblicare.
-Scrivi in italiano, in Markdown, ESATTAMENTE 3 proposte con questa struttura ciascuna:
-## Idea N — [titolo dell'idea]
-**Perché ora:** 1 frase legata a un trend o conversazione reale di oggi.
-**Formato consigliato:** (post LinkedIn / thread X / video breve / articolo) e momento di pubblicazione.
-**Bozza:**
-Il testo del post, pronto da pubblicare (80-120 parole per LinkedIn, più corto per X). Non usare hashtag spazzatura: massimo 3, pertinenti.
-Rispetta il tono di voce del brand se fornito. Massimo 550 parole totali.`;
+const SYSTEM = `You are a senior content strategist. Based on the day's real trends and conversations, propose content to publish.
+Write in English, in Markdown, EXACTLY 3 proposals, each with this structure:
+## Idea N — [idea title]
+**Why now:** 1 sentence tied to a real trend or conversation from today.
+**Recommended format:** (LinkedIn post / X thread / short video / article) and posting moment.
+**Draft:**
+The post text, ready to publish (80-120 words for LinkedIn, shorter for X). No junk hashtags: at most 3, relevant.
+Respect the brand tone of voice if provided. Max 550 words total.`;
 
 export async function POST() {
   const project = await getCurrentProject();
-  if (!project) return NextResponse.json({ error: 'nessun progetto' }, { status: 404 });
-  if (!claudeAvailable()) return NextResponse.json({ error: 'API key Claude non configurata' }, { status: 400 });
+  if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
+  if (!claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
 
   const db = await getDb();
   // Cache giornaliera: un giro di idee al giorno (rigenerabile domani)
@@ -38,19 +38,19 @@ export async function POST() {
 
   const ideas = await callClaude(
     MODELS.sonnet, 'content_studio', SYSTEM,
-    `Settore: ${project.name}
-${project.brandVoice ? `Tono di voce del brand: ${project.brandVoice}\n` : ''}
-Trend emergenti (radar):
-${trends.map((t) => `- ${t.topic} (x${t.score.toFixed(1)} rispetto alla norma)${t.explanation ? `: ${t.explanation}` : ''}`).join('\n') || '- nessun trend anomalo oggi'}
+    `Sector: ${project.name}
+${project.brandVoice ? `Brand tone of voice: ${project.brandVoice}\n` : ''}
+Emerging trends (radar):
+${trends.map((t) => `- ${t.topic} (x${t.score.toFixed(1)} vs the norm)${t.explanation ? `: ${t.explanation}` : ''}`).join('\n') || '- no anomalous trend today'}
 
-Temi principali della settimana:
+Top topics of the week:
 ${dashboard.topTopics.slice(0, 10).map((t) => `- ${t.topic} (${t.n})`).join('\n')}
 
-Contenuti che stanno performando (per capire cosa funziona):
+Content that is performing (to understand what works):
 ${top.slice(0, 8).map((r) => `- [${r.source}, eng ${Math.round(r.engagementScore)}] ${(r.title || r.content).slice(0, 140)}`).join('\n')}`,
     1500,
   );
-  if (!ideas) return NextResponse.json({ error: 'tetto di spesa raggiunto o errore API' }, { status: 429 });
+  if (!ideas) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
 
   await db.insert(contentIdeas).values({ projectId: project.id, contentMd: ideas });
   return NextResponse.json({ ideas });
@@ -58,7 +58,7 @@ ${top.slice(0, 8).map((r) => `- [${r.source}, eng ${Math.round(r.engagementScore
 
 export async function GET() {
   const project = await getCurrentProject();
-  if (!project) return NextResponse.json({ error: 'nessun progetto' }, { status: 404 });
+  if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
   const db = await getDb();
   const history = await db.select().from(contentIdeas)
     .where(eq(contentIdeas.projectId, project.id))

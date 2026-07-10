@@ -8,7 +8,7 @@ export type Engagement = {
 
 export type Quality = {
   score: number; relevance: number; virality: number;
-  risk: 'basso' | 'medio' | 'alto'; note?: string;
+  risk: 'low' | 'medium' | 'high'; note?: string;
 };
 
 export const users = pgTable('users', {

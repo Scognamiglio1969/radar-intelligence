@@ -3,37 +3,37 @@ import { PageHeader, EmptyState, SourceBadge, fmtDate } from '@/components/ui';
 import { ExternalLink } from 'lucide-react';
 
 const RISK_STYLE: Record<string, string> = {
-  basso: 'text-emerald-400', medio: 'text-amber-400', alto: 'text-red-400',
+  low: 'text-emerald-400', medium: 'text-amber-400', high: 'text-red-400',
 };
 
-export const metadata = { title: 'Contenuti' };
+export const metadata = { title: 'Content' };
 
 export default async function ContentPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const rows = await contentData(project.id);
 
   return (
     <>
       <PageHeader
         title="Social Content Ratings"
-        subtitle="Contenuti con più engagement (7 giorni): percentile per piattaforma + valutazione AI"
+        subtitle="Highest-engagement content (7 days): per-platform percentile + AI rating"
       />
 
       {rows.length === 0 ? (
-        <EmptyState message="Nessun contenuto con engagement negli ultimi 7 giorni." />
+        <EmptyState message="No content with engagement in the last 7 days." />
       ) : (
         <section className="panel overflow-x-auto px-5 py-4">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="pb-2 pr-3">Contenuto</th>
-                <th className="pb-2 pr-3">Fonte</th>
+                <th className="pb-2 pr-3">Content</th>
+                <th className="pb-2 pr-3">Source</th>
                 <th className="pb-2 pr-3 text-right">Engagement</th>
                 <th className="pb-2 pr-3 text-right">Percentile</th>
                 <th className="pb-2 pr-3 text-right">AI score</th>
-                <th className="pb-2 pr-3 text-right">Viralità</th>
-                <th className="pb-2 text-right">Rischio</th>
+                <th className="pb-2 pr-3 text-right">Virality</th>
+                <th className="pb-2 text-right">Risk</th>
               </tr>
             </thead>
             <tbody>
@@ -53,7 +53,7 @@ export default async function ContentPage() {
                     </p>
                   </td>
                   <td className="py-2.5 pr-3"><SourceBadge source={m.source} /></td>
-                  <td className="py-2.5 pr-3 text-right">{Math.round(m.engagementScore).toLocaleString('it-IT')}</td>
+                  <td className="py-2.5 pr-3 text-right">{Math.round(m.engagementScore).toLocaleString('en-US')}</td>
                   <td className="py-2.5 pr-3 text-right">
                     <span className={m.percentile >= 80 ? 'font-semibold text-sky-300' : ''}>{m.percentile}°</span>
                   </td>
@@ -69,7 +69,7 @@ export default async function ContentPage() {
             </tbody>
           </table>
           <p className="mt-3 text-xs text-slate-600">
-            La valutazione AI (score, viralità, rischio) viene assegnata ogni giorno ai 30 contenuti col maggior engagement.
+            The AI rating (score, virality, risk) is assigned daily to the 30 highest-engagement items.
           </p>
         </section>
       )}

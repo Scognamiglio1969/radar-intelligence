@@ -7,7 +7,7 @@ import { NEWS_SOURCES } from '@/lib/connectors';
 const HAIKU = 'claude-haiku-4-5';
 const SONNET = 'claude-sonnet-4-6';
 
-// USD per milione di token
+// USD per million tokens
 const PRICES: Record<string, { input: number; output: number }> = {
   [HAIKU]: { input: 1, output: 5 },
   [SONNET]: { input: 3, output: 15 },
@@ -21,13 +21,13 @@ export function claudeAvailable(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
-/** Tetto mensile di spesa API in USD (env API_BUDGET_USD, default 6). */
+/** Monthly API spend cap in USD (env API_BUDGET_USD, default 6). */
 export function monthlyBudgetUsd(): number {
   const n = Number(process.env.API_BUDGET_USD);
   return Number.isFinite(n) && n > 0 ? n : 6;
 }
 
-/** Spesa API del mese corrente in USD. */
+/** Current-month API spend in USD. */
 export async function monthSpendUsd(): Promise<number> {
   const db = await getDb();
   const start = new Date();
@@ -39,7 +39,7 @@ export async function monthSpendUsd(): Promise<number> {
 
 export const MODELS = { haiku: HAIKU, sonnet: SONNET };
 
-/** Rimuove i surrogati UTF-16 spaiati (emoji spezzate dai troncamenti): renderebbero invalido il JSON della richiesta. */
+/** Strips lone UTF-16 surrogates (emoji broken by truncation): they would make the request JSON invalid. */
 function sanitize(s: string): string {
   return s
     .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')
@@ -51,10 +51,10 @@ export async function callClaude(model: string, purpose: string, system: string,
   if (!client) return null;
   system = sanitize(system);
   user = sanitize(user);
-  // Freno di emergenza: mai superare il tetto mensile.
+  // Emergency brake: never exceed the monthly cap.
   const spend = await monthSpendUsd();
   if (spend >= monthlyBudgetUsd()) {
-    console.warn(`[claude] tetto di spesa raggiunto ($${spend.toFixed(2)}/$${monthlyBudgetUsd()}): chiamata "${purpose}" saltata`);
+    console.warn(`[claude] spend cap reached ($${spend.toFixed(2)}/$${monthlyBudgetUsd()}): "${purpose}" call skipped`);
     return null;
   }
   const msg = await client.messages.create({
@@ -76,7 +76,7 @@ export async function callClaude(model: string, purpose: string, system: string,
   return block?.type === 'text' ? block.text : null;
 }
 
-/** Estrae il primo JSON valido da una risposta che può contenere testo attorno. */
+/** Extracts the first valid JSON from a response that may have text around it. */
 function parseJson<T>(text: string | null): T | null {
   if (!text) return null;
   const cleaned = text.replace(/```json|```/g, '').trim();
@@ -94,31 +94,31 @@ function parseJson<T>(text: string | null): T | null {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Analisi mention (Haiku, batch): lingua, sentiment, temi, entità
+// 1. Mention analysis (Haiku, batch): language, sentiment, topics, entities
 // ---------------------------------------------------------------------------
 
 type AnalysisRow = {
-  id: number; language: string; sentiment: 'positivo' | 'neutro' | 'negativo';
+  id: number; language: string; sentiment: 'positive' | 'neutral' | 'negative';
   sentiment_score: number; relevance: number; relevance_reason: string;
   topics: string[]; entities: string[];
 };
 
-const ANALYSIS_SYSTEM = `Sei un analista di social listening. Ricevi il tema monitorato e un array JSON di contenuti (news, post social).
-Per OGNI elemento restituisci un oggetto con:
-- id: lo stesso id ricevuto
-- language: codice ISO 639-1 della lingua del testo (es. "it", "en")
-- sentiment: "positivo", "neutro" o "negativo" — riferito al tono del contenuto verso il tema di cui parla
-- sentiment_score: numero da -1 (molto negativo) a 1 (molto positivo)
-- relevance: 1-5, quanto il contenuto è rilevante e importante per chi monitora il tema (5 = centrale e di peso, 3 = attinente ma ordinario, 1 = marginale o fuori tema)
-- relevance_reason: massimo 12 parole in italiano che motivano il giudizio di rilevanza
-- topics: massimo 3 temi in italiano, brevi (1-3 parole, minuscole)
-- entities: massimo 5 entità nominate (brand, aziende, persone, prodotti)
-Rispondi SOLO con l'array JSON, nessun altro testo.`;
+const ANALYSIS_SYSTEM = `You are a social listening analyst. You receive the monitored topic and a JSON array of items (news, social posts).
+For EACH item, return an object with:
+- id: the same id you received
+- language: ISO 639-1 code of the text's language (e.g. "it", "en")
+- sentiment: "positive", "neutral" or "negative" — about the tone of the content toward the topic it discusses
+- sentiment_score: number from -1 (very negative) to 1 (very positive)
+- relevance: 1-5, how relevant and important the item is for someone monitoring the topic (5 = central and weighty, 3 = on-topic but ordinary, 1 = marginal or off-topic)
+- relevance_reason: at most 12 words in English explaining the relevance judgment
+- topics: at most 3 topics in English, short (1-3 words, lowercase)
+- entities: at most 5 named entities (brands, companies, people, products)
+Respond ONLY with the JSON array, no other text.`;
 
 export async function analyzePendingMentions(projectId: number, theme: string, limit = 80): Promise<{ analyzed: number; pending: number }> {
   const db = await getDb();
-  // Nuove mention + backfill graduale della rilevanza sui contenuti recenti
-  // già analizzati prima che esistessero le stelle
+  // New mentions + gradual relevance backfill on recent items already analyzed
+  // before the stars existed
   const d3 = new Date(Date.now() - 3 * 86400_000);
   const pendingCond = sql`(${mentions.analyzedAt} IS NULL OR (${mentions.relevance} IS NULL AND ${mentions.publishedAt} >= ${d3.toISOString()}::timestamptz))`;
   const pending = await db.select({
@@ -143,17 +143,17 @@ export async function analyzePendingMentions(projectId: number, theme: string, l
     }));
     try {
       const text = await callClaude(
-        HAIKU, 'analisi_mention', ANALYSIS_SYSTEM,
-        `Tema monitorato: ${theme}\n\n${JSON.stringify(payload)}`, 3800,
+        HAIKU, 'mention_analysis', ANALYSIS_SYSTEM,
+        `Monitored topic: ${theme}\n\n${JSON.stringify(payload)}`, 3800,
       );
       const rows = parseJson<AnalysisRow[]>(text);
       if (!rows) return;
-      const sentimentMap: Record<string, string> = { positivo: 'positivo', neutro: 'neutro', negativo: 'negativo' };
+      const sentimentMap: Record<string, string> = { positive: 'positive', neutral: 'neutral', negative: 'negative' };
       for (const r of rows) {
         if (!chunk.some((m) => m.id === r.id)) continue;
         await db.update(mentions).set({
           language: r.language?.slice(0, 5),
-          sentiment: sentimentMap[r.sentiment] ?? 'neutro',
+          sentiment: sentimentMap[r.sentiment] ?? 'neutral',
           sentimentScore: Math.max(-1, Math.min(1, Number(r.sentiment_score) || 0)),
           relevance: Math.max(1, Math.min(5, Math.round(Number(r.relevance)) || 3)),
           relevanceReason: r.relevance_reason?.slice(0, 200) ?? null,
@@ -164,7 +164,7 @@ export async function analyzePendingMentions(projectId: number, theme: string, l
         analyzed++;
       }
     } catch (e) {
-      console.error('Analisi batch fallita:', e);
+      console.error('Batch analysis failed:', e);
     }
   }));
 
@@ -172,18 +172,18 @@ export async function analyzePendingMentions(projectId: number, theme: string, l
 }
 
 // ---------------------------------------------------------------------------
-// 2. Content ratings (Sonnet): quality score dei contenuti top per engagement
+// 2. Content ratings (Sonnet): quality score of the top content by engagement
 // ---------------------------------------------------------------------------
 
-const QUALITY_SYSTEM = `Sei un analista di contenuti social. Ricevi un array JSON di contenuti con engagement alto.
-Per OGNI elemento restituisci:
-- id: lo stesso id
-- score: 0-100, qualità complessiva del contenuto (informatività, credibilità, rilevanza per il tema)
-- relevance: 0-100, pertinenza rispetto al tema monitorato
-- virality: 0-100, potenziale di diffusione
-- risk: "basso", "medio" o "alto" — rischio reputazionale/disinformazione per chi opera nel settore
-- note: una frase in italiano (max 15 parole) che motiva il giudizio
-Rispondi SOLO con l'array JSON.`;
+const QUALITY_SYSTEM = `You are a social content analyst. You receive a JSON array of high-engagement items.
+For EACH item, return:
+- id: the same id
+- score: 0-100, overall content quality (informativeness, credibility, relevance to the topic)
+- relevance: 0-100, pertinence to the monitored topic
+- virality: 0-100, spread potential
+- risk: "low", "medium" or "high" — reputational/disinformation risk for someone operating in the sector
+- note: one sentence in English (max 15 words) justifying the judgment
+Respond ONLY with the JSON array.`;
 
 export async function scoreTopContent(projectId: number, topic: string): Promise<number> {
   const db = await getDb();
@@ -208,7 +208,7 @@ export async function scoreTopContent(projectId: number, topic: string): Promise
   }));
   const text = await callClaude(
     SONNET, 'content_ratings', QUALITY_SYSTEM,
-    `Tema monitorato: ${topic}\n\n${JSON.stringify(payload)}`, 3500,
+    `Monitored topic: ${topic}\n\n${JSON.stringify(payload)}`, 3500,
   );
   const rows = parseJson<(Quality & { id: number })[]>(text);
   if (!rows) return 0;
@@ -220,7 +220,7 @@ export async function scoreTopContent(projectId: number, topic: string): Promise
         score: Math.max(0, Math.min(100, Number(r.score) || 0)),
         relevance: Math.max(0, Math.min(100, Number(r.relevance) || 0)),
         virality: Math.max(0, Math.min(100, Number(r.virality) || 0)),
-        risk: ['basso', 'medio', 'alto'].includes(r.risk) ? r.risk : 'basso',
+        risk: ['low', 'medium', 'high'].includes(r.risk) ? r.risk : 'low',
         note: r.note,
       },
     }).where(eq(mentions.id, r.id));
@@ -230,13 +230,13 @@ export async function scoreTopContent(projectId: number, topic: string): Promise
 }
 
 // ---------------------------------------------------------------------------
-// 3. Raggruppamento news in storie (Sonnet)
+// 3. Grouping news into stories (Sonnet)
 // ---------------------------------------------------------------------------
 
-const STORIES_SYSTEM = `Sei un media analyst. Ricevi titoli di news (con id) sullo stesso settore.
-Raggruppa quelli che parlano della STESSA storia/evento (anche in lingue diverse).
-Rispondi SOLO con un array JSON di oggetti: { "title": "titolo della storia in italiano", "summary": "sintesi in 1-2 frasi in italiano", "ids": [id, ...] }.
-Includi solo storie con almeno 2 articoli. Ignora gli articoli non raggruppabili.`;
+const STORIES_SYSTEM = `You are a media analyst. You receive news headlines (with id) about the same sector.
+Group the ones covering the SAME story/event (even across different languages).
+Respond ONLY with a JSON array of objects: { "title": "story title in English", "summary": "1-2 sentence summary in English", "ids": [id, ...] }.
+Include only stories with at least 2 articles. Ignore articles that cannot be grouped.`;
 
 export async function clusterNewsStories(projectId: number): Promise<number> {
   const db = await getDb();
@@ -255,7 +255,7 @@ export async function clusterNewsStories(projectId: number): Promise<number> {
   if (news.length < 4) return 0;
 
   const payload = news.filter((n) => n.title).map((n) => ({ id: n.id, title: n.title!.slice(0, 150) }));
-  const text = await callClaude(SONNET, 'clustering_storie', STORIES_SYSTEM, JSON.stringify(payload), 3000);
+  const text = await callClaude(SONNET, 'story_clustering', STORIES_SYSTEM, JSON.stringify(payload), 3000);
   const groups = parseJson<{ title: string; summary: string; ids: number[] }[]>(text);
   if (!groups) return 0;
 
@@ -276,20 +276,20 @@ export async function clusterNewsStories(projectId: number): Promise<number> {
 // 4. Daily brief (Sonnet)
 // ---------------------------------------------------------------------------
 
-const BRIEF_SYSTEM = `Sei un senior media intelligence analyst. Scrivi un briefing esecutivo GIORNALIERO in italiano, in Markdown, per un decisore che monitora un settore.
-Struttura richiesta:
-## In sintesi (3 bullet essenziali)
-## Cosa è successo (le storie principali, con contesto)
-## Sentiment e conversazioni (tono, dove si discute, temi emergenti)
-## Rischi e opportunità (concreti, azionabili)
-Massimo 500 parole. Tono professionale e diretto. Basati SOLO sui dati forniti; se i dati sono pochi dillo apertamente.`;
+const BRIEF_SYSTEM = `You are a senior media intelligence analyst. Write a DAILY executive briefing in English, in Markdown, for a decision-maker monitoring a sector.
+Required structure:
+## At a glance (3 essential bullets)
+## What happened (the main stories, with context)
+## Sentiment and conversations (tone, where it's discussed, emerging topics)
+## Risks and opportunities (concrete, actionable)
+Max 500 words. Professional, direct tone. Base it ONLY on the provided data; if data is scarce, say so openly.`;
 
 export async function generateDailyBrief(projectId: number, projectName: string, briefData: unknown): Promise<boolean> {
   const db = await getDb();
   if (!claudeAvailable()) return false;
   const text = await callClaude(
     SONNET, 'daily_brief', BRIEF_SYSTEM,
-    `Settore monitorato: ${projectName}\nData: ${new Date().toLocaleDateString('it-IT', { dateStyle: 'full' })}\n\nDati delle ultime 24 ore:\n${JSON.stringify(briefData).slice(0, 9000)}`,
+    `Monitored sector: ${projectName}\nDate: ${new Date().toLocaleDateString('en-US', { dateStyle: 'full' })}\n\nLast 24 hours of data:\n${JSON.stringify(briefData).slice(0, 9000)}`,
     1300,
   );
   if (!text) return false;

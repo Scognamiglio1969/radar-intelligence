@@ -32,7 +32,7 @@ function parseSeenDate(s: string): Date {
 
 export const gdelt: Connector = {
   id: 'gdelt',
-  label: 'GDELT (news globali)',
+  label: 'GDELT (worldwide news)',
   tier: 'free',
   enabled: () => true,
   async fetchMentions(q) {

@@ -7,8 +7,8 @@ import { SearchBox } from '@/components/search-box';
 import { TranslateBar } from '@/components/translate-bar';
 import { translateMentions, TRANSLATE_LANGS, type Translated } from '@/lib/translate';
 
-const SENTIMENTS = ['positivo', 'neutro', 'negativo'];
-const PERIODS = [{ v: 1, l: '24 ore' }, { v: 7, l: '7 giorni' }, { v: 30, l: '30 giorni' }, { v: 90, l: '90 giorni' }];
+const SENTIMENTS = ['positive', 'neutral', 'negative'];
+const PERIODS = [{ v: 1, l: '24 hours' }, { v: 7, l: '7 days' }, { v: 30, l: '30 days' }, { v: 90, l: '90 days' }];
 
 function buildQS(params: Record<string, string | number | undefined>) {
   const qs = new URLSearchParams();
@@ -19,13 +19,13 @@ function buildQS(params: Record<string, string | number | undefined>) {
   return s ? `?${s}` : '';
 }
 
-export const metadata = { title: 'Ascolto' };
+export const metadata = { title: 'Listening' };
 
 export default async function ListeningPage({ searchParams }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const sp = await searchParams;
   const semanticTerms = sp.st ? sp.st.split('|').filter(Boolean) : undefined;
   const filters = {
@@ -39,7 +39,7 @@ export default async function ListeningPage({ searchParams }: {
   };
   const data = await listeningData(project.id, filters);
 
-  // Lingua di lettura scelta dall'utente: traduce la pagina corrente (cache in DB)
+  // Reading language chosen by the user: translates the current page (cached in DB)
   const readLang = (await cookies()).get('sr_translate')?.value ?? null;
   const translations: Map<number, Translated> = readLang
     ? await translateMentions(data.rows, readLang)
@@ -54,7 +54,7 @@ export default async function ListeningPage({ searchParams }: {
 
   return (
     <>
-      <PageHeader title="Ascolto" subtitle={`${fmtNum(data.total)} mention trovate`} />
+      <PageHeader title="Listening" subtitle={`${fmtNum(data.total)} mentions found`} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
         <div className="mr-2"><SearchBox /></div>
@@ -62,33 +62,33 @@ export default async function ListeningPage({ searchParams }: {
         {semanticTerms && (
           <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-2.5 py-1 text-violet-300"
             title={semanticTerms.join(', ')}>
-            ✨ ricerca semantica: {semanticTerms.length} termini
+            ✨ semantic search: {semanticTerms.length} terms
           </span>
         )}
 
-        <FilterGroup label="Fonte" items={Object.entries(SOURCE_META).map(([id, m]) => ({ value: id, label: m.label }))}
+        <FilterGroup label="Source" items={Object.entries(SOURCE_META).map(([id, m]) => ({ value: id, label: m.label }))}
           param="fonte" current={current} />
         <FilterGroup label="Sentiment" items={SENTIMENTS.map((s) => ({ value: s, label: s }))}
           param="sentiment" current={current} />
-        <FilterGroup label="Periodo" items={PERIODS.map((p) => ({ value: String(p.v), label: p.l }))}
+        <FilterGroup label="Period" items={PERIODS.map((p) => ({ value: String(p.v), label: p.l }))}
           param="giorni" current={current} />
-        <FilterGroup label="Lingua" items={data.languages.map((l) => ({ value: l.language!, label: l.language!.toUpperCase() }))}
+        <FilterGroup label="Language" items={data.languages.map((l) => ({ value: l.language!, label: l.language!.toUpperCase() }))}
           param="lingua" current={current} />
-        <FilterGroup label="Rilevanza" items={[{ value: '4', label: '★ ≥ 4' }, { value: '5', label: '★ 5' }]}
+        <FilterGroup label="Relevance" items={[{ value: '4', label: '★ ≥ 4' }, { value: '5', label: '★ 5' }]}
           param="rilevanza" current={current} />
-        <FilterGroup label="Ordina" items={[
-          { value: 'engagement', label: 'engagement' }, { value: 'rilevanza', label: 'rilevanza' },
+        <FilterGroup label="Sort" items={[
+          { value: 'engagement', label: 'engagement' }, { value: 'rilevanza', label: 'relevance' },
         ]} param="ordina" current={current} />
         {sp.autore && (
           <span className="flex items-center gap-1 rounded-full bg-sky-500/15 px-2.5 py-1 text-sky-300">
-            autore: {sp.autore}
+            author: {sp.autore}
           </span>
         )}
 
         {(sp.fonte || sp.sentiment || sp.lingua || sp.q || sp.st || sp.giorni || sp.rilevanza || sp.autore || sp.ordina) && (
           <Link href="/listening"
             className="flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-3.5 py-1.5 font-semibold text-sky-300 transition hover:bg-sky-500/25">
-            ↺ Mostra tutto
+            ↺ Show all
           </Link>
         )}
       </div>
@@ -96,17 +96,17 @@ export default async function ListeningPage({ searchParams }: {
       <div className="flex flex-col gap-2">
         {data.rows.length
           ? data.rows.map((m) => <MentionCard key={m.id} m={m} translated={translations.get(m.id)} />)
-          : <EmptyState message="Nessuna mention con questi filtri." />}
+          : <EmptyState message="No mentions with these filters." />}
       </div>
 
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-center gap-3 text-sm">
           {data.page > 1 && (
-            <Link className="text-sky-400 hover:text-sky-300" href={`/listening${buildQS({ ...current, pagina: data.page - 1 })}`}>← precedente</Link>
+            <Link className="text-sky-400 hover:text-sky-300" href={`/listening${buildQS({ ...current, pagina: data.page - 1 })}`}>← previous</Link>
           )}
-          <span className="text-slate-500">pagina {data.page} di {totalPages}</span>
+          <span className="text-slate-500">page {data.page} of {totalPages}</span>
           {data.page < totalPages && (
-            <Link className="text-sky-400 hover:text-sky-300" href={`/listening${buildQS({ ...current, pagina: data.page + 1 })}`}>successiva →</Link>
+            <Link className="text-sky-400 hover:text-sky-300" href={`/listening${buildQS({ ...current, pagina: data.page + 1 })}`}>next →</Link>
           )}
         </div>
       )}

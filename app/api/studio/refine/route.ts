@@ -6,26 +6,26 @@ export const maxDuration = 40;
 export const dynamic = 'force-dynamic';
 
 const FORMAT_LABEL: Record<string, string> = {
-  linkedin: 'post LinkedIn', xthread: 'thread per X (tweet separati da doppia riga)',
-  instagram: 'caption Instagram con hashtag', videohook: 'hook di apertura per video breve',
-  newsletter: 'paragrafo da newsletter',
+  linkedin: 'LinkedIn post', xthread: 'X thread (tweets separated by a blank line)',
+  instagram: 'Instagram caption with hashtags', videohook: 'opening hook for a short video',
+  newsletter: 'newsletter paragraph',
 };
 
 export async function POST(req: Request) {
   const project = await getCurrentProject();
-  if (!project) return NextResponse.json({ error: 'nessun progetto' }, { status: 404 });
-  if (!claudeAvailable()) return NextResponse.json({ error: 'API key Claude non configurata' }, { status: 400 });
+  if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
+  if (!claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
 
   const { text, instruction, format } = await req.json() as { text: string; instruction: string; format: string };
-  if (!text?.trim() || !instruction?.trim()) return NextResponse.json({ error: 'dati mancanti' }, { status: 400 });
+  if (!text?.trim() || !instruction?.trim()) return NextResponse.json({ error: 'missing data' }, { status: 400 });
 
   const revised = await callClaude(
     MODELS.haiku, 'studio_refine',
-    `Sei un copywriter. Riscrivi il testo seguendo l'istruzione dell'utente, mantenendo il formato: ${FORMAT_LABEL[format] ?? 'testo social'}.
-${project.brandVoice ? `Tono di voce del brand: ${project.brandVoice}\n` : ''}Rispondi SOLO con il testo rivisto, senza commenti.`,
-    `Testo attuale:\n${text}\n\nIstruzione: ${instruction}`,
+    `You are a copywriter. Rewrite the text following the user's instruction, keeping the format: ${FORMAT_LABEL[format] ?? 'social text'}.
+${project.brandVoice ? `Brand tone of voice: ${project.brandVoice}\n` : ''}Respond ONLY with the revised text, no comments.`,
+    `Current text:\n${text}\n\nInstruction: ${instruction}`,
     900,
   );
-  if (!revised) return NextResponse.json({ error: 'tetto di spesa raggiunto o errore API' }, { status: 429 });
+  if (!revised) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
   return NextResponse.json({ text: revised.trim() });
 }

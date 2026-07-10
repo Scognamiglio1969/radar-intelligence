@@ -69,7 +69,7 @@ async function fetchFeed(url: string): Promise<RawMention[]> {
 
 export const rss: Connector = {
   id: 'rss',
-  label: 'Feed RSS personalizzati',
+  label: 'Custom RSS feeds',
   tier: 'free',
   enabled: () => true,
   async fetchMentions() {

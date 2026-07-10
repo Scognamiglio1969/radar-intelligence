@@ -25,7 +25,7 @@ export function AskChat({ suggestions }: { suggestions: string[] }) {
         body: JSON.stringify({ question, history: turns.slice(-3) }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'errore');
+      if (!res.ok) throw new Error(data.error ?? 'error');
       setTurns((t) => [...t, { q: question, a: data.answer }]);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch (e) {
@@ -39,7 +39,7 @@ export function AskChat({ suggestions }: { suggestions: string[] }) {
     <div className="flex flex-col gap-4">
       {turns.length === 0 && (
         <div className="panel px-5 py-5">
-          <p className="mb-3 text-sm text-slate-400">Prova a chiedere:</p>
+          <p className="mb-3 text-sm text-slate-400">Try asking:</p>
           <div className="flex flex-wrap gap-2">
             {suggestions.map((s) => (
               <button key={s} onClick={() => ask(s)}
@@ -65,10 +65,10 @@ export function AskChat({ suggestions }: { suggestions: string[] }) {
 
       {busy && (
         <div className="panel flex max-w-[92%] items-center gap-2 px-5 py-4 text-sm text-slate-400">
-          <Loader2 className="size-4 animate-spin text-sky-400" /> Sto analizzando i dati…
+          <Loader2 className="size-4 animate-spin text-sky-400" /> Analyzing the data…
         </div>
       )}
-      {error && <p className="text-sm text-red-400">Errore: {error}</p>}
+      {error && <p className="text-sm text-red-400">Error: {error}</p>}
       <div ref={bottomRef} />
 
       <form
@@ -78,7 +78,7 @@ export function AskChat({ suggestions }: { suggestions: string[] }) {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Fai una domanda sui dati…"
+          placeholder="Ask a question about the data…"
           className="flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-slate-600"
         />
         <button type="submit" disabled={busy || !input.trim()}
@@ -87,7 +87,7 @@ export function AskChat({ suggestions }: { suggestions: string[] }) {
         </button>
       </form>
       <p className="text-center text-[11px] text-slate-600">
-        Ogni domanda costa ~1 centesimo di API. Le risposte si basano sugli ultimi 14 giorni di dati.
+        Each question costs ~1 cent of API. Answers are based on the last 14 days of data.
       </p>
     </div>
   );

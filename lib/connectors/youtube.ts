@@ -16,7 +16,7 @@ export const youtube: Connector = {
   label: 'YouTube',
   tier: 'freekey',
   enabled: () => Boolean(cfg('YOUTUBE_API_KEY')),
-  disabledReason: 'Serve una API Key YouTube (gratuita da Google Cloud Console): inseriscila qui',
+  disabledReason: 'Requires a YouTube API key (free from Google Cloud Console): enter it here',
   async fetchMentions(q) {
     const key = cfg('YOUTUBE_API_KEY')!;
     const out: RawMention[] = [];

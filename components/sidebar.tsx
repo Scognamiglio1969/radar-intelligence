@@ -13,32 +13,32 @@ import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
 
 const NAV: ({ href: string; label: string; icon: typeof Radar } | { section: string })[] = [
-  { section: 'Analisi' },
+  { section: 'Analytics' },
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/listening', label: 'Ascolto', icon: Ear },
+  { href: '/listening', label: 'Listening', icon: Ear },
   { href: '/media', label: 'Media', icon: Newspaper },
   { href: '/benchmark', label: 'Benchmark', icon: BarChart3 },
   { href: '/audience', label: 'Audience', icon: Users },
-  { href: '/content', label: 'Contenuti', icon: Star },
+  { href: '/content', label: 'Content', icon: Star },
   { section: 'Intelligence' },
-  { href: '/narratives', label: 'Narrazioni', icon: GitBranch },
-  { href: '/stakeholders', label: 'Mappa attori', icon: Network },
+  { href: '/narratives', label: 'Narratives', icon: GitBranch },
+  { href: '/stakeholders', label: 'Stakeholder map', icon: Network },
   { href: '/timeline', label: 'Timeline', icon: History },
-  { href: '/changes', label: 'Cosa è cambiato', icon: Diff },
-  { href: '/alerts', label: 'Alert', icon: Bell },
+  { href: '/changes', label: 'What changed', icon: Diff },
+  { href: '/alerts', label: 'Alerts', icon: Bell },
   { href: '/brief', label: 'Brief', icon: FileText },
-  { section: 'Insight avanzati' },
-  { href: '/insights/topics', label: 'Temi × Sentiment', icon: ScatterChart },
-  { href: '/insights/heatmap', label: 'Heatmap oraria', icon: Grid3x3 },
-  { href: '/insights/waterfall', label: 'Sentiment Waterfall', icon: TrendingDown },
-  { href: '/insights/clusters', label: 'Cluster conversazionali', icon: Boxes },
-  { href: '/insights/causal', label: 'Causa-Effetto', icon: Workflow },
+  { section: 'Advanced insights' },
+  { href: '/insights/topics', label: 'Topics × Sentiment', icon: ScatterChart },
+  { href: '/insights/heatmap', label: 'Hourly heatmap', icon: Grid3x3 },
+  { href: '/insights/waterfall', label: 'Sentiment waterfall', icon: TrendingDown },
+  { href: '/insights/clusters', label: 'Conversation clusters', icon: Boxes },
+  { href: '/insights/causal', label: 'Cause-Effect', icon: Workflow },
   { section: 'AI Studio' },
-  { href: '/ask', label: 'Chiedi ai dati', icon: MessageSquareText },
+  { href: '/ask', label: 'Ask the data', icon: MessageSquareText },
   { href: '/studio', label: 'Content Studio', icon: PenLine },
   { section: '' },
   { href: '/tv', label: 'War Room', icon: MonitorPlay },
-  { href: '/settings', label: 'Gestione progetti', icon: Settings },
+  { href: '/settings', label: 'Projects', icon: Settings },
 ];
 
 type Props = {
@@ -69,16 +69,16 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
         <UserCircle2 className="size-5 shrink-0 text-slate-500" />
         <div className="min-w-0">
           <p className="truncate text-xs font-medium text-slate-300">{user.name}</p>
-          <p className="text-[10px] uppercase tracking-wide text-slate-600">{user.role === 'admin' ? 'Admin' : 'Membro'}</p>
+          <p className="text-[10px] uppercase tracking-wide text-slate-600">{user.role === 'admin' ? 'Admin' : 'Member'}</p>
         </div>
       </div>
       <Link href="/impostazioni/account" onClick={() => setOpen(false)}
         className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm text-slate-400 transition hover:bg-white/5 hover:text-slate-200">
-        <UserCog className="size-4" /> Impostazioni
+        <UserCog className="size-4" /> Settings
       </Link>
       <button onClick={logout}
         className="flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm text-slate-400 transition hover:bg-white/5 hover:text-red-300">
-        <LogOut className="size-4" /> Esci
+        <LogOut className="size-4" /> Log out
       </button>
     </div>
   );
@@ -87,7 +87,7 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
     <>
       {/* Header mobile/tablet (sotto lg) */}
       <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-[var(--border)] bg-[#0c1226]/95 px-4 py-2.5 backdrop-blur lg:hidden">
-        <button onClick={() => setOpen(true)} aria-label="Apri il menu"
+        <button onClick={() => setOpen(true)} aria-label="Open menu"
           className="rounded-lg p-1.5 text-slate-300 hover:bg-white/10">
           <Menu className="size-5" />
         </button>
@@ -104,7 +104,7 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
           <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col gap-4 overflow-y-auto bg-[#0c1226] px-3 py-4 shadow-2xl">
             <div className="flex items-center gap-2 px-2">
               <Brand />
-              <button onClick={() => setOpen(false)} aria-label="Chiudi il menu"
+              <button onClick={() => setOpen(false)} aria-label="Close menu"
                 className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white/10">
                 <X className="size-5" />
               </button>
@@ -199,8 +199,8 @@ function FooterBlock({ lastIngest }: { lastIngest: string | null }) {
       <RefreshButton />
       <p className="px-1 text-[11px] leading-4 text-slate-500">
         {lastIngest
-          ? `Ultimo aggiornamento: ${new Date(lastIngest).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
-          : 'Nessuna raccolta dati ancora eseguita'}
+          ? `Last update: ${new Date(lastIngest).toLocaleString('en-US', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+          : 'No data collected yet'}
       </p>
     </div>
   );

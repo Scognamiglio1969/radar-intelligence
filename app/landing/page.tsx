@@ -7,155 +7,156 @@ import {
 import { ParticleField } from '@/components/particle-field';
 import { Brand } from '@/components/brand';
 
-export const metadata = { title: 'Radar, media intelligence By Scognamiglio 2026' };
+export const metadata = { title: 'Radar — open-source media intelligence' };
 
 const FEATURES = [
   {
     icon: Ear, color: 'text-sky-400',
-    title: 'Ascolto multicanale',
-    text: '9 fonti pubbliche gratuite, news mondiali via GDELT (oltre 100.000 testate in 65+ lingue) e Google News, più Reddit, Bluesky, Mastodon, YouTube, Telegram e feed RSS illimitati. In più 6 connettori premium pronti: X, Instagram, Facebook, TikTok, LinkedIn e NewsAPI (150.000 testate).',
+    title: 'Multi-channel listening',
+    text: '9 free public sources: worldwide news via GDELT (100,000+ outlets in 65+ languages) and Google News, plus Reddit, Bluesky, Mastodon, YouTube, Telegram and unlimited RSS feeds. Plus 6 ready premium connectors: X, Instagram, Facebook, TikTok, LinkedIn and NewsAPI (150,000 outlets).',
   },
   {
     icon: Star, color: 'text-amber-400',
-    title: 'Rilevanza a stelle',
-    text: 'Ogni contenuto è letto dall’AI e valutato da 1 a 5 stelle rispetto al tuo tema, con la motivazione. Il rumore sparisce.',
+    title: 'Star relevance',
+    text: 'Every item is read by AI and rated 1 to 5 stars against your topic, with the reason why. The noise disappears.',
   },
   {
     icon: Flame, color: 'text-orange-400',
-    title: 'Radar dei trend',
-    text: 'I temi in accelerazione anomala vengono intercettati prima che esplodano, con la spiegazione del perché stanno crescendo.',
+    title: 'Trend radar',
+    text: 'Topics accelerating abnormally are caught before they explode, with an explanation of why they are growing.',
   },
   {
     icon: FileText, color: 'text-emerald-400',
-    title: 'Daily brief esecutivo',
-    text: 'Ogni mattina un briefing scritto dall’AI sui dati delle ultime 24 ore: cosa è successo, sentiment, rischi e opportunità.',
+    title: 'Executive daily brief',
+    text: 'Every morning, an AI-written briefing on the last 24 hours: what happened, sentiment, risks and opportunities.',
   },
   {
     icon: MonitorPlay, color: 'text-red-400',
-    title: 'War Room live',
-    text: 'Una regia a schermo intero con radar animato, contatori e feed continuo. Da proiettare in riunione o su uno schermo in ufficio.',
+    title: 'Live War Room',
+    text: 'A full-screen control room with an animated radar, counters and a continuous feed. Project it in a meeting or on an office screen.',
   },
   {
     icon: GitBranch, color: 'text-violet-400',
-    title: 'Narrazioni e coordinamento',
-    text: 'Non solo cosa si dice: chi sta spingendo quale tesi, con segnalazione dei pattern sospetti di coordinamento.',
+    title: 'Narratives & coordination',
+    text: 'Not just what is said: who is pushing which thesis, flagging suspicious coordination patterns.',
   },
   {
     icon: MessageSquareText, color: 'text-cyan-400',
-    title: 'Chiedi ai dati',
-    text: 'Un analista AI conversazionale: fai domande in italiano e ricevi risposte con numeri e citazioni come prove.',
+    title: 'Ask the data',
+    text: 'A conversational AI analyst: ask questions in plain language and get answers backed by numbers and citations as evidence.',
   },
   {
     icon: ScatterChart, color: 'text-fuchsia-400',
-    title: 'Insight avanzati',
-    text: 'Mappa Temi × Sentiment, heatmap oraria, sentiment waterfall, cluster conversazionali e grafico causa-effetto: analisi visive che i tool standard non offrono.',
+    title: 'Advanced insights',
+    text: 'Topics × Sentiment map, hourly heatmap, sentiment waterfall, conversation clusters and a cause-effect chart: visual analyses standard tools don’t offer.',
   },
   {
     icon: PenLine, color: 'text-pink-400',
-    title: 'Content Studio avanzato',
-    text: 'Da un concetto a un kit multi-formato, LinkedIn, thread X, Instagram, hook video, newsletter, più 10 hook alternativi e rifinitura conversazionale di ogni bozza, nel tono di voce del brand.',
+    title: 'Advanced Content Studio',
+    text: 'From a concept to a multi-format kit — LinkedIn, X thread, Instagram, video hook, newsletter — plus 10 alternative hooks and conversational refinement of every draft, in the brand’s voice.',
   },
   {
     icon: Share2, color: 'text-teal-400',
-    title: 'Export e condivisione',
-    text: 'PDF, Excel, Word, PowerPoint con grafici modificabili. E link di sola lettura a scadenza per capi e clienti.',
+    title: 'Export & sharing',
+    text: 'PDF, Excel, Word, PowerPoint with editable charts. And read-only expiring links for managers and clients.',
   },
 ];
 
-// ✓ = incluso, ~ = parziale/con limiti, ✗ = non disponibile
+// ✓ = included, ~ = partial/limited, ✗ = not available
 type MarkValue = 'si' | 'parz' | 'no';
-type CompareRow = [string, MarkValue, MarkValue, string?, string?]; // [funzione, talkwalker, radar, notaTW, notaRadar]
+type CompareRow = [string, MarkValue, MarkValue, string?, string?]; // [feature, competitor, radar, competitorNote, radarNote]
 
 const COMPARISON: { cat: string; rows: CompareRow[] }[] = [
   {
-    cat: 'Fonti pubbliche (gratuite in Radar)',
+    cat: 'Public sources (free in Radar)',
     rows: [
-      ['News mondiali (GDELT)', 'si', 'si', 'incluse', 'oltre 100.000 testate, 65+ lingue'],
-      ['News aggregate (Google News)', 'si', 'si', , 'migliaia di testate'],
-      ['Reddit, Bluesky, Mastodon, Hacker News', 'parz', 'si', , 'social pubblici, senza chiavi'],
-      ['YouTube', 'si', 'si', , 'chiave gratuita'],
-      ['Canali Telegram pubblici', 'parz', 'si', , 'watchlist di canali'],
-      ['Feed RSS/Atom illimitati', 'parz', 'si', , 'testate, blog, Google Alerts'],
-      ['Copertura 30+ lingue', 'si', 'si'],
-      ['Query booleane (AND / OR / NOT) e aree geografiche', 'si', 'si'],
+      ['Worldwide news (GDELT)', 'si', 'si', 'included', '100,000+ outlets, 65+ languages'],
+      ['Aggregated news (Google News)', 'si', 'si', , 'thousands of outlets'],
+      ['Reddit, Bluesky, Mastodon, Hacker News', 'parz', 'si', , 'public social, no keys'],
+      ['YouTube', 'si', 'si', , 'free key'],
+      ['Public Telegram channels', 'parz', 'si', , 'channel watchlist'],
+      ['Unlimited RSS/Atom feeds', 'parz', 'si', , 'outlets, blogs, Google Alerts'],
+      ['30+ language coverage', 'si', 'si'],
+      ['Boolean queries (AND / OR / NOT) and geographies', 'si', 'si'],
     ],
   },
   {
-    cat: 'Fonti premium (private, a pagamento)',
+    cat: 'Premium sources (private, paid)',
     rows: [
-      ['NewsAPI, 150.000 testate news', 'si', 'parz', 'inclusa in licenza', 'connettore pronto, chiave a parte'],
-      ['X (Twitter)', 'si', 'parz', 'inclusa', 'connettore pronto, chiave a parte'],
-      ['Instagram e Facebook (Meta)', 'si', 'parz', 'inclusi', 'connettori pronti, token a parte'],
-      ['TikTok', 'si', 'parz', 'inclusa', 'connettore pronto, accesso a parte'],
-      ['LinkedIn', 'si', 'parz', 'inclusa', 'connettore pronto, token a parte'],
-      ['Archivio storico pluriennale', 'si', 'no', , '90 giorni, estendibile'],
+      ['NewsAPI, 150,000 news outlets', 'si', 'parz', 'included in license', 'connector ready, key separate'],
+      ['X (Twitter)', 'si', 'parz', 'included', 'connector ready, key separate'],
+      ['Instagram & Facebook (Meta)', 'si', 'parz', 'included', 'connectors ready, token separate'],
+      ['TikTok', 'si', 'parz', 'included', 'connector ready, access separate'],
+      ['LinkedIn', 'si', 'parz', 'included', 'connector ready, token separate'],
+      ['Multi-year historical archive', 'si', 'no', , '90 days, extendable'],
     ],
   },
   {
-    cat: 'Analisi AI',
+    cat: 'AI analysis',
     rows: [
-      ['Sentiment multilingua', 'si', 'si'],
-      ['Temi ed entità automatici', 'si', 'si'],
-      ['Rilevanza 1–5 spiegata per contenuto', 'no', 'si', , 'con motivazione AI'],
-      ['Traduzione integrata delle news', 'parz', 'si', , '8 lingue, cache permanente'],
-      ['Daily brief esecutivo scritto dall’AI', 'parz', 'si'],
-      ['Analista conversazionale sui dati', 'no', 'si', , '«Chiedi ai dati»'],
-      ['Ricerca semantica per concetti', 'parz', 'si'],
-      ['Area semantica del progetto in linguaggio naturale', 'no', 'si'],
+      ['Multilingual sentiment', 'si', 'si'],
+      ['Automatic topics & entities', 'si', 'si'],
+      ['Explained 1–5 relevance per item', 'no', 'si', , 'with AI rationale'],
+      ['Built-in news translation', 'parz', 'si', , '8 languages, permanent cache'],
+      ['AI-written executive daily brief', 'parz', 'si'],
+      ['Conversational analyst over your data', 'no', 'si', , '“Ask the data”'],
+      ['Semantic search by concept', 'parz', 'si'],
+      ['Natural-language topic definition', 'no', 'si'],
     ],
   },
   {
-    cat: 'Insight avanzati',
+    cat: 'Advanced insights',
     rows: [
-      ['Mappa Temi × Sentiment (bolle a quadranti)', 'parz', 'si', , 'volume, sentiment, crescita'],
-      ['Heatmap oraria e giornaliera', 'parz', 'si'],
-      ['Sentiment Waterfall (cosa ha mosso il tono)', 'no', 'si'],
-      ['Cluster conversazionali (famiglie di discorso)', 'no', 'si'],
-      ['Grafico Causa-Effetto (eventi → conseguenze)', 'no', 'si'],
+      ['Topics × Sentiment map (quadrant bubbles)', 'parz', 'si', , 'volume, sentiment, growth'],
+      ['Hourly & daily heatmap', 'parz', 'si'],
+      ['Sentiment waterfall (what moved the tone)', 'no', 'si'],
+      ['Conversation clusters (families of discourse)', 'no', 'si'],
+      ['Cause-effect chart (events → consequences)', 'no', 'si'],
     ],
   },
   {
     cat: 'Intelligence',
     rows: [
-      ['Alert su picchi e crolli di sentiment', 'si', 'si'],
-      ['Trend emergenti con spiegazione del perché', 'parz', 'si'],
-      ['Rilevamento narrazioni coordinate', 'no', 'si'],
-      ['Crisis playbook con bozza di comunicato', 'no', 'si', , 'in 30 secondi dall’alert'],
-      ['Timeline storica degli eventi del settore', 'no', 'si'],
-      ['Mappa attori e stakeholder', 'parz', 'si'],
-      ['Confronto settimanale in linguaggio naturale', 'no', 'si'],
-      ['Benchmark e share of voice', 'si', 'si'],
-      ['Notifiche push', 'si', 'si', 'email e app', 'Telegram'],
-      ['Demografia audience (età, genere)', 'si', 'no', , 'non derivabile da fonti accessibili'],
+      ['Alerts on volume spikes & sentiment drops', 'si', 'si'],
+      ['Emerging trends with the “why”', 'parz', 'si'],
+      ['Coordinated-narrative detection', 'no', 'si'],
+      ['Crisis playbook with draft statement', 'no', 'si', , '30 seconds from the alert'],
+      ['Historical timeline of industry events', 'no', 'si'],
+      ['Actor & stakeholder map', 'parz', 'si'],
+      ['Natural-language weekly comparison', 'no', 'si'],
+      ['Benchmark & share of voice', 'si', 'si'],
+      ['Push notifications', 'si', 'si', 'email & app', 'Telegram'],
+      ['Audience demographics (age, gender)', 'si', 'no', , 'not derivable from accessible sources'],
     ],
   },
   {
-    cat: 'Output e collaborazione',
+    cat: 'Output & collaboration',
     rows: [
-      ['Export Excel, Word, PDF', 'si', 'si'],
-      ['PowerPoint con grafici modificabili', 'parz', 'si', 'immagini statiche', 'grafici nativi Office'],
-      ['Report condivisibili con scadenza', 'si', 'si'],
-      ['War Room / display live animato', 'parz', 'si', 'dashboard TV', 'regia animata a rotazione'],
-      ['Content Studio: kit multi-formato (5 canali)', 'no', 'si', , 'da un concetto a tutti i canali'],
-      ['Content Studio: Hook Lab + editing conversazionale', 'no', 'si'],
-      ['Profili influencer con bozza di contatto', 'parz', 'si'],
-      ['Multi-progetto', 'si', 'si'],
+      ['Excel, Word, PDF export', 'si', 'si'],
+      ['PowerPoint with editable charts', 'parz', 'si', 'static images', 'native Office charts'],
+      ['Shareable reports with expiry', 'si', 'si'],
+      ['War Room / animated live display', 'parz', 'si', 'TV dashboard', 'rotating animated view'],
+      ['Content Studio: multi-format kit (5 channels)', 'no', 'si', , 'from one concept to every channel'],
+      ['Content Studio: Hook Lab + conversational editing', 'no', 'si'],
+      ['Influencer profiles with outreach draft', 'parz', 'si'],
+      ['Multi-project', 'si', 'si'],
     ],
   },
   {
-    cat: 'Piattaforma',
+    cat: 'Platform',
     rows: [
-      ['Dati nel proprio database', 'no', 'si'],
-      ['Funzioni nuove su misura in pochi giorni', 'no', 'si', 'roadmap del vendor'],
-      ['Tetto di spesa AI configurabile', 'no', 'si'],
-      ['Nessun vincolo contrattuale', 'no', 'si', 'contratti annuali'],
+      ['Open source & self-hostable', 'no', 'si', , 'AGPL-3.0'],
+      ['Data in your own database', 'no', 'si'],
+      ['Custom features in days', 'no', 'si', 'vendor roadmap'],
+      ['Configurable AI spend cap', 'no', 'si'],
+      ['No contractual lock-in', 'no', 'si', 'annual contracts'],
     ],
   },
 ];
 
-function CheckIcon() { return <Check className="inline size-4 text-emerald-400" aria-label="incluso" />; }
-function XIcon() { return <XMark className="inline size-4 text-red-400" aria-label="non disponibile" />; }
-function PartialIcon() { return <Minus className="inline size-4 text-amber-400" aria-label="parziale" />; }
+function CheckIcon() { return <Check className="inline size-4 text-emerald-400" aria-label="included" />; }
+function XIcon() { return <XMark className="inline size-4 text-red-400" aria-label="not available" />; }
+function PartialIcon() { return <Minus className="inline size-4 text-amber-400" aria-label="partial" />; }
 
 function Mark({ v, note }: { v: MarkValue; note?: string }) {
   return (
@@ -167,15 +168,15 @@ function Mark({ v, note }: { v: MarkValue; note?: string }) {
 }
 
 const STEPS = [
-  { n: '01', title: 'Descrivi il tema', text: 'Anche in linguaggio naturale: l’AI trasforma la descrizione in una query di monitoraggio multilingua.' },
-  { n: '02', title: 'Radar lavora da solo', text: 'Raccoglie, traduce, valuta e organizza i contenuti ogni giorno. Alert automatici se qualcosa esplode.' },
-  { n: '03', title: 'Tu decidi', text: 'Dashboard, brief, mappe e report pronti da esportare: le decisioni si prendono con i dati davanti.' },
+  { n: '01', title: 'Describe your topic', text: 'In plain language too: AI turns the description into a multilingual monitoring query.' },
+  { n: '02', title: 'Radar works on its own', text: 'It collects, translates, rates and organizes content every day. Automatic alerts if something blows up.' },
+  { n: '03', title: 'You decide', text: 'Dashboards, briefs, maps and export-ready reports: decisions made with the data in front of you.' },
 ];
 
 export default function LandingPage() {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#04070f] text-slate-200">
-      {/* sfondi */}
+      {/* backgrounds */}
       <div className="pointer-events-none fixed inset-0">
         <ParticleField />
         <div aria-hidden className="absolute -right-[30vmax] -top-[30vmax] size-[80vmax] rounded-full opacity-[0.07]"
@@ -189,7 +190,7 @@ export default function LandingPage() {
         <Brand />
         <Link href="/login"
           className="ml-auto rounded-lg bg-sky-500/90 px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400">
-          Accedi
+          Sign in
         </Link>
       </header>
 
@@ -197,38 +198,38 @@ export default function LandingPage() {
         {/* hero */}
         <section className="tv-3d flex flex-col items-center py-16 text-center sm:py-24">
           <span className="mb-6 flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-1.5 text-xs font-medium tracking-wide text-sky-300">
-            <Sparkles className="size-3.5" /> Media intelligence potenziata dall&apos;AI
+            <Sparkles className="size-3.5" /> AI-powered media intelligence
           </span>
           <h1 className="max-w-3xl text-4xl font-black leading-[1.08] tracking-tight sm:text-6xl">
-            Tutto ciò che il mondo dice sul tuo tema.{' '}
+            Everything the world says about your topic.{' '}
             <span className="bg-gradient-to-r from-sky-300 via-cyan-200 to-violet-300 bg-clip-text text-transparent">
-              Capito, valutato, raccontato.
+              Understood, rated, briefed.
             </span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
-            Radar ascolta news e social in più di 30 lingue, giudica la rilevanza di ogni contenuto,
-            intercetta i trend prima che esplodano e ogni mattina ti scrive il briefing.
-            Il lavoro di una piattaforma enterprise, senza il prezzo di una piattaforma enterprise.
+            Radar listens to news and social in 30+ languages, judges the relevance of every item,
+            catches trends before they explode, and writes your briefing every morning.
+            The work of an enterprise platform, without the enterprise price.
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link href="/login"
               className="flex items-center gap-2 rounded-xl bg-sky-500 px-7 py-3 text-base font-bold text-slate-950 shadow-lg shadow-sky-500/25 transition hover:bg-sky-400">
-              Entra in Radar <ArrowRight className="size-4" />
+              Open Radar <ArrowRight className="size-4" />
             </Link>
-            <a href="#funzioni"
+            <a href="#features"
               className="rounded-xl border border-[var(--border)] px-7 py-3 text-base font-medium text-slate-300 transition hover:bg-white/5">
-              Scopri le funzioni
+              See the features
             </a>
           </div>
         </section>
 
-        {/* numeri */}
+        {/* numbers */}
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            [<Database key="i" className="mx-auto size-5 text-sky-400" />, '15', 'fonti · 9 gratuite + 6 premium'],
-            [<Globe2 key="i" className="mx-auto size-5 text-violet-400" />, '30+', 'lingue analizzate'],
-            [<Sparkles key="i" className="mx-auto size-5 text-amber-400" />, '20', 'moduli di intelligence'],
-            [<Wallet key="i" className="mx-auto size-5 text-emerald-400" />, '<1%', 'del costo dei tool enterprise'],
+            [<Database key="i" className="mx-auto size-5 text-sky-400" />, '15', 'sources · 9 free + 6 premium'],
+            [<Globe2 key="i" className="mx-auto size-5 text-violet-400" />, '30+', 'languages analyzed'],
+            [<Sparkles key="i" className="mx-auto size-5 text-amber-400" />, '20', 'intelligence modules'],
+            [<Wallet key="i" className="mx-auto size-5 text-emerald-400" />, '<1%', 'of the cost of enterprise tools'],
           ].map(([icon, big, small], i) => (
             <div key={i} className="tv-shine rounded-2xl border border-[var(--border)] bg-[var(--panel)]/70 px-4 py-6 text-center backdrop-blur">
               {icon}
@@ -238,42 +239,41 @@ export default function LandingPage() {
           ))}
         </section>
 
-        {/* filosofia */}
+        {/* philosophy — open-source manifesto */}
         <section className="mx-auto max-w-3xl py-20 text-center sm:py-24">
-          <p className="text-xs font-bold uppercase tracking-[0.3em] text-violet-400">La filosofia</p>
-          <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">AI Employee: a real one man band</h2>
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-violet-400">Open source</p>
+          <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Enterprise power, at a thousandth of the price</h2>
           <div className="mt-6 flex flex-col gap-4 text-left text-base leading-relaxed text-slate-400 sm:text-lg">
             <p>
-              Radar nasce da una convinzione di <strong className="text-slate-200">Massimo Scognamiglio</strong>:
-              nell&apos;era dell&apos;intelligenza artificiale, <strong className="text-slate-200">un singolo professionista
-              può mettere a disposizione della propria azienda strumenti che ieri richiedevano budget enterprise</strong>,
-              se impara a orchestrare l&apos;AI invece di limitarsi a usarla.
+              Commercial listening platforms cost <strong className="text-slate-200">thousands of euros a month</strong> and
+              lock their intelligence behind annual contracts. Radar is <strong className="text-slate-200">open source</strong>:
+              the same core workflow — listen, analyze, decide, create — built on <strong className="text-slate-200">free public
+              data</strong> and the Claude API, that anyone can run for the price of an API key. Or nothing at all, if you just
+              want to collect data.
             </p>
             <p>
-              Questa piattaforma ne è la prova: un progetto personale nato per portare valore, in cui una persona
-              dirige l&apos;intelligenza artificiale come si coordina un team, l&apos;AI raccoglie, legge, valuta,
-              scrive e avvisa; <strong className="text-slate-200">le decisioni restano alle persone</strong>.
-              Il risultato: capacità di livello enterprise a una frazione del costo, con la libertà
-              di far evolvere lo strumento su misura delle esigenze di chi lo usa.
+              It began as a one-person project with a simple conviction: in the age of AI, a single person who orchestrates
+              models well can put <strong className="text-slate-200">enterprise-grade tools</strong> in anyone’s hands. Building
+              it in the open turns that into a shared, extensible foundation — <strong className="text-slate-200">bring your own
+              keys</strong>, own your data, and shape the tool to your needs. The AI collects, reads, evaluates, writes and
+              alerts; <strong className="text-slate-200">the decisions stay with people.</strong>
             </p>
             <blockquote className="flex flex-col gap-3 border-l-2 border-violet-500/50 pl-4 italic text-slate-300">
               <p>
-                «Il valore che porti non si misura più in ore di lavoro: si misura in quanto sai far rendere
-                l&apos;intelligenza, quella artificiale e quella delle persone intorno a te.
+                “The capabilities that used to cost thousands a month, in the hands of anyone — for a thousandth of the price.
               </p>
               <p>
-                Conta la tua capacità di trasformare strumenti, idee e relazioni in risultati più lucidi,
-                più rapidi, più profondi.»
+                That is the whole point of building this out in the open: democratizing media intelligence, one deployment at a time.”
               </p>
             </blockquote>
           </div>
         </section>
 
-        {/* funzioni */}
-        <section id="funzioni" className="pb-8">
-          <h2 className="text-center text-3xl font-black tracking-tight sm:text-4xl">Cosa fa Radar</h2>
+        {/* features */}
+        <section id="features" className="pb-8">
+          <h2 className="text-center text-3xl font-black tracking-tight sm:text-4xl">What Radar does</h2>
           <p className="mx-auto mt-3 max-w-xl text-center text-sm text-slate-500">
-            Le funzioni delle piattaforme di social intelligence enterprise, ripensate con l&apos;AI generativa al centro.
+            The features of enterprise social-intelligence platforms, rethought with generative AI at the core.
           </p>
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURES.map((f) => (
@@ -287,17 +287,17 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* confronto */}
+        {/* comparison */}
         <section className="py-16">
           <h2 className="text-center text-3xl font-black tracking-tight sm:text-4xl">Radar vs Competitor products</h2>
           <p className="mx-auto mt-3 max-w-xl text-center text-sm text-slate-500">
-            Funzione per funzione, un confronto onesto con le piattaforme enterprise di riferimento.
+            Feature by feature, an honest comparison with the leading enterprise platforms.
           </p>
           <div className="mt-10 overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--panel)]/70 backdrop-blur">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)] text-left">
-                  <th className="px-5 py-4 font-semibold text-slate-400">Funzionalità</th>
+                  <th className="px-5 py-4 font-semibold text-slate-400">Feature</th>
                   <th className="w-40 px-4 py-4 text-center font-semibold text-slate-300">Competitor products</th>
                   <th className="w-40 bg-sky-500/10 px-4 py-4 text-center font-bold text-sky-300">Radar</th>
                 </tr>
@@ -320,23 +320,23 @@ export default function LandingPage() {
                   ]
                 ))}
                 <tr>
-                  <td className="px-5 py-4 text-[13px] font-bold text-slate-200">Costo mensile</td>
-                  <td className="px-4 py-4 text-center text-sm font-bold text-red-300">€800–2.000+</td>
+                  <td className="px-5 py-4 text-[13px] font-bold text-slate-200">Monthly cost</td>
+                  <td className="px-4 py-4 text-center text-sm font-bold text-red-300">€800–2,000+</td>
                   <td className="bg-sky-500/10 px-4 py-4 text-center text-sm font-bold text-emerald-300">~€10–40</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-600">
-            <span className="flex items-center gap-1"><CheckIcon /> incluso</span>
-            <span className="flex items-center gap-1"><PartialIcon /> parziale o con limiti</span>
-            <span className="flex items-center gap-1"><XIcon /> non disponibile</span>
+            <span className="flex items-center gap-1"><CheckIcon /> included</span>
+            <span className="flex items-center gap-1"><PartialIcon /> partial or limited</span>
+            <span className="flex items-center gap-1"><XIcon /> not available</span>
           </div>
         </section>
 
-        {/* come funziona */}
+        {/* how it works */}
         <section className="py-20">
-          <h2 className="text-center text-3xl font-black tracking-tight">Come funziona</h2>
+          <h2 className="text-center text-3xl font-black tracking-tight">How it works</h2>
           <div className="mt-10 grid gap-4 sm:grid-cols-3">
             {STEPS.map((s) => (
               <div key={s.n} className="relative rounded-2xl border border-[var(--border)] bg-[var(--panel)]/50 px-6 py-7">
@@ -348,26 +348,26 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* CTA finale */}
+        {/* final CTA */}
         <section className="pb-20">
           <div className="tv-shine relative overflow-hidden rounded-3xl border border-sky-500/30 bg-gradient-to-br from-[#0c1a38] to-[#0a0f22] px-6 py-14 text-center sm:px-10">
             <RadarIcon className="mx-auto size-10 text-sky-400" />
             <h2 className="mt-4 text-2xl font-black tracking-tight sm:text-3xl">
-              Il tuo settore sta parlando. Radar sta già ascoltando.
+              Your industry is talking. Radar is already listening.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-sm text-slate-400">
-              Accedi con le tue credenziali e apri la dashboard: i dati sono già lì.
+              Sign in with your credentials and open the dashboard: the data is already there.
             </p>
             <Link href="/login"
               className="mt-7 inline-flex items-center gap-2 rounded-xl bg-sky-500 px-8 py-3 text-base font-bold text-slate-950 shadow-lg shadow-sky-500/25 transition hover:bg-sky-400">
-              Accedi a Radar <ArrowRight className="size-4" />
+              Sign in to Radar <ArrowRight className="size-4" />
             </Link>
           </div>
         </section>
       </main>
 
       <footer className="relative z-10 border-t border-[var(--border)]/60 py-8 text-center text-xs text-slate-600">
-        Radar · By Scognamiglio 2026, media intelligence costruita da una persona, orchestrando l&apos;AI.
+        Radar · open-source media intelligence, orchestrated with AI.
       </footer>
     </div>
   );

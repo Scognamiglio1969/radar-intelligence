@@ -42,7 +42,7 @@ export const instagram: Connector = {
   label: 'Instagram',
   tier: 'premium',
   enabled: () => Boolean(cfg('META_ACCESS_TOKEN') && cfg('INSTAGRAM_USER_ID')),
-  disabledReason: 'Servono Meta Access Token e Instagram User ID (account Business + app Meta): inseriscili qui',
+  disabledReason: 'Requires Meta Access Token and Instagram User ID (Business account + Meta app): enter them here',
   async fetchMentions(q) {
     const tags = [...new Set(
       q.anyTerms.map((k) => k.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()).filter((t) => t.length >= 3),

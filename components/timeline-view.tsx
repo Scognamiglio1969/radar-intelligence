@@ -7,13 +7,13 @@ import { Loader2, Milestone, Sparkles, Star, Zap } from 'lucide-react';
 type Ev = { id: number; date: string; title: string; description: string | null; importance: number };
 
 const IMPORTANCE = {
-  3: { icon: Star, ring: 'border-amber-400 text-amber-400', glow: 'shadow-[0_0_24px_rgba(251,191,36,0.35)]', label: 'svolta' },
-  2: { icon: Zap, ring: 'border-sky-400 text-sky-400', glow: 'shadow-[0_0_16px_rgba(56,189,248,0.25)]', label: 'rilevante' },
+  3: { icon: Star, ring: 'border-amber-400 text-amber-400', glow: 'shadow-[0_0_24px_rgba(251,191,36,0.35)]', label: 'turning point' },
+  2: { icon: Zap, ring: 'border-sky-400 text-sky-400', glow: 'shadow-[0_0_16px_rgba(56,189,248,0.25)]', label: 'notable' },
   1: { icon: Milestone, ring: 'border-slate-500 text-slate-400', glow: '', label: '' },
 } as const;
 
 function monthLabel(date: string) {
-  return new Date(date).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  return new Date(date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 export function TimelineView({ events, canGenerate }: { events: Ev[]; canGenerate: boolean }) {
@@ -34,13 +34,13 @@ export function TimelineView({ events, canGenerate }: { events: Ev[]; canGenerat
     return (
       <div className="panel flex flex-col items-center gap-3 px-6 py-14 text-center">
         <p className="text-sm text-slate-400">
-          La timeline si costruisce da sola: ogni mattina l&apos;AI estrae gli eventi salienti dalle news del giorno.
+          The timeline builds itself: every morning the AI extracts the salient events from the day's news.
         </p>
         {canGenerate && (
           <button onClick={generate} disabled={busy}
             className="flex items-center gap-2 rounded-lg bg-sky-500/90 px-5 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-sky-400 disabled:opacity-60">
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-            Estrai gli eventi di oggi
+            Extract today’s events
           </button>
         )}
       </div>
@@ -56,7 +56,7 @@ export function TimelineView({ events, canGenerate }: { events: Ev[]; canGenerat
           <button onClick={generate} disabled={busy}
             className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/5 disabled:opacity-60">
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5 text-sky-400" />}
-            Aggiorna con gli eventi di oggi
+            Update with today’s events
           </button>
         </div>
       )}
@@ -88,11 +88,11 @@ export function TimelineView({ events, canGenerate }: { events: Ev[]; canGenerat
                 <article className={`panel ml-12 flex-1 px-5 py-4 sm:ml-0 ${e.importance === 3 ? 'border-amber-500/40' : e.importance === 2 ? 'border-sky-500/30' : ''}`}>
                   <div className="flex flex-wrap items-center gap-2">
                     <time className="text-xs font-semibold text-sky-300">
-                      {new Date(e.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}
+                      {new Date(e.date).toLocaleDateString('en-US', { day: 'numeric', month: 'long' })}
                     </time>
                     {e.importance === 3 && (
                       <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-400">
-                        svolta
+                        turning point
                       </span>
                     )}
                   </div>

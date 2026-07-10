@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 import { UserCog, Users, Database } from 'lucide-react';
 
 const TABS = [
-  { href: '/impostazioni/account', label: 'Il mio account', icon: UserCog, adminOnly: false },
+  { href: '/impostazioni/account', label: 'My account', icon: UserCog, adminOnly: false },
   { href: '/impostazioni/team', label: 'Team', icon: Users, adminOnly: true },
-  { href: '/impostazioni/fonti', label: 'Fonti e budget', icon: Database, adminOnly: false },
+  { href: '/impostazioni/fonti', label: 'Sources & budget', icon: Database, adminOnly: false },
 ] as const;
 
 export function SettingsTabs({ isAdmin }: { isAdmin: boolean }) {

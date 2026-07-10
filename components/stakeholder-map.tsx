@@ -104,8 +104,8 @@ function Cloud({ nodes, height = 460 }: { nodes: Node[]; height?: number }) {
             {active && (
               <text x={x} y={r > 26 ? y + 16 : y - r + 10} textAnchor="middle" fill="#7c8cab" fontSize="10">
                 {node.kind === 'voce'
-                  ? `${node.posts} post · ${SOURCE_META[node.source ?? '']?.label ?? node.source} · eng ${node.value.toLocaleString('it-IT')}`
-                  : `${node.value} citazioni`}
+                  ? `${node.posts} posts · ${SOURCE_META[node.source ?? '']?.label ?? node.source} · eng ${node.value.toLocaleString('en-US')}`
+                  : `${node.value} mentions`}
               </text>
             )}
           </g>
@@ -124,26 +124,26 @@ export function StakeholderMap({ entities, authors }: { entities: Node[]; author
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setTab('entità')}
           className={`rounded-full px-4 py-1.5 text-sm transition ${tab === 'entità' ? 'bg-sky-500/20 text-sky-300' : 'bg-white/5 text-slate-400 hover:text-slate-200'}`}>
-          Di chi si parla ({entities.length})
+          Who is discussed ({entities.length})
         </button>
         <button onClick={() => setTab('voci')}
           className={`rounded-full px-4 py-1.5 text-sm transition ${tab === 'voci' ? 'bg-sky-500/20 text-sky-300' : 'bg-white/5 text-slate-400 hover:text-slate-200'}`}>
-          Chi ne parla ({authors.length})
+          Who is talking ({authors.length})
         </button>
         <span className="ml-auto flex items-center gap-3 text-[11px] text-slate-500">
-          <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-emerald-400/70" /> positivo</span>
-          <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-slate-400/70" /> neutro</span>
-          <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-red-400/70" /> negativo</span>
+          <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-emerald-400/70" /> positive</span>
+          <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-slate-400/70" /> neutral</span>
+          <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-red-400/70" /> negative</span>
         </span>
       </div>
       <div className="panel overflow-hidden px-2 py-2">
         {nodes.length ? <Cloud nodes={nodes} /> : (
-          <p className="py-20 text-center text-sm text-slate-500">Nessun attore in questa vista.</p>
+          <p className="py-20 text-center text-sm text-slate-500">No actors in this view.</p>
         )}
       </div>
       <p className="text-[11px] text-slate-600">
-        «Di chi si parla»: persone, aziende e prodotti citati nei contenuti (estratti dall&apos;AI).
-        «Chi ne parla»: gli account con più engagement. Passa il mouse per i dettagli, <span className="text-sky-400">clicca una bolla per vedere le sue mention</span>.
+        “Who is discussed”: people, companies and products cited in the content (extracted by AI).
+        “Who is talking”: the accounts with the most engagement. Hover for details, <span className="text-sky-400">click a bubble to see its mentions</span>.
       </p>
     </div>
   );

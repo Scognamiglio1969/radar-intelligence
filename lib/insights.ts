@@ -70,7 +70,7 @@ export async function topicSentimentMap(projectId: number, days = 14): Promise<T
       const recentShare = recent / recentTotal;
       const olderShare = older / olderTotal;
       // Variazione del peso relativo: +% = il tema guadagna importanza rispetto agli altri.
-      // Se il tema è nuovo (nessuna presenza prima) e ora è significativo → cap positivo.
+      // Se il tema è nuovo (nessuna presenza prima) e ora è significativo → cap positive.
       let growth: number;
       if (olderShare < 1e-6) growth = recentShare > 0 ? 120 : 0;
       else growth = ((recentShare - olderShare) / olderShare) * 100;
@@ -120,7 +120,7 @@ export async function sentimentWaterfall(projectId: number, days = 14): Promise<
   // Contributo netto giornaliero = (positivi - negativi)
   const rows = await db.execute(sql`
     SELECT to_char(date_trunc('day', published_at AT TIME ZONE ${TZ}), 'YYYY-MM-DD') AS day,
-      count(*) FILTER (WHERE sentiment = 'positivo') - count(*) FILTER (WHERE sentiment = 'negativo') AS delta
+      count(*) FILTER (WHERE sentiment = 'positive') - count(*) FILTER (WHERE sentiment = 'negative') AS delta
     FROM mentions
     WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz AND sentiment IS NOT NULL
     GROUP BY 1 ORDER BY 1
@@ -142,7 +142,7 @@ export async function sentimentWaterfall(projectId: number, days = 14): Promise<
       SELECT title, content, url, sentiment FROM mentions
       WHERE project_id = ${projectId}
         AND to_char(date_trunc('day', published_at AT TIME ZONE ${TZ}), 'YYYY-MM-DD') = ${s.day}
-        AND sentiment = ${s.up ? 'positivo' : 'negativo'}
+        AND sentiment = ${s.up ? 'positive' : 'negative'}
       ORDER BY engagement_score DESC LIMIT 1
     `).then((r) => r.rows as { title: string | null; content: string; url: string | null; sentiment: string | null }[]);
     void dayStart;
@@ -156,9 +156,9 @@ export async function sentimentWaterfall(projectId: number, days = 14): Promise<
 // ---------------------------------------------------------------------------
 export type Cluster = { family: string; share: number; sentiment: string; example: string };
 
-const CLUSTER_SYSTEM = `Sei un analista di conversazioni. Classifica la conversazione su un tema in FAMIGLIE DI DISCORSO (il "frame" con cui se ne parla), scegliendo da questa lista:
-prezzo/costi, qualità/prodotto, scandalo/controversia, ironia/meme, politica/regolamentazione, customer care/assistenza, etica/valori, innovazione/tecnologia, business/mercato, sicurezza/rischi.
-Sulla base dei temi e dei contenuti forniti, restituisci un array JSON di 4-7 oggetti { "family": "<una delle famiglie>", "share": <percentuale stimata 0-100>, "sentiment": "positivo|neutro|negativo", "example": "<frase esempio in italiano, max 12 parole>" }. Le share devono sommare ~100. Rispondi SOLO con l'array JSON.`;
+const CLUSTER_SYSTEM = `You are a conversation analyst. Classify the conversation about a topic into FAMILIES OF DISCOURSE (the "frame" it is discussed with), choosing from this list:
+price/cost, quality/product, scandal/controversy, irony/meme, politics/regulation, customer care/support, ethics/values, innovation/technology, business/market, safety/risks.
+Based on the provided topics and content, return a JSON array of 4-7 objects { "family": "<one of the families>", "share": <estimated percentage 0-100>, "sentiment": "positive|neutral|negative", "example": "<example sentence in English, max 12 words>" }. The shares must sum to ~100. Respond ONLY with the JSON array.`;
 
 export async function getClusters(projectId: number, force = false): Promise<Cluster[] | null> {
   const key = `clusters:${projectId}:${new Date().toISOString().slice(0, 10)}`;
@@ -201,10 +201,10 @@ export async function getClusters(projectId: number, force = false): Promise<Clu
 // ---------------------------------------------------------------------------
 export type CausalChain = { cause: string; date: string | null; effects: string[]; narratives: string[] };
 
-const CAUSAL_SYSTEM = `Sei un analista di media intelligence. Ricostruisci le catene CAUSA → EFFETTO del periodo: quali eventi/notizie hanno prodotto conseguenze misurabili (picchi di volume, cambi di sentiment, nuove narrazioni).
-Basati SOLO sui dati forniti (eventi timeline, alert, trend, narrazioni). Restituisci un array JSON di 3-5 oggetti:
-{ "cause": "<evento/notizia scatenante, in italiano>", "date": "YYYY-MM-DD o null", "effects": ["<conseguenza numerica/osservata>", ...], "narratives": ["<narrazione emersa>", ...] }.
-Sii concreto e onesto: se un nesso è debole, non inventarlo. Rispondi SOLO con l'array JSON.`;
+const CAUSAL_SYSTEM = `You are a media intelligence analyst. Reconstruct the CAUSE → EFFECT chains of the period: which events/news produced measurable consequences (volume spikes, sentiment shifts, new narratives).
+Base it ONLY on the provided data (timeline events, alerts, trends, narratives). Return a JSON array of 3-5 objects:
+{ "cause": "<triggering event/news, in English>", "date": "YYYY-MM-DD or null", "effects": ["<numeric/observed consequence>", ...], "narratives": ["<narrative that emerged>", ...] }.
+Be concrete and honest: if a link is weak, don't invent it. Respond ONLY with the JSON array.`;
 
 export async function getCausalChains(projectId: number, force = false): Promise<CausalChain[] | null> {
   const key = `causal:${projectId}:${new Date().toISOString().slice(0, 10)}`;

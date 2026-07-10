@@ -7,17 +7,17 @@ import { callClaude, claudeAvailable, MODELS } from '@/lib/claude';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-const SYSTEM = `Sei un media analyst. Confronta gli ultimi 7 giorni con i 7 precedenti e scrivi in italiano, in Markdown:
-## Cosa è cambiato (3-5 bullet con i cambiamenti che contano, con numeri e variazioni %)
-## Temi in ascesa e in calo (cosa è nuovo, cosa è sparito)
-## Sentiment (com'è cambiato il tono e dove)
-## Da tenere d'occhio (1-2 segnali deboli)
-Massimo 300 parole. Basati SOLO sui dati; se una differenza è piccola non chiamarla svolta.`;
+const SYSTEM = `You are a media analyst. Compare the last 7 days with the previous 7 and write in English, in Markdown:
+## What changed (3-5 bullets with the changes that matter, with numbers and % variations)
+## Topics rising and falling (what's new, what disappeared)
+## Sentiment (how the tone changed and where)
+## To keep an eye on (1-2 weak signals)
+Max 300 words. Base it ONLY on the data; if a difference is small, don't call it a turning point.`;
 
 export async function POST() {
   const project = await getCurrentProject();
-  if (!project) return NextResponse.json({ error: 'nessun progetto' }, { status: 404 });
-  if (!claudeAvailable()) return NextResponse.json({ error: 'API key Claude non configurata' }, { status: 400 });
+  if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
+  if (!claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
 
   // Cache giornaliera: il confronto si paga al massimo una volta al giorno
   const cacheKey = `compare:${project.id}:${new Date().toISOString().slice(0, 10)}`;
@@ -58,11 +58,11 @@ export async function POST() {
   `);
 
   const comparison = await callClaude(
-    MODELS.sonnet, 'confronto_settimanale', SYSTEM,
-    `Settore: ${project.name}\n\nVolume e sentiment per fonte:\n${JSON.stringify(bySource.rows)}\n\nTemi settimana corrente:\n${JSON.stringify(topicsNow.rows)}\n\nTemi settimana precedente:\n${JSON.stringify(topicsPrev.rows)}\n\nCommunity:\n${JSON.stringify(communities.rows)}`,
+    MODELS.sonnet, 'weekly_comparison', SYSTEM,
+    `Sector: ${project.name}\n\nVolume and sentiment by source:\n${JSON.stringify(bySource.rows)}\n\nCurrent-week topics:\n${JSON.stringify(topicsNow.rows)}\n\nPrevious-week topics:\n${JSON.stringify(topicsPrev.rows)}\n\nCommunities:\n${JSON.stringify(communities.rows)}`,
     900,
   );
-  if (!comparison) return NextResponse.json({ error: 'tetto di spesa raggiunto o errore API' }, { status: 429 });
+  if (!comparison) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
 
   await setMeta(cacheKey, comparison);
   return NextResponse.json({ comparison });

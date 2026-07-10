@@ -8,8 +8,8 @@ Self-hostable, bring-your-own-keys, runs locally with zero configuration.
 ![CI](https://img.shields.io/badge/CI-GitHub_Actions-informational)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 
-> ⚠️ The user interface is currently in Italian. Internationalization (English & i18n)
-> is on the roadmap and contributions are very welcome.
+> The user interface and AI outputs are in English. Full internationalization (i18n) for
+> additional languages is on the roadmap and contributions are very welcome.
 
 ---
 

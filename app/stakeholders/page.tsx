@@ -8,7 +8,7 @@ export const metadata = { title: 'Mappa attori' };
 
 export default async function StakeholdersPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const db = await getDb();
   const d14 = new Date(Date.now() - 14 * 86400_000).toISOString();
 
@@ -54,11 +54,11 @@ export default async function StakeholdersPage() {
   return (
     <>
       <PageHeader
-        title="Mappa attori"
-        subtitle="Chi conta nella conversazione: dimensione = peso, colore = sentiment. Al centro i più influenti."
+        title="Stakeholder map"
+        subtitle="Who matters in the conversation: size = weight, color = sentiment. The most influential are at the center."
       />
       {entityNodes.length + authorNodes.length < 5 ? (
-        <EmptyState message="Ancora pochi attori rilevati: servono più mention analizzate dall'AI." />
+        <EmptyState message="Few actors detected yet: more AI-analyzed mentions are needed." />
       ) : (
         <StakeholderMap entities={entityNodes} authors={authorNodes} />
       )}

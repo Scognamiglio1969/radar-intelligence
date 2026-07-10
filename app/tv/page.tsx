@@ -9,7 +9,7 @@ export const metadata = { title: 'War Room' };
 
 export default async function TvPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
 
   const [data, trends, narratives, alerts] = await Promise.all([
     dashboardData(project.id),

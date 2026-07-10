@@ -13,9 +13,9 @@ export function RefreshButton() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
 
-  const phase = progress < 35 ? 'Interrogo le fonti…'
-    : progress < 75 ? 'Analisi AI in corso…'
-    : 'Quasi fatto…';
+  const phase = progress < 35 ? 'Querying sources…'
+    : progress < 75 ? 'AI analysis running…'
+    : 'Almost done…';
 
   async function refresh() {
     setBusy(true);
@@ -30,15 +30,15 @@ export function RefreshButton() {
       const data = await res.json() as { skipped?: boolean; summary?: Summary };
       setProgress(100);
       if (data.skipped) {
-        setToast('Un aggiornamento era già in corso: riprova tra un minuto.');
+        setToast('An update was already running: try again in a minute.');
       } else {
         const inserted = (data.summary ?? []).reduce((s, r) => s + (r.inserted ?? 0), 0);
         const analyzed = (data.summary ?? []).reduce((s, r) => s + (r.analyzed ?? 0), 0);
-        setToast(`Aggiornamento completato: ${inserted} nuove mention, ${analyzed} analizzate dall'AI.`);
+        setToast(`Update complete: ${inserted} new mentions, ${analyzed} analyzed by AI.`);
       }
       router.refresh();
     } catch {
-      setToast('Aggiornamento non riuscito, riprova.');
+      setToast('Update failed, please retry.');
     } finally {
       if (timerRef.current) clearInterval(timerRef.current);
       setTimeout(() => { setBusy(false); setProgress(0); }, 700);
@@ -54,7 +54,7 @@ export function RefreshButton() {
         className="flex items-center justify-center gap-2 rounded-lg bg-sky-500/90 px-3 py-2 text-sm font-medium text-slate-950 transition hover:bg-sky-400 disabled:opacity-60"
       >
         <RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />
-        {busy ? `${Math.round(progress)}%` : 'Aggiorna ora'}
+        {busy ? `${Math.round(progress)}%` : 'Refresh now'}
       </button>
 
       {/* Barra di avanzamento globale in cima allo schermo */}

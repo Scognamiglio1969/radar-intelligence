@@ -5,28 +5,28 @@ import { PageHeader, EmptyState } from '@/components/ui';
 import { GenerateRefresh } from '@/components/generate-refresh';
 import { Zap, ArrowRight, GitBranch } from 'lucide-react';
 
-export const metadata = { title: 'Causa-Effetto' };
+export const metadata = { title: 'Cause-Effect' };
 
 export default async function CausalPage() {
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="Nessun progetto configurato." />;
+  if (!project) return <EmptyState message="No project configured." />;
   const chains = await getCausalChains(project.id);
 
   return (
     <>
       <PageHeader
-        title="Grafico Causa-Effetto"
-        subtitle="La ricostruzione AI di come gli eventi hanno prodotto conseguenze: picchi di volume, cambi di sentiment, nuove narrazioni. Una lettura interpretativa dei nessi, non una prova statistica."
+        title="Cause-Effect chart"
+        subtitle="The AI's reconstruction of how events produced consequences: volume spikes, sentiment shifts, new narratives. An interpretive reading of the links, not statistical proof."
       />
       {!chains ? (
         <div className="panel flex flex-col items-center gap-3 px-6 py-12">
           <p className="text-sm text-slate-400">
             {claudeAvailable()
-              ? 'Ricostruisci le catene causa → effetto del periodo (una volta al giorno, ~3 centesimi).'
-              : 'Serve la API key Claude.'}
+              ? 'Reconstruct the cause → effect chains for the period (once a day, ~3 cents).'
+              : 'You need the Claude API key.'}
           </p>
           {claudeAvailable() && (
-            <GenerateRefresh endpoint="/api/insights/causal" label="Genera il grafico" busyLabel="Ricostruisco i nessi…" />
+            <GenerateRefresh endpoint="/api/insights/causal" label="Generate the chart" busyLabel="Reconstructing links…" />
           )}
         </div>
       ) : (
@@ -38,7 +38,7 @@ export default async function CausalPage() {
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 shrink-0 rounded-lg bg-amber-500/15 p-2 text-amber-400"><Zap className="size-4" /></span>
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-400/80">Causa{c.date ? ` · ${new Date(c.date).toLocaleDateString('it-IT')}` : ''}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-400/80">Cause{c.date ? ` · ${new Date(c.date).toLocaleDateString('en-US')}` : ''}</p>
                     <p className="text-sm font-semibold">{c.cause}</p>
                   </div>
                 </div>
@@ -65,7 +65,7 @@ export default async function CausalPage() {
             ))}
           </div>
           <div className="mt-4">
-            <GenerateRefresh endpoint="/api/insights/causal" label="Rigenera" busyLabel="Ricostruisco…" />
+            <GenerateRefresh endpoint="/api/insights/causal" label="Regenerate" busyLabel="Reconstructing…" />
           </div>
         </>
       )}
