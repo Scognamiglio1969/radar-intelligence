@@ -17,6 +17,7 @@ export default async function AlertsPage() {
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const rows = await getRecentAlerts(project.id);
+  const aiOn = await claudeAvailable();
 
   return (
     <>
@@ -97,7 +98,7 @@ export default async function AlertsPage() {
                       </div>
                     )}
 
-                    {claudeAvailable() && (
+                    {aiOn && (
                       <PlaybookButton
                         alertId={a.id}
                         existing={typeof (a.data as Record<string, unknown> | null)?.playbook === 'string'

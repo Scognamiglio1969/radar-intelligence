@@ -28,7 +28,7 @@ export async function translateMentions(rows: Row[], lang: string): Promise<Map<
     if (cached) out.set(r.id, cached);
     else pending.push(r);
   }
-  if (pending.length === 0 || !claudeAvailable()) return out;
+  if (pending.length === 0 || !await claudeAvailable()) return out;
 
   const db = await getDb();
   const chunks: Row[][] = [];

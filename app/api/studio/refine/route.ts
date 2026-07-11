@@ -14,7 +14,7 @@ const FORMAT_LABEL: Record<string, string> = {
 export async function POST(req: Request) {
   const project = await getCurrentProject();
   if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
-  if (!claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
+  if (!await claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
 
   const { text, instruction, format } = await req.json() as { text: string; instruction: string; format: string };
   if (!text?.trim() || !instruction?.trim()) return NextResponse.json({ error: 'missing data' }, { status: 400 });

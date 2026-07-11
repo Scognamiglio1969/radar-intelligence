@@ -35,8 +35,13 @@ async function init(): Promise<DB> {
     db = drizzle(client, { schema }) as unknown as DB;
   }
   await ensureSchema(db);
-  await seed(db);
-  await seedUsers(db);
+  if (process.env.DEMO_MODE === '1') {
+    const { seedDemo } = await import('./demo-seed');
+    await seedDemo(db);
+  } else {
+    await seed(db);
+    await seedUsers(db);
+  }
   return db;
 }
 

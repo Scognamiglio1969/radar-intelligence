@@ -17,7 +17,7 @@ Max 300 words. Base it ONLY on the data; if a difference is small, don't call it
 export async function POST() {
   const project = await getCurrentProject();
   if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
-  if (!claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
+  if (!await claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
 
   // Cache giornaliera: il confronto si paga al massimo una volta al giorno
   const cacheKey = `compare:${project.id}:${new Date().toISOString().slice(0, 10)}`;

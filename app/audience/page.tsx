@@ -10,6 +10,7 @@ export default async function AudiencePage() {
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const data = await audienceData(project.id);
+  const aiOn = await claudeAvailable();
 
   return (
     <>
@@ -63,7 +64,7 @@ export default async function AudiencePage() {
                   <span className="ml-auto shrink-0 text-xs text-slate-500">
                     {a.n} posts · engagement {Math.round(a.engagement).toLocaleString('en-US')}
                   </span>
-                  {claudeAvailable() && (
+                  {aiOn && (
                     <InfluencerButton author={a.authorHandle ?? a.author ?? ''} source={a.source} />
                   )}
                 </div>

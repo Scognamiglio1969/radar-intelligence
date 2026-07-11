@@ -51,7 +51,7 @@ export async function computeTrends(projectId: number): Promise<number> {
 /** Aggiunge a ogni trend una spiegazione AI del perché sta crescendo. */
 export async function explainTrends(projectId: number): Promise<number> {
   const db = await getDb();
-  if (!claudeAvailable()) return 0;
+  if (!await claudeAvailable()) return 0;
   const current = await db.select().from(trends)
     .where(and(eq(trends.projectId, projectId), sql`${trends.explanation} IS NULL`))
     .orderBy(desc(trends.score)).limit(5);

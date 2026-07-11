@@ -11,6 +11,7 @@ export default async function CausalPage() {
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const chains = await getCausalChains(project.id);
+  const aiOn = await claudeAvailable();
 
   return (
     <>
@@ -21,11 +22,11 @@ export default async function CausalPage() {
       {!chains ? (
         <div className="panel flex flex-col items-center gap-3 px-6 py-12">
           <p className="text-sm text-slate-400">
-            {claudeAvailable()
+            {aiOn
               ? 'Reconstruct the cause → effect chains for the period (once a day, ~3 cents).'
               : 'You need the Claude API key.'}
           </p>
-          {claudeAvailable() && (
+          {aiOn && (
             <GenerateRefresh endpoint="/api/insights/causal" label="Generate the chart" busyLabel="Reconstructing links…" />
           )}
         </div>

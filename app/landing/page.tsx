@@ -216,6 +216,10 @@ export default function LandingPage() {
               className="flex items-center gap-2 rounded-xl bg-sky-500 px-7 py-3 text-base font-bold text-slate-950 shadow-lg shadow-sky-500/25 transition hover:bg-sky-400">
               Open Radar <ArrowRight className="size-4" />
             </Link>
+            <a href="/tour.html" target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 px-7 py-3 text-base font-semibold text-sky-200 transition hover:bg-sky-500/20">
+              ▶ Watch the tour
+            </a>
             <a href="#features"
               className="rounded-xl border border-[var(--border)] px-7 py-3 text-base font-medium text-slate-300 transition hover:bg-white/5">
               See the features

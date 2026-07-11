@@ -4,6 +4,7 @@ import { getCurrentProject } from '@/lib/data';
 import { getTrends } from '@/lib/trends';
 import { dashboardData } from '@/lib/data';
 import { claudeAvailable } from '@/lib/claude';
+import { isDemoMode } from '@/lib/session';
 import { ContentStudio } from '@/components/content-studio';
 
 export const metadata = { title: 'Content Studio' };
@@ -31,10 +32,12 @@ export default async function StudioPage() {
           <Link href="/settings" className="underline">Projects</Link> for tailored drafts.
         </p>
       )}
-      {claudeAvailable() ? (
+      {await claudeAvailable() && !isDemoMode() ? (
         <ContentStudio suggestions={suggestions} />
       ) : (
-        <EmptyState message="You need the Claude API key for Content Studio." />
+        <EmptyState message={isDemoMode()
+          ? '✨ Content Studio is a live AI feature — self-host with your own Anthropic key to generate kits, hooks and drafts.'
+          : 'You need the Claude API key for Content Studio.'} />
       )}
     </>
   );

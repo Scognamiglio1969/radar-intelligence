@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radar — open-source media intelligence</title>
+<meta name="description" content="Social listening & media intelligence you can self-host — the workflow of an enterprise platform, on free data sources and Claude AI.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Radar — open-source media intelligence">
+<meta property="og:description" content="Enterprise power, at a thousandth of the price. Open-source, self-hostable social listening.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9B%B0%EF%B8%8F%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<style>
+  :root{
+    --bg:#04070f; --panel:#0b1120; --panel2:#0f1730;
+    --border:rgba(148,163,184,.16); --border2:rgba(148,163,184,.28);
+    --ink:#e8eef8; --mut:#94a3b8; --dim:#5b6b86;
+    --sky:#38bdf8; --sky2:#7dd3fc; --violet:#a78bfa; --violet2:#7c3aed;
+    --good:#34d399; --bad:#f87171; --warn:#fbbf24; --amber:#f59e0b;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",system-ui,sans-serif;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;overflow:hidden}
+  .stage{position:relative}
+
+  /* ambient radar + aurora */
+  .amb{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+  .sweep{position:absolute;right:-28vmax;top:-30vmax;width:82vmax;height:82vmax;border-radius:50%;opacity:.09;
+    background:conic-gradient(from 0deg,transparent 0deg,var(--sky) 26deg,transparent 62deg);animation:spin 15s linear infinite}
+  .aurora{position:absolute;left:-16vmax;bottom:-22vmax;width:58vmax;height:58vmax;border-radius:50%;opacity:.10;
+    background:radial-gradient(circle,var(--violet2) 0%,transparent 62%)}
+  .grid{position:absolute;inset:0;opacity:.5;
+    background:linear-gradient(rgba(56,189,248,.045) 1px,transparent 1px) 0 0/100% 46px,
+               linear-gradient(90deg,rgba(56,189,248,.045) 1px,transparent 1px) 0 0/46px 100%;
+    -webkit-mask:radial-gradient(120% 90% at 70% 0%,#000,transparent 75%);mask:radial-gradient(120% 90% at 70% 0%,#000,transparent 75%)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* slide frame */
+  .deck{position:relative;min-height:100vh;min-height:100dvh}
+  .slide>*{width:100%;max-width:1120px;margin-left:auto;margin-right:auto}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:clamp(26px,4.4vw,64px);opacity:0;transform:translateY(14px) scale(.99);
+    transition:opacity .6s ease,transform .6s cubic-bezier(.2,.7,.2,1);pointer-events:none}
+  .slide.on{opacity:1;transform:none;pointer-events:auto}
+  .eyebrow{font-size:clamp(10px,1.1vw,13px);font-weight:700;letter-spacing:.28em;text-transform:uppercase;color:var(--sky2);margin:0 0 16px}
+  h1{font-size:clamp(30px,5.4vw,68px);line-height:1.04;letter-spacing:-.02em;font-weight:850;margin:0;text-wrap:balance}
+  h2{font-size:clamp(24px,3.9vw,50px);line-height:1.06;letter-spacing:-.02em;font-weight:850;margin:0 0 6px;text-wrap:balance}
+  .grad{background:linear-gradient(100deg,var(--sky2),#cbe9ff,var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:clamp(14px,1.6vw,20px);line-height:1.55;color:var(--mut);max-width:60ch;margin:14px 0 0}
+  .kick{font-size:clamp(12px,1.25vw,15px);color:var(--dim);margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--dim)}
+
+  .brand{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+  .mark{width:clamp(42px,4.6vw,62px);height:clamp(42px,4.6vw,62px);border-radius:16px;display:grid;place-items:center;
+    background:radial-gradient(circle at 30% 25%,rgba(56,189,248,.28),rgba(124,58,237,.16));border:1px solid var(--border2);position:relative}
+  .mark svg{width:60%;height:60%}
+  .brandname{font-weight:850;font-size:clamp(20px,2.3vw,30px);letter-spacing:-.01em}
+  .brandsub{font-size:clamp(9px,.95vw,11px);letter-spacing:.24em;text-transform:uppercase;color:var(--dim);margin-top:2px}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+  .chip{font-size:clamp(11px,1.15vw,14px);padding:7px 13px;border-radius:999px;border:1px solid var(--border);background:rgba(148,163,184,.06);color:#cdd8ea;display:inline-flex;align-items:center;gap:7px}
+  .chip .d{width:7px;height:7px;border-radius:50%}
+  .chip.paid{border-color:rgba(245,158,11,.3);color:#fcd9a0}
+
+  /* value / price face-off */
+  .faceoff{display:grid;grid-template-columns:1fr auto 1fr;gap:clamp(14px,2.4vw,34px);align-items:stretch;margin-top:30px}
+  .pcard{border:1px solid var(--border);border-radius:20px;padding:clamp(18px,2.4vw,30px);background:linear-gradient(180deg,var(--panel2),var(--panel));display:flex;flex-direction:column;gap:8px}
+  .pcard.win{border-color:rgba(52,211,153,.4);background:linear-gradient(180deg,rgba(52,211,153,.09),var(--panel))}
+  .plabel{font-size:clamp(10px,1.05vw,13px);letter-spacing:.18em;text-transform:uppercase;color:var(--mut)}
+  .price{font-size:clamp(30px,4.6vw,58px);font-weight:850;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+  .price.red{color:var(--bad)} .price.green{color:var(--good)}
+  .psub{font-size:clamp(11px,1.15vw,14px);color:var(--mut)}
+  .vs{align-self:center;font-weight:850;color:var(--dim);font-size:clamp(14px,1.6vw,20px);letter-spacing:.1em}
+
+  /* mini UI mock */
+  .mock{border:1px solid var(--border);border-radius:18px;background:linear-gradient(180deg,var(--panel2),var(--panel));padding:clamp(14px,1.9vw,22px);box-shadow:0 30px 80px -40px rgba(0,0,0,.8)}
+  .row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+  .row:last-child{border-bottom:0}
+  .badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px}
+  .b-sky{background:rgba(56,189,248,.16);color:var(--sky2)} .b-amber{background:rgba(245,158,11,.16);color:#fcd9a0}
+  .b-good{background:rgba(52,211,153,.15);color:var(--good)} .b-bad{background:rgba(248,113,113,.15);color:var(--bad)}
+  .stars{color:var(--warn);letter-spacing:2px;font-size:14px}
+  .muted{color:var(--mut);font-size:clamp(11px,1.15vw,14px)}
+  .grow{flex:1;min-width:0}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px}
+  .kpi{border:1px solid var(--border);border-radius:14px;padding:14px;background:rgba(148,163,184,.04)}
+  .kpi .l{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+  .kpi .v{font-size:clamp(20px,2.2vw,30px);font-weight:850;margin-top:4px;font-variant-numeric:tabular-nums}
+
+  /* two-column feature slides */
+  .split{display:grid;grid-template-columns:1.05fr 1fr;gap:clamp(20px,3vw,46px);align-items:center}
+  .flist{display:flex;flex-direction:column;gap:14px;margin-top:22px}
+  .fitem{display:flex;gap:13px;align-items:flex-start}
+  .fic{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;background:rgba(56,189,248,.12);border:1px solid var(--border);font-size:16px}
+  .ftxt b{display:block;font-size:clamp(14px,1.5vw,17px);font-weight:750}
+  .ftxt span{font-size:clamp(12px,1.25vw,14.5px);color:var(--mut);line-height:1.5}
+
+  /* bubble cluster */
+  .bubbles{position:relative;height:100%;min-height:230px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(180deg,var(--panel2),var(--panel));overflow:hidden}
+  .bub{position:absolute;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;color:#04121f;text-align:center;box-shadow:0 8px 24px -8px rgba(0,0,0,.6)}
+  .axis{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:10px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
+
+  /* CTA */
+  .cmd{font-family:var(--mono);font-size:clamp(12px,1.4vw,16px);background:#060a14;border:1px solid var(--border);border-radius:12px;padding:14px 18px;color:#cbe9ff;display:inline-flex;gap:10px;align-items:center;margin-top:8px}
+  .cmd .pr{color:var(--dim)}
+  .btnrow{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px;align-items:center}
+  .btn{display:inline-flex;align-items:center;gap:9px;padding:13px 22px;border-radius:12px;font-weight:800;font-size:clamp(13px,1.4vw,16px);text-decoration:none}
+  .btn.pri{background:var(--sky);color:#04121f;box-shadow:0 16px 40px -18px rgba(56,189,248,.6)}
+  .btn.sec{border:1px solid var(--border2);color:#dbe6f5}
+  .repo{font-family:var(--mono);font-size:clamp(12px,1.25vw,15px);color:var(--sky2);margin-top:20px;word-break:break-all}
+
+  /* controls */
+  .ctl{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;display:flex;align-items:center;gap:14px;z-index:20;
+    background:rgba(11,17,32,.7);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:999px;padding:8px 12px}
+  .nav{width:30px;height:30px;border-radius:50%;border:1px solid var(--border2);background:transparent;color:#cdd8ea;cursor:pointer;font-size:15px;line-height:1;display:grid;place-items:center;transition:.15s}
+  .nav:hover{background:rgba(56,189,248,.16);color:#fff}
+  .pips{display:flex;gap:7px}
+  .pip{width:8px;height:8px;border-radius:50%;background:rgba(148,163,184,.32);cursor:pointer;transition:.2s}
+  .pip.on{background:var(--sky);width:22px;border-radius:999px}
+  .count{font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums;min-width:34px;text-align:center}
+  .pbar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--sky),var(--violet));width:0;z-index:20;transition:width .2s linear}
+  .foot{position:fixed;right:16px;bottom:20px;font-size:11px;color:var(--dim);z-index:20;font-family:var(--mono)}
+
+  @media (max-width:720px){
+    .faceoff{grid-template-columns:1fr;gap:12px}.vs{display:none}
+    .split{grid-template-columns:1fr;gap:18px}.kpis{grid-template-columns:repeat(2,1fr)}
+    .deck{aspect-ratio:auto;height:82vh}
+  }
+  @media (prefers-reduced-motion:reduce){.sweep{animation:none}.slide{transition:opacity .2s}}
+</style>
+
+<div class="amb"><div class="grid"></div><div class="sweep"></div><div class="aurora"></div></div>
+<div class="pbar" id="pbar"></div>
+
+<div class="stage">
+  <div class="deck" id="deck" aria-live="polite">
+
+    <!-- 1 · HERO -->
+    <section class="slide on">
+      <div class="brand">
+        <div class="mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="#7dd3fc"/><path d="M12 12L20 6"/></svg>
+        </div>
+        <div><div class="brandname">Radar</div><div class="brandsub">Open-source media intelligence</div></div>
+      </div>
+      <h1>Everything the world says about your topic.<br><span class="grad">Understood, rated, briefed.</span></h1>
+      <p class="lede">Social listening &amp; media intelligence you can self-host — the workflow of an enterprise platform, on free data sources and Claude AI.</p>
+      <div class="kick"><span>Self-hostable</span><span class="dot"></span><span>Bring your own keys</span><span class="dot"></span><span>AGPL-3.0</span></div>
+    </section>
+
+    <!-- 2 · VALUE -->
+    <section class="slide">
+      <p class="eyebrow">The whole point</p>
+      <h2>Enterprise power,<br><span class="grad">at a thousandth of the price.</span></h2>
+      <p class="lede">Commercial listening platforms cost thousands a month and lock intelligence behind annual contracts. Radar gives a person or a small team the same core workflow — for the price of an API key.</p>
+      <div class="faceoff">
+        <div class="pcard"><div class="plabel">Enterprise tools</div><div class="price red">€800–2,000+</div><div class="psub">per month · annual lock-in</div></div>
+        <div class="vs">vs</div>
+        <div class="pcard win"><div class="plabel">Radar</div><div class="price green">~€10–40</div><div class="psub">per month · or free to just collect</div></div>
+      </div>
+    </section>
+
+    <!-- 3 · LISTEN -->
+    <section class="slide">
+      <p class="eyebrow">Listen</p>
+      <h2>Every source. 30+ languages.</h2>
+      <p class="lede">Nine free public sources out of the box, plus six premium connectors that turn on the moment you drop in a key.</p>
+      <div class="chips">
+        <span class="chip"><span class="d" style="background:#a78bfa"></span>GDELT · 100k+ outlets</span>
+        <span class="chip"><span class="d" style="background:#f59e0b"></span>Google News</span>
+        <span class="chip"><span class="d" style="background:#ff4500"></span>Reddit</span>
+        <span class="chip"><span class="d" style="background:#38bdf8"></span>Bluesky</span>
+        <span class="chip"><span class="d" style="background:#8b5cf6"></span>Mastodon</span>
+        <span class="chip"><span class="d" style="background:#ef4444"></span>YouTube</span>
+        <span class="chip"><span class="d" style="background:#29b6f6"></span>Telegram</span>
+        <span class="chip"><span class="d" style="background:#fbbf24"></span>RSS</span>
+        <span class="chip"><span class="d" style="background:#f97316"></span>Hacker News</span>
+        <span class="chip paid">＋ X</span><span class="chip paid">＋ Instagram</span><span class="chip paid">＋ Facebook</span>
+        <span class="chip paid">＋ TikTok</span><span class="chip paid">＋ LinkedIn</span><span class="chip paid">＋ NewsAPI</span>
+      </div>
+      <div class="kick"><span>9 free</span><span class="dot"></span><span>6 premium connectors ready</span><span class="dot"></span><span>news &amp; social, worldwide</span></div>
+    </section>
+
+    <!-- 4 · UNDERSTAND -->
+    <section class="slide">
+      <div class="split">
+        <div>
+          <p class="eyebrow">Understand</p>
+          <h2>AI reads, rates and explains every mention.</h2>
+          <div class="flist">
+            <div class="fitem"><div class="fic">★</div><div class="ftxt"><b>Star relevance</b><span>Every item scored 1–5 against your topic, with the reason why. The noise disappears.</span></div></div>
+            <div class="fitem"><div class="fic">📝</div><div class="ftxt"><b>Executive daily brief</b><span>An AI-written briefing every morning: what happened, sentiment, risks and opportunities.</span></div></div>
+            <div class="fitem"><div class="fic">💬</div><div class="ftxt"><b>Ask the data</b><span>A conversational analyst that answers with numbers and citations as evidence.</span></div></div>
+          </div>
+        </div>
+        <div class="mock">
+          <div class="row"><span class="badge b-sky">Reddit</span><span class="badge b-good">positive</span><span class="stars">★★★★★</span></div>
+          <div class="muted" style="padding:8px 0 2px">New frontier model beats prior benchmarks on reasoning</div>
+          <div class="row"><span class="badge b-amber">GDELT</span><span class="badge b-bad">negative</span><span class="stars">★★★☆☆</span></div>
+          <div class="muted" style="padding:8px 0 2px">Red-teaming report finds jailbreaks still slip through</div>
+          <div class="kpis">
+            <div class="kpi"><div class="l">Mentions 7d</div><div class="v">1,240</div></div>
+            <div class="kpi"><div class="l">Sentiment</div><div class="v">+0.31</div></div>
+            <div class="kpi"><div class="l">Sources</div><div class="v">9</div></div>
+            <div class="kpi"><div class="l">Topics</div><div class="v">10</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 · INSIGHTS -->
+    <section class="slide">
+      <div class="split">
+        <div>
+          <p class="eyebrow">See what others miss</p>
+          <h2>Advanced insights, not just counts.</h2>
+          <p class="lede">Visual analyses standard tools don't offer — read the shape of the conversation at a glance.</p>
+          <div class="chips">
+            <span class="chip">Topics × Sentiment</span><span class="chip">Hourly heatmap</span>
+            <span class="chip">Sentiment waterfall</span><span class="chip">Conversation clusters</span>
+            <span class="chip">Cause → effect chains</span><span class="chip">Coordinated narratives</span>
+          </div>
+        </div>
+        <div class="bubbles">
+          <div class="bub" style="width:70px;height:70px;left:58%;top:14%;background:radial-gradient(circle at 35% 30%,#6ee7b7,#10b981)">model<br>release</div>
+          <div class="bub" style="width:52px;height:52px;left:40%;top:40%;background:radial-gradient(circle at 35% 30%,#cbd5e1,#94a3b8)">ai chips</div>
+          <div class="bub" style="width:46px;height:46px;left:24%;top:56%;background:radial-gradient(circle at 35% 30%,#fca5a5,#ef4444)">safety</div>
+          <div class="bub" style="width:40px;height:40px;left:62%;top:58%;background:radial-gradient(circle at 35% 30%,#cbd5e1,#94a3b8)">funding</div>
+          <div class="bub" style="width:34px;height:34px;left:47%;top:70%;background:radial-gradient(circle at 35% 30%,#fca5a5,#ef4444)">ethics</div>
+          <div class="axis">← negative &nbsp;·&nbsp; sentiment &nbsp;·&nbsp; positive →</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 · ACT -->
+    <section class="slide">
+      <p class="eyebrow">Act</p>
+      <h2>From listening to publishing.</h2>
+      <p class="lede">Turn what you learn into output — and put it on the wall.</p>
+      <div class="flist" style="max-width:none;display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+        <div class="fitem"><div class="fic">✍️</div><div class="ftxt"><b>Content Studio</b><span>One concept → a multi-format kit (LinkedIn, X, Instagram, video, newsletter) + hook lab, in your brand voice.</span></div></div>
+        <div class="fitem"><div class="fic">📄</div><div class="ftxt"><b>Branded exports</b><span>PDF, PowerPoint, Word, Excel with editable charts. Read-only share links that expire.</span></div></div>
+        <div class="fitem"><div class="fic">📺</div><div class="ftxt"><b>Live War Room</b><span>A full-screen animated command view for a meeting or an office display.</span></div></div>
+      </div>
+    </section>
+
+    <!-- 7 · CTA -->
+    <section class="slide" style="align-items:flex-start">
+      <p class="eyebrow">Open source · yours to run</p>
+      <h2>Run it in <span class="grad">30 seconds.</span></h2>
+      <p class="lede">Zero config to start — an embedded database, no keys, works offline. Add your own Anthropic key when you want the AI.</p>
+      <div class="cmd"><span class="pr">$</span> git clone · npm install · npm run dev</div>
+      <div class="repo">github.com/Scognamiglio1969/radar-intelligence</div>
+      <div class="btnrow">
+        <a class="btn pri" href="https://github.com/Scognamiglio1969/radar-intelligence" target="_blank" rel="noopener">⭐ Star on GitHub</a>
+        <span class="btn sec">AGPL-3.0 · self-hostable</span>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div class="pbar" id="bar"></div>
+<div class="ctl">
+  <button class="nav" id="prev" aria-label="Previous slide">‹</button>
+  <div class="pips" id="pips"></div>
+  <span class="count" id="count">1 / 7</span>
+  <button class="nav" id="next" aria-label="Next slide">›</button>
+</div>
+<div class="foot">Radar · media intelligence</div>
+
+<script>
+(function(){
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var pips=document.getElementById('pips'), count=document.getElementById('count'), bar=document.getElementById('bar');
+  var i=0, n=slides.length, DUR=7200, t0=Date.now(), timer, raf;
+  var reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  slides.forEach(function(_,k){var p=document.createElement('div');p.className='pip'+(k===0?' on':'');p.onclick=function(){go(k)};pips.appendChild(p)});
+  function render(){
+    slides.forEach(function(s,k){s.classList.toggle('on',k===i)});
+    [].forEach.call(pips.children,function(p,k){p.classList.toggle('on',k===i)});
+    count.textContent=(i+1)+' / '+n;
+  }
+  function go(k){i=(k+n)%n;render();restart()}
+  function next(){go(i+1)} function prev(){go(i-1)}
+  function restart(){t0=Date.now();clearTimeout(timer);if(!paused)timer=setTimeout(next,DUR)}
+  function tick(){var e=paused?0:(Date.now()-t0);bar.style.width=Math.min(100,e/DUR*100)+'%';raf=requestAnimationFrame(tick)}
+  var paused=false;
+  document.getElementById('next').onclick=next;
+  document.getElementById('prev').onclick=prev;
+  addEventListener('keydown',function(e){if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next()}if(e.key==='ArrowLeft')prev()});
+  var deck=document.getElementById('deck');
+  deck.addEventListener('mouseenter',function(){paused=true;clearTimeout(timer)});
+  deck.addEventListener('mouseleave',function(){paused=false;restart()});
+  render();restart();if(!reduce)tick();
+})();
+</script>
+
+</body>
+</html>

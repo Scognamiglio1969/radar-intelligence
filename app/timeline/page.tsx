@@ -25,7 +25,7 @@ export default async function TimelinePage() {
           description: e.description,
           importance: e.importance,
         }))}
-        canGenerate={claudeAvailable()}
+        canGenerate={await claudeAvailable()}
       />
     </>
   );

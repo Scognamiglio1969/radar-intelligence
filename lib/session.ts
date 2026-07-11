@@ -5,6 +5,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const SESSION_COOKIE = 'sr_session';
 
+/** Public read-only demo mode: no login, sample data, AI on-demand disabled. */
+export function isDemoMode(): boolean {
+  return process.env.DEMO_MODE === '1';
+}
+
 function secret(): string {
   return process.env.SESSION_SECRET || process.env.APP_PASSWORD || 'sr-dev-secret-change-me';
 }

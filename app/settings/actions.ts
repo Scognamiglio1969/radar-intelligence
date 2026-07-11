@@ -56,7 +56,7 @@ export async function saveAndExpandProject(formData: FormData) {
 
   if (data.semanticContext) {
     const { callClaude, claudeAvailable, MODELS } = await import('@/lib/claude');
-    if (claudeAvailable()) {
+    if (await claudeAvailable()) {
       const langs = (data.languages.length ? data.languages : ['it', 'en']).join(', ');
       const text = await callClaude(
         MODELS.haiku, 'espansione_progetto',

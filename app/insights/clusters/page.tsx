@@ -15,6 +15,7 @@ export default async function ClustersPage() {
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const clusters = await getClusters(project.id);
+  const aiOn = await claudeAvailable();
 
   return (
     <>
@@ -25,11 +26,11 @@ export default async function ClustersPage() {
       {!clusters ? (
         <div className="panel flex flex-col items-center gap-3 px-6 py-12">
           <p className="text-sm text-slate-400">
-            {claudeAvailable()
+            {aiOn
               ? 'Generate the map of discourse families (once a day, ~2 cents).'
               : 'You need the Claude API key for clusters.'}
           </p>
-          {claudeAvailable() && (
+          {aiOn && (
             <GenerateRefresh endpoint="/api/insights/clusters" label="Generate clusters" busyLabel="Analyzing conversations…" />
           )}
         </div>

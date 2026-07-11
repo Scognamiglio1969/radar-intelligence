@@ -22,7 +22,7 @@ Respect the brand tone of voice if provided. Max 550 words total.`;
 export async function POST() {
   const project = await getCurrentProject();
   if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
-  if (!claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
+  if (!await claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
 
   const db = await getDb();
   // Cache giornaliera: un giro di idee al giorno (rigenerabile domani)

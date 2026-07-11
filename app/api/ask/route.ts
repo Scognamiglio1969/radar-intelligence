@@ -17,7 +17,7 @@ Rules:
 export async function POST(req: Request) {
   const project = await getCurrentProject();
   if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
-  if (!claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
+  if (!await claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
 
   const { question, history } = await req.json() as { question: string; history?: { q: string; a: string }[] };
   if (!question?.trim()) return NextResponse.json({ error: 'empty question' }, { status: 400 });

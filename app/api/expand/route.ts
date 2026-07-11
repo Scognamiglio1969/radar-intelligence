@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   const project = await getCurrentProject();
   if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
-  if (!claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
+  if (!await claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
 
   const { q } = await req.json() as { q: string };
   if (!q?.trim()) return NextResponse.json({ error: 'empty query' }, { status: 400 });

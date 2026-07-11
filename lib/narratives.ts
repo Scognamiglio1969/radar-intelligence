@@ -32,7 +32,7 @@ function parseJson<T>(text: string | null): T | null {
 /** Rileva le narrazioni sui post social delle ultime 48h (giro giornaliero). */
 export async function detectNarratives(projectId: number): Promise<number> {
   const db = await getDb();
-  if (!claudeAvailable()) return 0;
+  if (!await claudeAvailable()) return 0;
   const h48 = new Date(Date.now() - 48 * 3600_000);
 
   const posts = await db.select({

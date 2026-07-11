@@ -15,6 +15,9 @@ export type CredField = { env: string; label: string; hint?: string; secret: boo
  * valore salvato o, in mancanza, dalla env var (fallback).
  */
 export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
+  anthropic: [
+    { env: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', hint: 'from console.anthropic.com — powers all AI features', secret: true },
+  ],
   reddit: [
     { env: 'REDDIT_CLIENT_ID', label: 'Client ID', hint: 'Reddit app of type "script", the string under the name', secret: true },
     { env: 'REDDIT_CLIENT_SECRET', label: 'Client Secret', hint: 'the app’s "secret" field', secret: true },
@@ -84,6 +87,12 @@ async function loadStore(): Promise<Store> {
 /** Idrata la cache sincrona letta dai connettori. Chiamare prima di enabled()/fetch. */
 export async function hydrateConnectorCredentials(): Promise<void> {
   setConnectorConfig(await loadStore());
+}
+
+/** Read one stored credential (decrypted) by env-var name — always fresh from the DB. */
+export async function getStoredKey(env: string): Promise<string | undefined> {
+  const v = (await loadStore())[env];
+  return v && v.trim() ? v.trim() : undefined;
 }
 
 /**

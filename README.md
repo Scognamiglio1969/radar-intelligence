@@ -64,10 +64,18 @@ for the full, commented list.
 
 ## Bring your own keys (BYOK)
 
-Radar never ships with anyone's keys. Every paid/registered data source can be configured
-**from the UI** (Settings → Sources), stored **encrypted at rest**, without editing any
-file — or via environment variables as a fallback. The Anthropic key powers the AI
-features and is yours to provide.
+Radar never ships with anyone's keys — you bring your own, and everything is stored
+**encrypted at rest**.
+
+- **Anthropic (Claude) key** — powers all AI features (sentiment, briefs, ratings, clustering,
+  Content Studio, "Ask the data"…). Enter it **from the UI** in *Settings → Sources & budget →
+  AI engine · Claude*, or set the `ANTHROPIC_API_KEY` environment variable. No key needed just
+  to collect data.
+- **Data-source keys** (X, Instagram, Facebook, TikTok, LinkedIn, NewsAPI, Reddit, YouTube) —
+  configured **from the UI** in *Settings → Sources*, or via environment variables as a fallback.
+
+Nothing requires editing code or redeploying: an admin adds the keys from the app and the
+features turn on immediately.
 
 ## Modules
 

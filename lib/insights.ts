@@ -166,7 +166,7 @@ export async function getClusters(projectId: number, force = false): Promise<Clu
     const cached = await getMeta<Cluster[]>(key);
     if (cached) return cached;
   }
-  if (!claudeAvailable()) return null;
+  if (!await claudeAvailable()) return null;
   const db = await getDb();
   const since = new Date(Date.now() - 14 * 86400_000).toISOString();
   const topics = await db.execute(sql`
@@ -212,7 +212,7 @@ export async function getCausalChains(projectId: number, force = false): Promise
     const cached = await getMeta<CausalChain[]>(key);
     if (cached) return cached;
   }
-  if (!claudeAvailable()) return null;
+  if (!await claudeAvailable()) return null;
 
   const [timeline, alerts, trends, narratives] = await Promise.all([
     getTimeline(projectId), getRecentAlerts(projectId, 10), getTrends(projectId), getNarratives(projectId),

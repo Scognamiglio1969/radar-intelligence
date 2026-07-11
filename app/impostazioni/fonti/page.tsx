@@ -91,9 +91,19 @@ export default async function FontiPage() {
           </div>
         </section>
 
+        <div className="flex flex-col gap-4">
+        {canEditKeys && credStatuses.anthropic && (
+          <section className="panel px-5 py-4">
+            <h2 className="mb-1 text-sm font-semibold text-slate-300">AI engine · Claude</h2>
+            <p className="mb-2 text-[11px] text-slate-600">
+              Enter your Anthropic API key to power sentiment, briefs, ratings and every AI feature. Stored encrypted; you can also set it as the <span className="text-slate-400">ANTHROPIC_API_KEY</span> environment variable instead.
+            </p>
+            <ConnectorKeys connectorId="anthropic" fields={credStatuses.anthropic.fields} />
+          </section>
+        )}
         <section className="panel h-fit px-5 py-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-300">Claude API budget (current month)</h2>
-          {claudeAvailable() ? (
+          {await claudeAvailable() ? (
             <>
               <div className="flex items-baseline gap-2">
                 <p className="text-3xl font-bold">${cost.cost.toFixed(2)}</p>
@@ -120,10 +130,11 @@ export default async function FontiPage() {
             </>
           ) : (
             <p className="text-sm text-amber-400/90">
-              ANTHROPIC_API_KEY not configured: data collection works, but sentiment, briefs and ratings stay pending.
+              No Claude key yet: add one above (or set ANTHROPIC_API_KEY). Data collection works, but sentiment, briefs and ratings stay pending.
             </p>
           )}
         </section>
+        </div>
       </div>
     </>
   );

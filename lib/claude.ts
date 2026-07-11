@@ -13,12 +13,22 @@ const PRICES: Record<string, { input: number; output: number }> = {
   [SONNET]: { input: 3, output: 15 },
 };
 
-function getClient(): Anthropic | null {
-  return process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
+/** Effective Anthropic key: entered from the UI (encrypted store) or, as a fallback, the ANTHROPIC_API_KEY env var. */
+export async function anthropicKey(): Promise<string | undefined> {
+  const { getStoredKey } = await import('@/lib/connector-credentials');
+  const stored = await getStoredKey('ANTHROPIC_API_KEY');
+  const key = (stored || process.env.ANTHROPIC_API_KEY || '').trim();
+  return key || undefined;
 }
 
-export function claudeAvailable(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+async function getClient(): Promise<Anthropic | null> {
+  const key = await anthropicKey();
+  return key ? new Anthropic({ apiKey: key }) : null;
+}
+
+/** Is the AI configured? True if a Claude key is set (from the UI or env). */
+export async function claudeAvailable(): Promise<boolean> {
+  return Boolean(await anthropicKey());
 }
 
 /** Monthly API spend cap in USD (env API_BUDGET_USD, default 6). */
@@ -47,7 +57,9 @@ function sanitize(s: string): string {
 }
 
 export async function callClaude(model: string, purpose: string, system: string, user: string, maxTokens: number): Promise<string | null> {
-  const client = getClient();
+  // Public demo: never spend on the API, regardless of any configured key.
+  if (process.env.DEMO_MODE === '1') return null;
+  const client = await getClient();
   if (!client) return null;
   system = sanitize(system);
   user = sanitize(user);
@@ -128,7 +140,7 @@ export async function analyzePendingMentions(projectId: number, theme: string, l
     .orderBy(desc(mentions.publishedAt))
     .limit(limit);
 
-  if (pending.length === 0 || !claudeAvailable()) {
+  if (pending.length === 0 || !(await claudeAvailable())) {
     return { analyzed: 0, pending: pending.length };
   }
 
@@ -187,7 +199,7 @@ Respond ONLY with the JSON array.`;
 
 export async function scoreTopContent(projectId: number, topic: string): Promise<number> {
   const db = await getDb();
-  if (!claudeAvailable()) return 0;
+  if (!(await claudeAvailable())) return 0;
   const since = new Date(Date.now() - 7 * 86400_000);
   const top = await db.select({
     id: mentions.id, title: mentions.title, content: mentions.content,
@@ -240,7 +252,7 @@ Include only stories with at least 2 articles. Ignore articles that cannot be gr
 
 export async function clusterNewsStories(projectId: number): Promise<number> {
   const db = await getDb();
-  if (!claudeAvailable()) return 0;
+  if (!(await claudeAvailable())) return 0;
   const since = new Date(Date.now() - 48 * 3600_000);
   const news = await db.select({ id: mentions.id, title: mentions.title })
     .from(mentions)
@@ -286,7 +298,7 @@ Max 500 words. Professional, direct tone. Base it ONLY on the provided data; if 
 
 export async function generateDailyBrief(projectId: number, projectName: string, briefData: unknown): Promise<boolean> {
   const db = await getDb();
-  if (!claudeAvailable()) return false;
+  if (!(await claudeAvailable())) return false;
   const text = await callClaude(
     SONNET, 'daily_brief', BRIEF_SYSTEM,
     `Monitored sector: ${projectName}\nDate: ${new Date().toLocaleDateString('en-US', { dateStyle: 'full' })}\n\nLast 24 hours of data:\n${JSON.stringify(briefData).slice(0, 9000)}`,

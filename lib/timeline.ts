@@ -17,7 +17,7 @@ Respond ONLY with the JSON array.`;
 /** Estrae gli eventi delle ultime 48h e li aggiunge alla cronologia (mai sostituita). */
 export async function extractTimelineEvents(projectId: number): Promise<number> {
   const db = await getDb();
-  if (!claudeAvailable()) return 0;
+  if (!await claudeAvailable()) return 0;
 
   // Una estrazione al giorno basta
   const today = new Date(); today.setHours(0, 0, 0, 0);
