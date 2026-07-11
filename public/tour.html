@@ -137,7 +137,16 @@
     .split{grid-template-columns:1fr;gap:18px}.kpis{grid-template-columns:repeat(2,1fr)}
     .deck{aspect-ratio:auto;height:82vh}
   }
-  @media (prefers-reduced-motion:reduce){.sweep{animation:none}.slide{transition:opacity .2s}}
+  /* Live detections: the deck itself is listening */
+  .blip{position:absolute;pointer-events:none;opacity:0;animation:blip 5s ease-out forwards}
+  .blip i{display:block;width:7px;height:7px;border-radius:50%;background:var(--sky);box-shadow:0 0 12px 2px rgba(56,189,248,.7)}
+  .blip::before{content:"";position:absolute;left:50%;top:3.5px;width:7px;height:7px;border-radius:50%;
+    border:1px solid rgba(56,189,248,.65);transform:translate(-50%,-50%);animation:echo 2.4s ease-out infinite}
+  .blip b{position:absolute;left:14px;top:-5px;font-family:var(--mono);font-weight:400;font-size:10px;
+    letter-spacing:.08em;color:#7dd3fc;white-space:nowrap;opacity:.85}
+  @keyframes blip{0%{opacity:0}6%{opacity:1}70%{opacity:.85}100%{opacity:0}}
+  @keyframes echo{from{width:7px;height:7px;opacity:.8}to{width:64px;height:64px;opacity:0}}
+  @media (prefers-reduced-motion:reduce){.sweep{animation:none}.slide{transition:opacity .2s}.blip{display:none}}
 </style>
 
 <div class="amb"><div class="grid"></div><div class="sweep"></div><div class="aurora"></div></div>
@@ -304,6 +313,24 @@
   deck.addEventListener('mouseenter',function(){paused=true;clearTimeout(timer)});
   deck.addEventListener('mouseleave',function(){paused=false;restart()});
   render();restart();if(!reduce)tick();
+
+  /* Live detections — the page itself is listening */
+  if(!reduce){
+    var amb=document.querySelector('.amb');
+    var SRC=['bluesky','gdelt','mastodon','hacker news','google news','reddit','telegram','rss','youtube'];
+    var TONE=['+0.62','−0.41','+0.18','+0.87','−0.15','+0.33','+0.05','−0.72','+0.49'];
+    function ping(){
+      var b=document.createElement('div');b.className='blip';
+      b.style.left=(6+Math.random()*82)+'%';
+      b.style.top=(8+Math.random()*80)+'%';
+      var s=Math.floor(Math.random()*SRC.length);
+      b.innerHTML='<i></i><b>'+SRC[s]+' · '+TONE[Math.floor(Math.random()*TONE.length)]+'</b>';
+      amb.appendChild(b);
+      setTimeout(function(){b.remove()},5200);
+      setTimeout(ping,2200+Math.random()*3800);
+    }
+    setTimeout(ping,1200);
+  }
 })();
 </script>
 
