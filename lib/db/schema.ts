@@ -56,6 +56,8 @@ export const benchmarkEntities = pgTable('benchmark_entities', {
   projectId: integer('project_id').notNull(),
   name: text('name').notNull(),
   keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
+  // 1 = questa entità è "il tuo brand" (il soggetto dell'analisi), non un competitor.
+  isOwnBrand: integer('is_own_brand').notNull().default(0),
 });
 
 export const mentions = pgTable('mentions', {

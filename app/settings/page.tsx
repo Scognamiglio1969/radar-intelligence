@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, Trash2, Link2 } from 'lucide-react';
+import { Plus, Trash2, Link2, Star } from 'lucide-react';
 import { and, eq, gte } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { shareLinks } from '@/lib/db/schema';
@@ -10,7 +10,7 @@ import { PageHeader, EmptyState } from '@/components/ui';
 import type { projects as projectsTable } from '@/lib/db/schema';
 import {
   addEntity, createProject, createShareLink, deleteEntity, deleteProject,
-  revokeShareLink, saveAndExpandProject, updateProject,
+  revokeShareLink, saveAndExpandProject, setOwnBrand, updateProject,
 } from './actions';
 
 type Project = typeof projectsTable.$inferSelect;
@@ -118,13 +118,26 @@ export default async function SettingsPage({ searchParams }: {
                 <h3 className="mb-1 text-sm font-semibold text-slate-300">Benchmark entities</h3>
                 <p className="mb-3 text-xs text-slate-500">
                   Brands or competitors to compare on the Benchmark page: mentions citing these keywords are attributed to the entity.
+                  Mark one with the <Star className="inline size-3 -translate-y-px text-amber-400" /> to set it as <span className="text-amber-300">your brand</span> —
+                  this unlocks the Brand Health Index (your brand vs the market and the competitors).
                 </p>
                 <div className="flex flex-col gap-2">
                   {entities.map((e) => (
-                    <div key={e.id} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm">
+                    <div key={e.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${e.isOwnBrand === 1 ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-white/5'}`}>
                       <span className="font-medium">{e.name}</span>
+                      {e.isOwnBrand === 1 && (
+                        <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">Your brand</span>
+                      )}
                       <span className="truncate text-xs text-slate-500">{e.keywords.join(', ')}</span>
-                      <form action={deleteEntity} className="ml-auto">
+                      <form action={setOwnBrand} className="ml-auto" title={e.isOwnBrand === 1 ? 'Unset as your brand' : 'Set as your brand'}>
+                        <input type="hidden" name="id" value={e.id} />
+                        <input type="hidden" name="projectId" value={selected.id} />
+                        <input type="hidden" name="makeBrand" value={e.isOwnBrand === 1 ? '0' : '1'} />
+                        <button type="submit" className={e.isOwnBrand === 1 ? 'text-amber-400 hover:text-amber-300' : 'text-slate-600 hover:text-amber-400'} aria-label={e.isOwnBrand === 1 ? `Unset ${e.name} as your brand` : `Set ${e.name} as your brand`}>
+                          <Star className="size-4" fill={e.isOwnBrand === 1 ? 'currentColor' : 'none'} />
+                        </button>
+                      </form>
+                      <form action={deleteEntity} title={`Delete ${e.name}`}>
                         <input type="hidden" name="id" value={e.id} />
                         <button type="submit" className="text-slate-600 hover:text-red-400" aria-label={`Delete ${e.name}`}>
                           <Trash2 className="size-4" />

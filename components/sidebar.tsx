@@ -28,7 +28,7 @@ const NAV: ({ href: string; label: string; icon: typeof Radar } | { section: str
   { href: '/alerts', label: 'Alerts', icon: Bell },
   { href: '/brief', label: 'Brief', icon: FileText },
   { section: 'Advanced insights' },
-  { href: '/insights/health', label: 'Brand Health Index', icon: Gauge },
+  { href: '/insights/health', label: 'Health Index', icon: Gauge },
   { href: '/insights/geo', label: 'Geographic map', icon: Globe2 },
   { href: '/insights/topics', label: 'Topics × Sentiment', icon: ScatterChart },
   { href: '/insights/momentum', label: 'Momentum quadrant', icon: LayoutGrid },

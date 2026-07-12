@@ -130,6 +130,22 @@ export async function addEntity(formData: FormData) {
   revalidatePath('/benchmark');
 }
 
+export async function setOwnBrand(formData: FormData) {
+  const db = await getDb();
+  const id = Number(formData.get('id'));
+  const projectId = Number(formData.get('projectId'));
+  if (!id || !projectId) return;
+  const makeBrand = String(formData.get('makeBrand') ?? '1') === '1';
+  // Un solo brand per progetto: azzero gli altri, poi imposto (o tolgo) questo.
+  await db.update(benchmarkEntities).set({ isOwnBrand: 0 }).where(eq(benchmarkEntities.projectId, projectId));
+  if (makeBrand) {
+    await db.update(benchmarkEntities).set({ isOwnBrand: 1 }).where(eq(benchmarkEntities.id, id));
+  }
+  revalidatePath('/settings');
+  revalidatePath('/insights/health');
+  revalidatePath('/benchmark');
+}
+
 export async function deleteEntity(formData: FormData) {
   const db = await getDb();
   const id = Number(formData.get('id'));

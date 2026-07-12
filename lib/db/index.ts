@@ -97,6 +97,7 @@ const DDL = [
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS relevance_reason TEXT`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS translations JSONB`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS emotion TEXT`,
+  `ALTER TABLE benchmark_entities ADD COLUMN IF NOT EXISTS is_own_brand INTEGER NOT NULL DEFAULT 0`,
   `CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,

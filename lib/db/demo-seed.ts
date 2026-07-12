@@ -114,7 +114,7 @@ export async function seedDemo(db: DB) {
 
   await db.insert(schema.benchmarkEntities).values([
     { projectId: pid, name: 'OpenAI', keywords: ['OpenAI', 'ChatGPT', 'GPT'] },
-    { projectId: pid, name: 'Anthropic', keywords: ['Anthropic', 'Claude'] },
+    { projectId: pid, name: 'Anthropic', keywords: ['Anthropic', 'Claude'], isOwnBrand: 1 },
     { projectId: pid, name: 'Google', keywords: ['Gemini', 'DeepMind'] },
     { projectId: pid, name: 'Meta', keywords: ['Meta AI', 'Llama'] },
   ]);
@@ -150,13 +150,15 @@ export async function seedDemo(db: DB) {
       : sentiment === 'negative'
         ? pick(['anger', 'fear', 'sadness', 'anger'])
         : pick(['trust', 'surprise', 'fear', 'joy']);
+    // Un brand citato nel testo, così il Brand Health Index ha dati reali su cui filtrare.
+    const brandMention = pick(['OpenAI', 'ChatGPT', 'Anthropic', 'Claude', 'Gemini', 'DeepMind', 'Meta AI', 'Llama']);
     rows.push({
       projectId: pid,
       source,
       externalId: `demo-${idc++}`,
       url: 'https://example.com/article',
       title,
-      content: `${title}. ${pick(SNIPPETS)}`,
+      content: `${title}. ${pick(SNIPPETS)} ${brandMention} is part of the discussion.`,
       author: isNews ? pick(OUTLETS) : pick(NAMES),
       authorHandle: isNews ? undefined : pick(HANDLES),
       community: source === 'reddit' ? pick(SUBREDDITS) : isNews ? pick(OUTLETS) : source === 'youtube' ? pick(NAMES) : undefined,

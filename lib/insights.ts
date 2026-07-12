@@ -1,5 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getDb, getMeta, setMeta } from '@/lib/db';
+import { benchmarkEntities } from '@/lib/db/schema';
 import { getCurrentProject } from '@/lib/data';
 import { getTrends } from '@/lib/trends';
 import { getNarratives } from '@/lib/narratives';
@@ -367,12 +368,25 @@ function grade(score: number): string {
   return score >= 80 ? 'Excellent' : score >= 65 ? 'Good' : score >= 50 ? 'Fair' : 'At risk';
 }
 
-export async function brandHealth(projectId: number, days = 14): Promise<BrandHealth> {
+// Filtro keyword opzionale: se presente, limita alle mention che citano
+// almeno una keyword (nel titolo o nel testo). Serve a isolare il tuo brand
+// o un competitor dentro la conversazione generale sul tema.
+function kwFilter(keywords?: string[]) {
+  if (!keywords || keywords.length === 0) return sql``;
+  const ors = keywords.map((k) => sql`content ILIKE ${'%' + k + '%'} OR title ILIKE ${'%' + k + '%'}`);
+  return sql` AND (${sql.join(ors, sql` OR `)})`;
+}
+
+/**
+ * Health index composito (0-100) su un sottoinsieme di mention. Senza keyword
+ * misura l'intero TEMA/mercato; con le keyword di un'entità misura quel brand.
+ */
+export async function healthFor(projectId: number, days = 14, keywords?: string[]): Promise<BrandHealth> {
   const db = await getDb();
   const now = Date.now();
   const since = new Date(now - days * 86400_000).toISOString();
-  const midMs = now - (days / 2) * 86400_000;
-  const mid = new Date(midMs).toISOString();
+  const mid = new Date(now - (days / 2) * 86400_000).toISOString();
+  const kw = kwFilter(keywords);
 
   const [agg] = (await db.execute(sql`
     SELECT
@@ -385,7 +399,7 @@ export async function brandHealth(projectId: number, days = 14): Promise<BrandHe
       count(*) FILTER (WHERE published_at >= ${mid}::timestamptz) AS recent,
       count(*) FILTER (WHERE published_at < ${mid}::timestamptz) AS older
     FROM mentions
-    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz${kw}
   `)).rows as {
     total: number; avg_sent: number | null; pos: number; neg: number;
     classified: number; resonant: number; recent: number; older: number;
@@ -411,16 +425,55 @@ export async function brandHealth(projectId: number, days = 14): Promise<BrandHe
   ];
   const score = total === 0 ? 0 : Math.round(components.reduce((s, c) => s + c.value * c.weight, 0));
 
-  // Sparkline: indice sentiment giornaliero (0-100) sugli ultimi 14 giorni.
   const daily = (await db.execute(sql`
     SELECT to_char(published_at AT TIME ZONE ${TZ}, 'YYYY-MM-DD') AS day, avg(sentiment_score) AS s
     FROM mentions
-    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz${kw}
     GROUP BY day ORDER BY day
   `)).rows as { day: string; s: number | null }[];
   const spark = daily.map((d) => Math.round(((Number(d.s ?? 0) + 1) / 2) * 100));
 
   return { score, grade: grade(score), components, spark, total };
+}
+
+/** Retro-compatibilità: la salute dell'intero tema. */
+export async function brandHealth(projectId: number, days = 14): Promise<BrandHealth> {
+  return healthFor(projectId, days);
+}
+
+export type CompareItem = { name: string; score: number; total: number; isBrand: boolean };
+export type HealthReport = {
+  theme: BrandHealth;
+  brand: { name: string; health: BrandHealth } | null;
+  compare: CompareItem[]; // brand + competitor, ordinati per score (vuoto se nessuna entità)
+};
+
+/**
+ * Report completo: salute del tema (mercato) sempre; se una benchmark entity è
+ * marcata come "tuo brand", anche la sua salute e il confronto con i competitor.
+ */
+export async function brandHealthReport(projectId: number, days = 14): Promise<HealthReport> {
+  const db = await getDb();
+  const theme = await healthFor(projectId, days);
+  const entities = await db.select().from(benchmarkEntities).where(eq(benchmarkEntities.projectId, projectId));
+  const ownBrand = entities.find((e) => e.isOwnBrand === 1) ?? null;
+
+  const brand = ownBrand
+    ? { name: ownBrand.name, health: await healthFor(projectId, days, ownBrand.keywords.length ? ownBrand.keywords : [ownBrand.name]) }
+    : null;
+
+  // Confronto: brand + competitor (solo se c'è un brand definito).
+  let compare: CompareItem[] = [];
+  if (ownBrand) {
+    compare = await Promise.all(entities.map(async (e) => {
+      const h = e.id === ownBrand.id && brand ? brand.health
+        : await healthFor(projectId, days, e.keywords.length ? e.keywords : [e.name]);
+      return { name: e.name, score: h.score, total: h.total, isBrand: e.isOwnBrand === 1 };
+    }));
+    compare.sort((a, b) => b.score - a.score);
+  }
+
+  return { theme, brand, compare };
 }
 
 // ---------------------------------------------------------------------------

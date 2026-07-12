@@ -83,25 +83,42 @@ export async function GET(req: Request) {
   }
   }
 
-  // ── Brand Health Index
-  if (has('health') && data.health.total > 0) {
-    const hCol = data.health.score >= 80 ? '34D399' : data.health.score >= 65 ? '38BDF8' : data.health.score >= 50 ? 'FBBF24' : 'F87171';
+  // ── Health Index (market + brand + confronto)
+  if (has('health') && data.health.theme.total > 0) {
+    const gcol = (v: number) => v >= 80 ? '34D399' : v >= 65 ? '38BDF8' : v >= 50 ? 'FBBF24' : 'F87171';
+    const h = data.health;
+    const primary = h.brand ? h.brand.health : h.theme;
     const sh = pptx.addSlide({ masterName: 'DARK' });
-    sh.addText('Brand Health Index', titleOpts);
+    sh.addText(h.brand ? `Brand Health Index — ${h.brand.name}` : 'Market Health Index', titleOpts);
     sh.addShape('roundRect', { x: 0.5, y: 1.6, w: 4.2, h: 4.6, fill: { color: PANEL }, line: { color: '1E2A4A' }, rectRadius: 0.1 });
-    sh.addText(String(data.health.score), { x: 0.5, y: 2.4, w: 4.2, h: 1.7, fontSize: 96, bold: true, color: hCol, align: 'center' });
-    sh.addText(data.health.grade.toUpperCase(), { x: 0.5, y: 4.1, w: 4.2, h: 0.5, fontSize: 20, bold: true, color: hCol, align: 'center', charSpacing: 2 });
-    sh.addText(`${data.health.total.toLocaleString('en-US')} mentions · 14 days`, { x: 0.5, y: 4.7, w: 4.2, h: 0.4, fontSize: 12, color: MUTED, align: 'center' });
+    sh.addText(String(primary.score), { x: 0.5, y: 2.3, w: 4.2, h: 1.6, fontSize: 92, bold: true, color: gcol(primary.score), align: 'center' });
+    sh.addText(primary.grade.toUpperCase(), { x: 0.5, y: 3.95, w: 4.2, h: 0.5, fontSize: 20, bold: true, color: gcol(primary.score), align: 'center', charSpacing: 2 });
+    sh.addText(h.brand ? `Market health: ${h.theme.score}  (${primary.score - h.theme.score >= 0 ? '+' : ''}${primary.score - h.theme.score} vs market)` : `${h.theme.total.toLocaleString('en-US')} mentions · 14 days`,
+      { x: 0.5, y: 4.6, w: 4.2, h: 0.5, fontSize: 12, color: MUTED, align: 'center' });
     sh.addChart('bar', [{
       name: 'Score',
-      labels: data.health.components.map((c) => c.label),
-      values: data.health.components.map((c) => c.value),
+      labels: primary.components.map((c) => c.label),
+      values: primary.components.map((c) => c.value),
     }], {
       x: 5.1, y: 1.6, w: 7.7, h: 4.6, barDir: 'bar',
-      chartColors: data.health.components.map((c) => c.value >= 80 ? '34D399' : c.value >= 65 ? '38BDF8' : c.value >= 50 ? 'FBBF24' : 'F87171'),
+      chartColors: primary.components.map((c) => gcol(c.value)),
       catAxisLabelColor: TEXT, valAxisLabelColor: MUTED, showLegend: false,
       valAxisMinVal: 0, valAxisMaxVal: 100, valGridLine: { color: '1E2A4A' }, catGridLine: { style: 'none' },
     });
+    if (h.compare.length > 1) {
+      const sc = pptx.addSlide({ masterName: 'DARK' });
+      sc.addText('Health ranking — your brand vs competitors', titleOpts);
+      sc.addChart('bar', [{
+        name: 'Health score',
+        labels: h.compare.map((c) => c.name),
+        values: h.compare.map((c) => c.score),
+      }], {
+        x: 0.5, y: 1.3, w: 12.3, h: 5.4, barDir: 'bar',
+        chartColors: h.compare.map((c) => c.isBrand ? 'FBBF24' : gcol(c.score)),
+        catAxisLabelColor: TEXT, valAxisLabelColor: MUTED, showLegend: false,
+        valAxisMinVal: 0, valAxisMaxVal: 100, valGridLine: { color: '1E2A4A' }, catGridLine: { style: 'none' },
+      });
+    }
   }
 
   // ── Emerging trends

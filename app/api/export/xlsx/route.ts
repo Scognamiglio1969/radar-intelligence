@@ -83,15 +83,29 @@ export async function GET(req: Request) {
   for (const r of data.dashboard.sentimentDist) wsS.addRow({ s: r.sentiment, n: r.n });
   }
 
-  // 3a. Brand Health Index
-  if (has('health') && data.health.total > 0) {
-  const wsH = sheet(wb, 'Brand Health', [
-    { header: 'Metric', key: 'm', width: 22 },
+  // 3a. Health Index (market + brand + confronto)
+  if (has('health') && data.health.theme.total > 0) {
+  const wsH = sheet(wb, 'Health Index', [
+    { header: 'Scope', key: 'sc', width: 20 },
+    { header: 'Metric', key: 'm', width: 20 },
     { header: 'Value (0-100)', key: 'v', width: 14 },
     { header: 'Weight', key: 'w', width: 10 },
   ]);
-  wsH.addRow({ m: `OVERALL — ${data.health.grade}`, v: data.health.score, w: '100%' });
-  for (const c of data.health.components) wsH.addRow({ m: c.label, v: c.value, w: `${Math.round(c.weight * 100)}%` });
+  wsH.addRow({ sc: 'Market', m: `OVERALL — ${data.health.theme.grade}`, v: data.health.theme.score, w: '100%' });
+  for (const c of data.health.theme.components) wsH.addRow({ sc: 'Market', m: c.label, v: c.value, w: `${Math.round(c.weight * 100)}%` });
+  if (data.health.brand) {
+    wsH.addRow({ sc: `Brand: ${data.health.brand.name}`, m: `OVERALL — ${data.health.brand.health.grade}`, v: data.health.brand.health.score, w: '100%' });
+    for (const c of data.health.brand.health.components) wsH.addRow({ sc: `Brand: ${data.health.brand.name}`, m: c.label, v: c.value, w: `${Math.round(c.weight * 100)}%` });
+  }
+  if (data.health.compare.length > 1) {
+    const wsC = sheet(wb, 'Health ranking', [
+      { header: 'Entity', key: 'e', width: 26 },
+      { header: 'Health score', key: 's', width: 14 },
+      { header: 'Mentions', key: 'n', width: 10 },
+      { header: 'Your brand', key: 'b', width: 12 },
+    ]);
+    for (const c of data.health.compare) wsC.addRow({ e: c.name, s: c.score, n: c.total, b: c.isBrand ? 'yes' : '' });
+  }
   }
 
   // 3b. Emotion radar

@@ -8,7 +8,7 @@ import { getRecentAlerts } from '@/lib/alerts';
 import { getTrends } from '@/lib/trends';
 import { getNarratives } from '@/lib/narratives';
 import { getTimeline } from '@/lib/timeline';
-import { geoDistribution, emotionDistribution, brandHealth, momentumQuadrant, semanticConstellation } from '@/lib/insights';
+import { geoDistribution, emotionDistribution, brandHealthReport, momentumQuadrant, semanticConstellation } from '@/lib/insights';
 import { SOURCE_META } from '@/lib/connectors';
 import type { projects } from '@/lib/db/schema';
 
@@ -73,7 +73,7 @@ export async function collectExportData(project: Project, days = 30) {
       .orderBy(desc(mentions.publishedAt))
       .limit(3000),
   ]);
-  const health = await brandHealth(project.id, 14);
+  const health = await brandHealthReport(project.id, 14);
 
   return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, health, allMentions };
 }

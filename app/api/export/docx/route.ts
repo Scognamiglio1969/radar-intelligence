@@ -81,13 +81,28 @@ export async function GET(req: Request) {
     );
   }
 
-  // Brand Health Index
-  if (has('health') && data.health.total > 0) {
-    children.push(h1(`Brand Health Index — ${data.health.score}/100 (${data.health.grade})`));
+  // Health Index (market + brand + confronto)
+  if (has('health') && data.health.theme.total > 0) {
+    children.push(h1(`Market Health Index — ${data.health.theme.score}/100 (${data.health.theme.grade})`));
     children.push(table(
       ['Metric', 'Value (0-100)', 'Weight'],
-      data.health.components.map((c) => [c.label, String(c.value), `${Math.round(c.weight * 100)}%`]),
+      data.health.theme.components.map((c) => [c.label, String(c.value), `${Math.round(c.weight * 100)}%`]),
     ));
+    if (data.health.brand) {
+      const b = data.health.brand;
+      children.push(h2(`Brand health — ${b.name}: ${b.health.score}/100 (${b.health.grade}), ${b.health.score - data.health.theme.score >= 0 ? '+' : ''}${b.health.score - data.health.theme.score} vs market`));
+      children.push(table(
+        ['Metric', 'Value (0-100)', 'Weight'],
+        b.health.components.map((c) => [c.label, String(c.value), `${Math.round(c.weight * 100)}%`]),
+      ));
+    }
+    if (data.health.compare.length > 1) {
+      children.push(h2('Health ranking — your brand vs competitors'));
+      children.push(table(
+        ['Entity', 'Health score', 'Mentions', 'Your brand'],
+        data.health.compare.map((c) => [c.name, String(c.score), String(c.total), c.isBrand ? 'yes' : '']),
+      ));
+    }
   }
 
   // Emerging trends

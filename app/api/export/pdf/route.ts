@@ -192,10 +192,19 @@ export async function GET(req: Request) {
     doc.y = y0 + 72;
   }
 
-  // ---- Brand Health Index ----
-  if (has('health') && data.health.total > 0) {
-    heading(`Brand Health Index — ${data.health.score}/100 (${data.health.grade})`);
-    hbars(data.health.components.map((c) => ({ label: c.label, value: c.value })));
+  // ---- Health Index (market + brand + confronto) ----
+  if (has('health') && data.health.theme.total > 0) {
+    heading(`Market Health Index — ${data.health.theme.score}/100 (${data.health.theme.grade})`);
+    hbars(data.health.theme.components.map((c) => ({ label: c.label, value: c.value })));
+    if (data.health.brand) {
+      const b = data.health.brand;
+      para(`Brand health — ${b.name}: ${b.health.score}/100 (${b.health.grade}), ${b.health.score - data.health.theme.score >= 0 ? '+' : ''}${b.health.score - data.health.theme.score} vs market`, { bold: true, size: 10, gap: 0.2 });
+      hbars(b.health.components.map((c) => ({ label: c.label, value: c.value })));
+    }
+    if (data.health.compare.length > 1) {
+      para('Health ranking — your brand vs competitors:', { bold: true, size: 10, gap: 0.2 });
+      hbars(data.health.compare.map((c) => ({ label: `${c.isBrand ? '★ ' : ''}${c.name}`, value: c.score })));
+    }
   }
 
   // ---- Trend ----

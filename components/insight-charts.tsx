@@ -238,7 +238,7 @@ export function MomentumQuadrant({ points }: { points: QuadrantPoint[] }) {
 type HealthComponent = { key: string; label: string; value: number; weight: number };
 const healthColor = (v: number) => v >= 80 ? '#34d399' : v >= 65 ? '#38bdf8' : v >= 50 ? '#fbbf24' : '#f87171';
 
-export function BrandHealthGauge({ score, grade }: { score: number; grade: string }) {
+export function BrandHealthGauge({ score, grade, label = 'Health Index' }: { score: number; grade: string; label?: string }) {
   const R = 80, C = 100, sw = 16;
   const start = 135, sweep = 270; // arco 270°
   const rad = (deg: number) => (deg * Math.PI) / 180;
@@ -256,7 +256,7 @@ export function BrandHealthGauge({ score, grade }: { score: number; grade: strin
       <path d={arc(Math.max(0.001, score / 100))} fill="none" stroke={col} strokeWidth={sw} strokeLinecap="round" />
       <text x={C} y={C - 4} textAnchor="middle" fontSize="46" fontWeight={800} fill="#f1f5f9">{score}</text>
       <text x={C} y={C + 22} textAnchor="middle" fontSize="13" fill={col} fontWeight={700} letterSpacing="1">{grade.toUpperCase()}</text>
-      <text x={C} y={C + 40} textAnchor="middle" fontSize="10" fill="#64748b">Brand Health Index</text>
+      <text x={C} y={C + 40} textAnchor="middle" fontSize="10" fill="#64748b">{label}</text>
     </svg>
   );
 }
@@ -272,6 +272,25 @@ export function HealthBars({ components }: { components: HealthComponent[] }) {
           </div>
           <span className="w-10 shrink-0 text-right text-xs tabular-nums text-slate-400">{c.value}</span>
           <span className="w-12 shrink-0 text-right text-[10px] text-slate-600">{Math.round(c.weight * 100)}% wt</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type CompareItem = { name: string; score: number; total: number; isBrand: boolean };
+export function CompareBars({ items }: { items: CompareItem[] }) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      {items.map((c) => (
+        <div key={c.name} className="flex items-center gap-2 text-sm">
+          <span className={`w-32 shrink-0 truncate ${c.isBrand ? 'font-semibold text-amber-300' : 'text-slate-300'}`}>
+            {c.isBrand ? '★ ' : ''}{c.name}
+          </span>
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-700/40">
+            <div className="h-full rounded-full" style={{ width: `${c.score}%`, backgroundColor: c.isBrand ? '#fbbf24' : healthColor(c.score) }} />
+          </div>
+          <span className="w-8 shrink-0 text-right text-xs tabular-nums text-slate-400">{c.score}</span>
         </div>
       ))}
     </div>
