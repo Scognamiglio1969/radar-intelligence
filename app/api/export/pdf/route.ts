@@ -223,6 +223,12 @@ export async function GET(req: Request) {
     hbars(data.dashboard.topTopics.slice(0, 12).map((t) => ({ label: t.topic, value: Number(t.n) })));
   }
 
+  // ---- Emotion radar ----
+  if (has('emotions') && data.emotions.length) {
+    heading('Emotion radar — emotional fingerprint');
+    hbars(data.emotions.map((e) => ({ label: e.emotion, value: e.value })));
+  }
+
   // ---- Geographic map ----
   if (has('geo') && data.geo.length) {
     heading('Geographic map — by area (language-inferred)');

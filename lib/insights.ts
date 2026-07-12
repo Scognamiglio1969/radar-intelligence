@@ -288,6 +288,32 @@ const LANG_GEO: Record<string, GeoMeta> = {
   sl: { country: 'Slovenia', flag: '🇸🇮', lon: 14.8, lat: 46.1 },
 };
 
+// ---------------------------------------------------------------------------
+// 2b. Emotion radar (distribuzione delle emozioni dominanti)
+// ---------------------------------------------------------------------------
+const EMOTION_ORDER = ['joy', 'trust', 'fear', 'anger', 'sadness', 'surprise'] as const;
+export type EmotionSlice = { emotion: string; value: number; share: number };
+
+export async function emotionDistribution(projectId: number, days = 30): Promise<EmotionSlice[]> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const rows = (await db.execute(sql`
+    SELECT lower(emotion) AS emotion, count(*) AS n
+    FROM mentions
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+      AND emotion IS NOT NULL
+    GROUP BY lower(emotion)
+  `)).rows as { emotion: string; n: number }[];
+
+  const map = new Map(rows.map((r) => [r.emotion, Number(r.n)]));
+  const total = [...map.values()].reduce((s, n) => s + n, 0);
+  if (total === 0) return [];
+  return EMOTION_ORDER.map((e) => {
+    const value = map.get(e) ?? 0;
+    return { emotion: e, value, share: Math.round((value / total) * 1000) / 10 };
+  });
+}
+
 export type GeoPoint = {
   lang: string; country: string; flag: string;
   lon: number; lat: number; volume: number; sentiment: number | null; share: number;

@@ -144,6 +144,12 @@ export async function seedDemo(db: DB) {
     const engagementScore = likes + 2 * comments + 3 * shares + (views ?? 0) / 200;
     const topics = [topic, ...(rnd() < 0.5 ? [pick(TOPICS)] : [])].filter((v, k, a) => a.indexOf(v) === k);
     const relevance = Math.max(1, Math.min(5, Math.round(3 + (rnd() - 0.4) * 3)));
+    // Emozione plausibile coerente col sentiment (per popolare la Emotion Radar)
+    const emotion = sentiment === 'positive'
+      ? pick(['joy', 'joy', 'trust', 'surprise'])
+      : sentiment === 'negative'
+        ? pick(['anger', 'fear', 'sadness', 'anger'])
+        : pick(['trust', 'surprise', 'fear', 'joy']);
     rows.push({
       projectId: pid,
       source,
@@ -161,6 +167,7 @@ export async function seedDemo(db: DB) {
       reach: views,
       sentiment,
       sentimentScore,
+      emotion,
       relevance,
       relevanceReason: relevance >= 4 ? 'Directly on-topic with concrete, weighty detail.' : 'Related but fairly ordinary coverage.',
       topics,

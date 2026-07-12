@@ -105,6 +105,15 @@ export async function GET(req: Request) {
     children.push(table(['Tema', 'Mentions'], data.dashboard.topTopics.map((t) => [t.topic, String(t.n)])));
   }
 
+  // Emotion radar
+  if (has('emotions') && data.emotions.length) {
+    children.push(h1('Emotion radar — emotional fingerprint (30 days)'));
+    children.push(table(
+      ['Emotion', 'Mentions', 'Share'],
+      data.emotions.map((e) => [e.emotion, String(e.value), `${e.share}%`]),
+    ));
+  }
+
   // Geographic map
   if (has('geo') && data.geo.length) {
     children.push(h1('Geographic map — conversation by area (language-inferred)'));

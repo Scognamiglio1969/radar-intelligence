@@ -112,8 +112,10 @@ function parseJson<T>(text: string | null): T | null {
 type AnalysisRow = {
   id: number; language: string; sentiment: 'positive' | 'neutral' | 'negative';
   sentiment_score: number; relevance: number; relevance_reason: string;
-  topics: string[]; entities: string[];
+  topics: string[]; entities: string[]; emotion: string;
 };
+
+export const EMOTIONS = ['joy', 'trust', 'fear', 'anger', 'sadness', 'surprise'] as const;
 
 const ANALYSIS_SYSTEM = `You are a social listening analyst. You receive the monitored topic and a JSON array of items (news, social posts).
 For EACH item, return an object with:
@@ -121,6 +123,7 @@ For EACH item, return an object with:
 - language: ISO 639-1 code of the text's language (e.g. "it", "en")
 - sentiment: "positive", "neutral" or "negative" — about the tone of the content toward the topic it discusses
 - sentiment_score: number from -1 (very negative) to 1 (very positive)
+- emotion: the single dominant emotion, one of "joy", "trust", "fear", "anger", "sadness", "surprise" (pick the closest even if faint)
 - relevance: 1-5, how relevant and important the item is for someone monitoring the topic (5 = central and weighty, 3 = on-topic but ordinary, 1 = marginal or off-topic)
 - relevance_reason: at most 12 words in English explaining the relevance judgment
 - topics: at most 3 topics in English, short (1-3 words, lowercase)
@@ -132,7 +135,7 @@ export async function analyzePendingMentions(projectId: number, theme: string, l
   // New mentions + gradual relevance backfill on recent items already analyzed
   // before the stars existed
   const d3 = new Date(Date.now() - 3 * 86400_000);
-  const pendingCond = sql`(${mentions.analyzedAt} IS NULL OR (${mentions.relevance} IS NULL AND ${mentions.publishedAt} >= ${d3.toISOString()}::timestamptz))`;
+  const pendingCond = sql`(${mentions.analyzedAt} IS NULL OR ((${mentions.relevance} IS NULL OR ${mentions.emotion} IS NULL) AND ${mentions.publishedAt} >= ${d3.toISOString()}::timestamptz))`;
   const pending = await db.select({
     id: mentions.id, title: mentions.title, content: mentions.content, source: mentions.source,
   }).from(mentions)
@@ -163,10 +166,13 @@ export async function analyzePendingMentions(projectId: number, theme: string, l
       const sentimentMap: Record<string, string> = { positive: 'positive', neutral: 'neutral', negative: 'negative' };
       for (const r of rows) {
         if (!chunk.some((m) => m.id === r.id)) continue;
+        const emotion = (EMOTIONS as readonly string[]).includes((r.emotion ?? '').toLowerCase())
+          ? (r.emotion as string).toLowerCase() : null;
         await db.update(mentions).set({
           language: r.language?.slice(0, 5),
           sentiment: sentimentMap[r.sentiment] ?? 'neutral',
           sentimentScore: Math.max(-1, Math.min(1, Number(r.sentiment_score) || 0)),
+          emotion,
           relevance: Math.max(1, Math.min(5, Math.round(Number(r.relevance)) || 3)),
           relevanceReason: r.relevance_reason?.slice(0, 200) ?? null,
           topics: (r.topics ?? []).slice(0, 3),

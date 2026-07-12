@@ -83,6 +83,16 @@ export async function GET(req: Request) {
   for (const r of data.dashboard.sentimentDist) wsS.addRow({ s: r.sentiment, n: r.n });
   }
 
+  // 3b. Emotion radar
+  if (has('emotions') && data.emotions.length) {
+  const wsE = sheet(wb, 'Emotion radar', [
+    { header: 'Emotion', key: 'e', width: 14 },
+    { header: 'Mentions', key: 'n', width: 10 },
+    { header: 'Share %', key: 'sh', width: 10 },
+  ]);
+  for (const e of data.emotions) wsE.addRow({ e: e.emotion, n: e.value, sh: e.share });
+  }
+
   // 4. Temi
   if (has('topics')) {
   const wsT = sheet(wb, 'Topics', [

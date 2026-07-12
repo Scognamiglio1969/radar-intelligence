@@ -129,6 +129,22 @@ export async function GET(req: Request) {
     });
   }
 
+  // ── 4a. Emotion radar
+  if (has('emotions') && data.emotions.length) {
+    const se = pptx.addSlide({ masterName: 'DARK' });
+    se.addText('Emotion radar — emotional fingerprint (30 days)', titleOpts);
+    se.addChart('radar', [{
+      name: 'Share %',
+      labels: data.emotions.map((e) => e.emotion),
+      values: data.emotions.map((e) => e.share),
+    }], {
+      x: 1.5, y: 1.3, w: 10.3, h: 5.4,
+      chartColors: ['A78BFA'], radarStyle: 'standard',
+      catAxisLabelColor: TEXT, valAxisLabelColor: MUTED, showLegend: false,
+      lineSize: 2,
+    });
+  }
+
   // ── 4b. Geographic map (per area/lingua)
   if (has('geo') && data.geo.length) {
     const s4b = pptx.addSlide({ masterName: 'DARK' });

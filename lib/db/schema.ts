@@ -77,6 +77,8 @@ export const mentions = pgTable('mentions', {
   reach: integer('reach'),
   sentiment: text('sentiment'),
   sentimentScore: real('sentiment_score'),
+  // Emozione dominante (Plutchik-lite): joy/trust/fear/anger/sadness/surprise
+  emotion: text('emotion'),
   // Rilevanza AI rispetto al tema del progetto: 1-5 stelle + motivazione breve
   relevance: integer('relevance'),
   relevanceReason: text('relevance_reason'),

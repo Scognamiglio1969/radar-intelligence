@@ -3,6 +3,7 @@
 import {
   ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip,
   ReferenceLine, Cell, Treemap,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts';
 
 const TOOLTIP = { backgroundColor: '#16203c', border: '1px solid #1e2a4a', borderRadius: 8, fontSize: 12, color: '#e2e8f0' };
@@ -131,6 +132,37 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
     <ResponsiveContainer width="100%" height={360}>
       <Treemap data={data} dataKey="size" stroke="#0a0f1f" aspectRatio={4 / 3}
         content={<TreemapCell />} />
+    </ResponsiveContainer>
+  );
+}
+
+// ── 2b. Emotion Radar ─────────────────────────────────────────────────────
+type EmotionSlice = { emotion: string; value: number; share: number };
+const EMOTION_LABEL: Record<string, string> = {
+  joy: 'Joy', trust: 'Trust', fear: 'Fear', anger: 'Anger', sadness: 'Sadness', surprise: 'Surprise',
+};
+
+export function EmotionRadar({ data }: { data: EmotionSlice[] }) {
+  const rows = data.map((d) => ({ ...d, label: EMOTION_LABEL[d.emotion] ?? d.emotion }));
+  return (
+    <ResponsiveContainer width="100%" height={420}>
+      <RadarChart data={rows} outerRadius="72%">
+        <PolarGrid stroke="#1e2a4a" />
+        <PolarAngleAxis dataKey="label" tick={{ fill: '#cbd5e1', fontSize: 13 }} />
+        <PolarRadiusAxis angle={90} tick={{ fill: '#64748b', fontSize: 10 }} stroke="#1e2a4a" />
+        <Tooltip contentStyle={TOOLTIP}
+          content={({ payload }) => {
+            const p = payload?.[0]?.payload as (EmotionSlice & { label: string }) | undefined;
+            if (!p) return null;
+            return (
+              <div style={TOOLTIP} className="px-3 py-2">
+                <p className="font-semibold text-slate-100">{p.label}</p>
+                <p>{p.value} mentions · {p.share}%</p>
+              </div>
+            );
+          }} />
+        <Radar dataKey="share" stroke="#a78bfa" fill="#a78bfa" fillOpacity={0.4} strokeWidth={2} isAnimationActive={false} />
+      </RadarChart>
     </ResponsiveContainer>
   );
 }
