@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import {
   ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip,
   ReferenceLine, Cell, Treemap,
@@ -222,8 +222,12 @@ type FlowLink = { source: string; target: string; value: number };
 export function SankeyFlow({ nodes, links, sourceColors }: {
   nodes: FlowNode[]; links: FlowLink[]; sourceColors: Record<string, string>;
 }) {
-  // Focus = chiave di un nodo fonte (s:) o sentiment (x:); isola quel flusso.
-  const [focus, setFocus] = useState<string | null>(null);
+  // Multi-selezione indipendente: un set di fonti e un set di sentiment.
+  // Il flusso mostrato è l'INCROCIO (es. 2 fonti × solo "negative").
+  const [selSrc, setSelSrc] = useState<Set<string>>(new Set());
+  const [selSent, setSelSent] = useState<Set<string>>(new Set());
+  const toggle = (setter: Dispatch<SetStateAction<Set<string>>>, key: string) =>
+    setter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   const W = 1000, H = 580, nw = 14, gap = 14, pad = 10;
   const colX = [40, W / 2 - nw / 2, W - 40 - nw];
   const sentCol: Record<string, string> = { positive: '#34d399', neutral: '#94a3b8', negative: '#f87171' };
@@ -247,19 +251,27 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
     }
   });
 
-  // Topic collegati al nodo in focus (per illuminare l'intero percorso 3 colonne).
-  const focusTopics = new Set<string>();
-  if (focus?.startsWith('s:')) for (const l of links) { if (l.source === focus) focusTopics.add(l.target); }
-  if (focus?.startsWith('x:')) for (const l of links) { if (l.target === focus) focusTopics.add(l.source); }
+  // Per ogni topic: da quali fonti riceve e verso quali sentiment va.
+  const srcOfTopic = new Map<string, Set<string>>();
+  const sentOfTopic = new Map<string, Set<string>>();
+  for (const l of links) {
+    if (l.target.startsWith('t:')) { (srcOfTopic.get(l.target) ?? srcOfTopic.set(l.target, new Set()).get(l.target)!).add(l.source); }
+    else if (l.source.startsWith('t:')) { (sentOfTopic.get(l.source) ?? sentOfTopic.set(l.source, new Set()).get(l.source)!).add(l.target); }
+  }
+  const hasS = selSrc.size > 0, hasX = selSent.size > 0, anySel = hasS || hasX;
+  const topicOnPath = (t: string): boolean => {
+    const sOk = !hasS || [...(srcOfTopic.get(t) ?? [])].some((s) => selSrc.has(s));
+    const xOk = !hasX || [...(sentOfTopic.get(t) ?? [])].some((x) => selSent.has(x));
+    return sOk && xOk;
+  };
   const isActive = (l: FlowLink): boolean => {
-    if (!focus) return true;
-    if (focus.startsWith('s:')) return l.source === focus || focusTopics.has(l.source);
-    return l.target === focus || focusTopics.has(l.target);
+    if (!anySel) return true;
+    if (l.target.startsWith('t:')) return topicOnPath(l.target) && (!hasS || selSrc.has(l.source));
+    return topicOnPath(l.source) && (!hasX || selSent.has(l.target));
   };
-  const nodeActive = (n: FlowNode): boolean => {
-    if (!focus) return true;
-    return n.key === focus || focusTopics.has(n.key);
-  };
+  const activeNodeKeys = new Set<string>();
+  for (const l of links) if (isActive(l)) { activeNodeKeys.add(l.source); activeNodeKeys.add(l.target); }
+  const nodeActive = (n: FlowNode): boolean => !anySel || activeNodeKeys.has(n.key);
 
   const srcOff = new Map<string, number>();
   const tgtOff = new Map<string, number>();
@@ -286,10 +298,11 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
     });
 
   const sources = layers[0], sentiments = layers[2];
-  const Chip = ({ node }: { node: FlowNode }) => {
-    const on = focus === node.key;
+  const Chip = ({ node, sel }: { node: FlowNode; sel: Set<string> }) => {
+    const on = sel.has(node.key);
+    const set = node.kind === 'source' ? setSelSrc : setSelSent;
     return (
-      <button onClick={() => setFocus(on ? null : node.key)}
+      <button onClick={() => toggle(set, node.key)}
         className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${on ? 'border-sky-400 bg-sky-500/15 text-slate-100' : 'border-[var(--border)] text-slate-400 hover:text-slate-200'}`}>
         <span className="size-2.5 rounded-full" style={{ backgroundColor: nodeColor(node) }} />{node.label}
       </button>
@@ -299,12 +312,13 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-[11px] uppercase tracking-wide text-slate-600">Isolate:</span>
-        {sources.map((n) => <Chip key={n.key} node={n} />)}
-        <span className="mx-1 text-slate-700">·</span>
-        {sentiments.map((n) => <Chip key={n.key} node={n} />)}
-        {focus && (
-          <button onClick={() => setFocus(null)} className="ml-1 rounded-full px-2.5 py-1 text-xs text-sky-400 hover:text-sky-300">clear ✕</button>
+        <span className="mr-1 text-[11px] uppercase tracking-wide text-slate-600">Sources:</span>
+        {sources.map((n) => <Chip key={n.key} node={n} sel={selSrc} />)}
+        <span className="ml-2 mr-1 text-[11px] uppercase tracking-wide text-slate-600">Sentiment:</span>
+        {sentiments.map((n) => <Chip key={n.key} node={n} sel={selSent} />)}
+        {anySel && (
+          <button onClick={() => { setSelSrc(new Set()); setSelSent(new Set()); }}
+            className="ml-1 rounded-full px-2.5 py-1 text-xs text-sky-400 hover:text-sky-300">clear ✕</button>
         )}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 600 }}>
@@ -316,8 +330,9 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
           const midSide = n.layer === 1;
           const clickable = n.layer !== 1;
           const dim = !nodeActive(n);
+          const onNode = clickable ? () => toggle(n.kind === 'source' ? setSelSrc : setSelSent, n.key) : undefined;
           return (
-            <g key={n.key} opacity={dim ? 0.3 : 1} onClick={clickable ? () => setFocus(focus === n.key ? null : n.key) : undefined}
+            <g key={n.key} opacity={dim ? 0.3 : 1} onClick={onNode}
               style={{ cursor: clickable ? 'pointer' : 'default', transition: 'opacity .15s' }}>
               <title>{`${n.label} · ${n.value}`}</title>
               <rect x={p.x} y={p.y} width={nw} height={p.h} rx={3} fill={c} />
