@@ -247,6 +247,61 @@ export async function currentProjectForInsights() {
 }
 
 // ---------------------------------------------------------------------------
+// ★ Conversation Galaxy — riassunto 3D vivo dell'intera conversazione
+// ---------------------------------------------------------------------------
+export type GalaxyStar = { si: number; s: number; e: number; age: number };
+export type GalaxySource = { id: string; label: string; color: string; count: number };
+export type GalaxyData = {
+  title: string; core: number; grade: string; total: number; avgSentiment: number;
+  sources: GalaxySource[]; stars: GalaxyStar[];
+};
+
+export async function conversationGalaxy(projectId: number, days = 14): Promise<GalaxyData> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const maxAgeH = days * 24;
+
+  const rows = (await db.execute(sql`
+    SELECT source,
+      sentiment_score AS s,
+      engagement_score AS e,
+      extract(epoch FROM (now() - published_at)) / 3600 AS age_h
+    FROM mentions
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    ORDER BY published_at DESC
+    LIMIT 700
+  `)).rows as { source: string; s: number | null; e: number | null; age_h: number }[];
+
+  // Fonti presenti, con conteggio, ordinate per volume.
+  const counts = new Map<string, number>();
+  for (const r of rows) counts.set(r.source, (counts.get(r.source) ?? 0) + 1);
+  const sources: GalaxySource[] = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id, count]) => ({ id, label: SOURCE_META[id]?.label ?? id, color: SOURCE_META[id]?.color ?? '#64748b', count }));
+  const idx = new Map(sources.map((s, i) => [s.id, i]));
+
+  const maxE = Math.max(1, ...rows.map((r) => Number(r.e ?? 0)));
+  const stars: GalaxyStar[] = rows.map((r) => ({
+    si: idx.get(r.source) ?? 0,
+    s: r.s === null ? 0 : Math.max(-1, Math.min(1, Number(r.s))),
+    e: Math.sqrt(Number(r.e ?? 0) / maxE),           // 0..1 (radice: comprime le code)
+    age: Math.max(0, Math.min(1, Number(r.age_h) / maxAgeH)), // 0 = ora, 1 = più vecchio
+  }));
+
+  const total = rows.length;
+  const avgSentiment = total ? rows.reduce((a, r) => a + (r.s === null ? 0 : Number(r.s)), 0) / total : 0;
+  const health = await healthFor(projectId, days);
+  const project = await getCurrentProject();
+
+  return {
+    title: project?.name ?? 'Radar',
+    core: health.score, grade: health.grade,
+    total, avgSentiment: Math.round(avgSentiment * 100) / 100,
+    sources, stars,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 9. Anatomia del picco / rischio (gauge di rischio + autopsia dello spike)
 // ---------------------------------------------------------------------------
 export type CrisisDriver = { label: string; value: number };
