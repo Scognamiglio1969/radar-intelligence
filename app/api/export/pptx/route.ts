@@ -194,6 +194,22 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── 4·network. Influencer network (top autori)
+  if (has('network') && data.network.nodes.length) {
+    const sn = pptx.addSlide({ masterName: 'DARK' });
+    sn.addText('Influencer network — top voices by community', titleOpts);
+    const top = [...data.network.nodes].sort((a, b) => b.engagement - a.engagement).slice(0, 16);
+    sn.addTable([
+      ['Author', 'Community', 'Posts', 'Engagement'].map((t) => ({ text: t, options: { bold: true, color: TEXT, fill: { color: PANEL }, fontSize: 13 } })),
+      ...top.map((n) => [
+        { text: n.label, options: { color: TEXT, fontSize: 12 } },
+        { text: n.community, options: { color: MUTED, fontSize: 12 } },
+        { text: String(n.posts), options: { color: TEXT, fontSize: 12, align: 'right' as const } },
+        { text: n.engagement.toLocaleString('en-US'), options: { color: TEXT, fontSize: 12, align: 'right' as const } },
+      ]),
+    ], { x: 0.5, y: 1.3, w: 12.3, colW: [4, 4.3, 2, 2], border: { type: 'solid', color: '1E2A4A', pt: 1 } });
+  }
+
   // ── 4·flow. Conversation flow (tabella flussi principali)
   if (has('flow') && data.flow.links.length) {
     const lbl = new Map(data.flow.nodes.map((n) => [n.key, n.label]));

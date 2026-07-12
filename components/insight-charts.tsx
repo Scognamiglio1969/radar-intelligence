@@ -139,6 +139,79 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
   );
 }
 
+// ── 4. Rete degli influencer (force-directed) ─────────────────────────────
+type NetNode = { id: string; label: string; community: string; source: string; posts: number; engagement: number };
+type NetEdge = { a: string; b: string };
+
+export function InfluencerNetwork({ nodes, edges, communities }: {
+  nodes: NetNode[]; edges: NetEdge[]; communities: string[];
+}) {
+  const W = 1000, H = 600, cx = W / 2, cy = H / 2;
+  const commColor = (c: string) => SERIES_COLORS[communities.indexOf(c) % SERIES_COLORS.length];
+  const maxEng = Math.max(1, ...nodes.map((n) => n.engagement));
+  const nr = (e: number) => 7 + Math.sqrt(e / maxEng) * 26;
+
+  // Layout force-directed deterministico (init su cerchio, poi rilassamento).
+  type P = { id: string; x: number; y: number; vx: number; vy: number };
+  const pts = new Map<string, P>();
+  nodes.forEach((n, i) => {
+    const a = (i / nodes.length) * Math.PI * 2;
+    pts.set(n.id, { id: n.id, x: cx + Math.cos(a) * 200, y: cy + Math.sin(a) * 200, vx: 0, vy: 0 });
+  });
+  const arr = [...pts.values()];
+  for (let iter = 0; iter < 300; iter++) {
+    // repulsione
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i], b = arr[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d2 = dx * dx + dy * dy || 0.01;
+        const f = 5200 / d2;
+        const d = Math.sqrt(d2), ux = dx / d, uy = dy / d;
+        a.vx -= ux * f; a.vy -= uy * f; b.vx += ux * f; b.vy += uy * f;
+      }
+    }
+    // attrazione lungo gli archi
+    for (const e of edges) {
+      const a = pts.get(e.a), b = pts.get(e.b); if (!a || !b) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      a.vx += dx * 0.01; a.vy += dy * 0.01; b.vx -= dx * 0.01; b.vy -= dy * 0.01;
+    }
+    // gravità al centro + integrazione con smorzamento
+    for (const p of arr) {
+      p.vx += (cx - p.x) * 0.005; p.vy += (cy - p.y) * 0.005;
+      p.x += p.vx * 0.5; p.y += p.vy * 0.5; p.vx *= 0.82; p.vy *= 0.82;
+    }
+  }
+  // clamp in cornice
+  for (const n of nodes) {
+    const p = pts.get(n.id)!; const r = nr(n.engagement);
+    p.x = Math.max(r + 8, Math.min(W - r - 8, p.x));
+    p.y = Math.max(r + 8, Math.min(H - r - 20, p.y));
+  }
+
+  const sorted = [...nodes].sort((a, b) => b.engagement - a.engagement);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 620 }}>
+      <rect x="0" y="0" width={W} height={H} rx="14" fill="#0a0f1f" />
+      {edges.map((e, i) => {
+        const a = pts.get(e.a), b = pts.get(e.b); if (!a || !b) return null;
+        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#334155" strokeOpacity={0.4} strokeWidth={1} />;
+      })}
+      {sorted.map((n) => {
+        const p = pts.get(n.id)!; const r = nr(n.engagement); const c = commColor(n.community);
+        return (
+          <g key={n.id}>
+            <title>{`${n.label} · ${n.community} · ${n.posts} posts · engagement ${n.engagement.toLocaleString('en-US')}`}</title>
+            <circle cx={p.x} cy={p.y} r={r} fill={c} fillOpacity={0.28} stroke={c} strokeWidth={1.5} />
+            {r > 13 && <text x={p.x} y={p.y + r + 12} textAnchor="middle" fontSize="10" fill="#cbd5e1">{n.label}</text>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ── 3. Flusso della conversazione (Sankey Fonte → Topic → Sentiment) ──────
 type FlowNode = { key: string; label: string; layer: number; value: number; kind: string };
 type FlowLink = { source: string; target: string; value: number };

@@ -127,6 +127,20 @@ export async function GET(req: Request) {
   for (const r of data.dashboard.topTopics) wsT.addRow({ t: r.topic, n: Number(r.n) });
   }
 
+  // 4·network. Influencer network (top autori per community)
+  if (has('network') && data.network.nodes.length) {
+  const wsNet = sheet(wb, 'Influencer network', [
+    { header: 'Author', key: 'a', width: 24 },
+    { header: 'Community', key: 'c', width: 22 },
+    { header: 'Source', key: 'f', width: 14 },
+    { header: 'Posts', key: 'p', width: 8 },
+    { header: 'Engagement', key: 'e', width: 12 },
+  ]);
+  for (const n of [...data.network.nodes].sort((a, b) => b.engagement - a.engagement)) {
+    wsNet.addRow({ a: n.label, c: n.community, f: sourceLabel(n.source), p: n.posts, e: n.engagement });
+  }
+  }
+
   // 4·flow. Conversation flow (Source → Topic → Sentiment)
   if (has('flow') && data.flow.links.length) {
   const lbl = new Map(data.flow.nodes.map((n) => [n.key, n.label]));

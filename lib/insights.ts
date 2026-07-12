@@ -247,6 +247,55 @@ export async function currentProjectForInsights() {
 }
 
 // ---------------------------------------------------------------------------
+// 4. Rete degli influencer (autori collegati dalla community condivisa)
+// ---------------------------------------------------------------------------
+export type NetNode = { id: string; label: string; community: string; source: string; posts: number; engagement: number };
+export type NetEdge = { a: string; b: string };
+export type InfluencerNet = { nodes: NetNode[]; edges: NetEdge[]; communities: string[] };
+
+export async function influencerNetwork(projectId: number, days = 14, limit = 34): Promise<InfluencerNet> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  // Un nodo per autore: community e fonte dominanti (mode) per evitare id duplicati.
+  const rows = (await db.execute(sql`
+    SELECT id, id AS label, community, source, posts, engagement FROM (
+      SELECT coalesce(author_handle, author) AS id,
+        mode() WITHIN GROUP (ORDER BY community) AS community,
+        mode() WITHIN GROUP (ORDER BY source) AS source,
+        count(*) AS posts, sum(engagement_score) AS engagement
+      FROM mentions
+      WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+        AND community IS NOT NULL AND community <> ''
+        AND coalesce(author_handle, author) IS NOT NULL
+      GROUP BY coalesce(author_handle, author)
+    ) q
+    ORDER BY engagement DESC NULLS LAST
+    LIMIT ${limit}
+  `)).rows as { id: string; label: string; community: string; source: string; posts: number; engagement: number }[];
+
+  const nodes: NetNode[] = rows.map((r) => ({
+    id: r.id, label: r.label, community: r.community, source: r.source,
+    posts: Number(r.posts), engagement: Math.round(Number(r.engagement ?? 0)),
+  }));
+
+  // Archi: collego gli autori della stessa community (cluster visibili).
+  const byComm = new Map<string, NetNode[]>();
+  for (const n of nodes) {
+    if (!byComm.has(n.community)) byComm.set(n.community, []);
+    byComm.get(n.community)!.push(n);
+  }
+  const edges: NetEdge[] = [];
+  for (const group of byComm.values()) {
+    const g = group.slice(0, 8); // evita cricche troppo dense
+    for (let i = 0; i < g.length; i++) {
+      for (let j = i + 1; j < g.length; j++) edges.push({ a: g[i].id, b: g[j].id });
+    }
+  }
+  const communities = [...byComm.keys()];
+  return { nodes, edges, communities };
+}
+
+// ---------------------------------------------------------------------------
 // 3. Flusso della conversazione (Sankey: Fonte → Topic → Sentiment)
 // ---------------------------------------------------------------------------
 export type FlowNode = { key: string; label: string; layer: number; value: number; kind: string };

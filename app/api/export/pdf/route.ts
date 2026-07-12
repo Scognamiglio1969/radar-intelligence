@@ -250,6 +250,17 @@ export async function GET(req: Request) {
     }
   }
 
+  // ---- Influencer network ----
+  if (has('network') && data.network.nodes.length) {
+    heading('Influencer network — top voices by community');
+    table(
+      ['Author', 'Community', 'Posts', 'Engagement'],
+      [...data.network.nodes].sort((a, b) => b.engagement - a.engagement).slice(0, 20)
+        .map((n) => [n.label, n.community, String(n.posts), n.engagement.toLocaleString('en-US')]),
+      [0.36, 0.34, 0.14, 0.16], ['left', 'left', 'right', 'right'],
+    );
+  }
+
   // ---- Conversation flow ----
   if (has('flow') && data.flow.links.length) {
     const lbl = new Map(data.flow.nodes.map((n) => [n.key, n.label]));

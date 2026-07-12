@@ -37,6 +37,7 @@ const NAV: ({ href: string; label: string; icon: typeof Radar } | { section: str
   { href: '/insights/emotions', label: 'Emotion radar', icon: HeartPulse },
   { href: '/insights/heatmap', label: 'Hourly heatmap', icon: Grid3x3 },
   { href: '/insights/waterfall', label: 'Sentiment waterfall', icon: TrendingDown },
+  { href: '/insights/network', label: 'Influencer network', icon: Network },
   { href: '/insights/constellation', label: 'Semantic constellation', icon: Sparkles },
   { href: '/insights/clusters', label: 'Conversation clusters', icon: Boxes },
   { href: '/insights/causal', label: 'Cause-Effect', icon: Workflow },
