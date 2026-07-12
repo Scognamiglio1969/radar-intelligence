@@ -226,6 +226,7 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
   // Il flusso mostrato è l'INCROCIO (es. 2 fonti × solo "negative").
   const [selSrc, setSelSrc] = useState<Set<string>>(new Set());
   const [selSent, setSelSent] = useState<Set<string>>(new Set());
+  const [tip, setTip] = useState<{ x: number; y: number; title: string; lines: string[] } | null>(null);
   const toggle = (setter: Dispatch<SetStateAction<Set<string>>>, key: string) =>
     setter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   const W = 1000, H = 580, nw = 14, gap = 14, pad = 10;
@@ -273,6 +274,53 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
   for (const l of links) if (isActive(l)) { activeNodeKeys.add(l.source); activeNodeKeys.add(l.target); }
   const nodeActive = (n: FlowNode): boolean => !anySel || activeNodeKeys.has(n.key);
 
+  // ── Dati per i tooltip (valori + spiegazioni) ──
+  const labelOf = (k: string) => nodes.find((n) => n.key === k)?.label ?? k;
+  const topicIn = new Map<string, number>(), topicOut = new Map<string, number>();
+  const inSrc = new Map<string, { k: string; v: number }[]>();   // topic ← fonti
+  const outSent = new Map<string, { k: string; v: number }[]>();  // topic → sentiment
+  const srcOut = new Map<string, { k: string; v: number }[]>();   // fonte → topic
+  const sentIn = new Map<string, { k: string; v: number }[]>();   // sentiment ← topic
+  const push = (m: Map<string, { k: string; v: number }[]>, key: string, k: string, v: number) => {
+    (m.get(key) ?? m.set(key, []).get(key)!).push({ k, v });
+  };
+  for (const l of links) {
+    if (l.target.startsWith('t:')) {
+      topicIn.set(l.target, (topicIn.get(l.target) ?? 0) + l.value);
+      push(inSrc, l.target, l.source, l.value); push(srcOut, l.source, l.target, l.value);
+    } else if (l.source.startsWith('t:')) {
+      topicOut.set(l.source, (topicOut.get(l.source) ?? 0) + l.value);
+      push(outSent, l.source, l.target, l.value); push(sentIn, l.target, l.source, l.value);
+    }
+  }
+  const topList = (arr: { k: string; v: number }[] | undefined, n = 3) =>
+    (arr ?? []).slice().sort((a, b) => b.v - a.v).slice(0, n).map((x) => `${labelOf(x.k)} (${x.v})`).join(', ');
+  const nodeTip = (nd: FlowNode): { title: string; lines: string[] } => {
+    if (nd.kind === 'source') {
+      const outs = srcOut.get(nd.key); const tot = (outs ?? []).reduce((s, x) => s + x.v, 0);
+      return { title: `${nd.label} · source`, lines: [`${tot} mentions across ${(outs ?? []).length} topics`, `Top topics: ${topList(outs)}`] };
+    }
+    if (nd.kind === 'topic') {
+      const inflow = topicIn.get(nd.key) ?? 0;
+      const sents = (outSent.get(nd.key) ?? []);
+      const tot = sents.reduce((s, x) => s + x.v, 0) || 1;
+      const split = ['positive', 'neutral', 'negative'].map((s) => {
+        const v = sents.find((x) => x.k === `x:${s}`)?.v ?? 0; return `${s} ${Math.round((v / tot) * 100)}%`;
+      }).join(' · ');
+      return { title: `${nd.label} · topic`, lines: [`${inflow} mentions`, `From: ${topList(inSrc.get(nd.key))}`, `Sentiment: ${split}`] };
+    }
+    const tops = sentIn.get(nd.key); const tot = (tops ?? []).reduce((s, x) => s + x.v, 0);
+    return { title: `${nd.label} · sentiment`, lines: [`${tot} mentions`, `Driven by: ${topList(tops)}`] };
+  };
+  const linkTip = (l: FlowLink): { title: string; lines: string[] } => {
+    if (l.target.startsWith('t:')) {
+      const share = Math.round((l.value / (topicIn.get(l.target) ?? l.value)) * 100);
+      return { title: `${labelOf(l.source)} → ${labelOf(l.target)}`, lines: [`${l.value} mentions`, `${share}% of “${labelOf(l.target)}” comes from here`] };
+    }
+    const share = Math.round((l.value / (topicOut.get(l.source) ?? l.value)) * 100);
+    return { title: `${labelOf(l.source)} → ${labelOf(l.target)}`, lines: [`${l.value} mentions`, `${share}% of “${labelOf(l.source)}” is ${labelOf(l.target)}`] };
+  };
+
   const srcOff = new Map<string, number>();
   const tgtOff = new Map<string, number>();
   const ribbons = links
@@ -290,10 +338,13 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
       const srcNode = nodes.find((n) => n.key === l.source)!;
       const tgtNode = nodes.find((n) => n.key === l.target)!;
       const c = tgtNode.kind !== 'topic' ? (sentCol[tgtNode.kind] ?? '#64748b') : (sourceColors[srcNode.label] ?? '#64748b');
+      const t2 = linkTip(l);
       return (
         <path key={i} d={`M${x0},${sy} C${mx},${sy} ${mx},${ty} ${x1},${ty}`}
           fill="none" stroke={c} strokeOpacity={isActive(l) ? 0.42 : 0.04} strokeWidth={th}
-          style={{ transition: 'stroke-opacity .15s' }} />
+          style={{ transition: 'stroke-opacity .15s' }}
+          onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, title: t2.title, lines: t2.lines })}
+          onMouseLeave={() => setTip(null)} />
       );
     });
 
@@ -331,10 +382,12 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
           const clickable = n.layer !== 1;
           const dim = !nodeActive(n);
           const onNode = clickable ? () => toggle(n.kind === 'source' ? setSelSrc : setSelSent, n.key) : undefined;
+          const nt = nodeTip(n);
           return (
             <g key={n.key} opacity={dim ? 0.3 : 1} onClick={onNode}
-              style={{ cursor: clickable ? 'pointer' : 'default', transition: 'opacity .15s' }}>
-              <title>{`${n.label} · ${n.value}`}</title>
+              style={{ cursor: clickable ? 'pointer' : 'default', transition: 'opacity .15s' }}
+              onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, title: nt.title, lines: nt.lines })}
+              onMouseLeave={() => setTip(null)}>
               <rect x={p.x} y={p.y} width={nw} height={p.h} rx={3} fill={c} />
               <text x={rightSide ? p.x - 6 : p.x + nw + 6} y={p.y + p.h / 2}
                 textAnchor={rightSide ? 'end' : 'start'} dominantBaseline="middle"
@@ -344,6 +397,16 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
           );
         })}
       </svg>
+      {tip && (
+        <div className="pointer-events-none fixed z-50 w-56 rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2 text-xs shadow-xl"
+          style={{
+            left: Math.min(tip.x + 14, (typeof window !== 'undefined' ? window.innerWidth : 9999) - 240),
+            top: Math.min(tip.y + 14, (typeof window !== 'undefined' ? window.innerHeight : 9999) - 110),
+          }}>
+          <p className="mb-0.5 font-semibold text-slate-100">{tip.title}</p>
+          {tip.lines.map((l, i) => <p key={i} className="text-slate-400">{l}</p>)}
+        </div>
+      )}
     </div>
   );
 }
