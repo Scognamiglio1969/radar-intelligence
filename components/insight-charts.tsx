@@ -136,6 +136,67 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
   );
 }
 
+// ── 5. Brand Health Index (gauge + sotto-metriche + sparkline) ────────────
+type HealthComponent = { key: string; label: string; value: number; weight: number };
+const healthColor = (v: number) => v >= 80 ? '#34d399' : v >= 65 ? '#38bdf8' : v >= 50 ? '#fbbf24' : '#f87171';
+
+export function BrandHealthGauge({ score, grade }: { score: number; grade: string }) {
+  const R = 80, C = 100, sw = 16;
+  const start = 135, sweep = 270; // arco 270°
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  const pt = (deg: number) => [C + R * Math.cos(rad(deg)), C + R * Math.sin(rad(deg))];
+  const arc = (frac: number) => {
+    const a0 = start, a1 = start + sweep * frac;
+    const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
+    const large = sweep * frac > 180 ? 1 : 0;
+    return `M ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1}`;
+  };
+  const col = healthColor(score);
+  return (
+    <svg viewBox="0 0 200 190" className="w-full" style={{ maxHeight: 260 }}>
+      <path d={arc(1)} fill="none" stroke="#1e2a4a" strokeWidth={sw} strokeLinecap="round" />
+      <path d={arc(Math.max(0.001, score / 100))} fill="none" stroke={col} strokeWidth={sw} strokeLinecap="round" />
+      <text x={C} y={C - 4} textAnchor="middle" fontSize="46" fontWeight={800} fill="#f1f5f9">{score}</text>
+      <text x={C} y={C + 22} textAnchor="middle" fontSize="13" fill={col} fontWeight={700} letterSpacing="1">{grade.toUpperCase()}</text>
+      <text x={C} y={C + 40} textAnchor="middle" fontSize="10" fill="#64748b">Brand Health Index</text>
+    </svg>
+  );
+}
+
+export function HealthBars({ components }: { components: HealthComponent[] }) {
+  return (
+    <div className="flex flex-col gap-3">
+      {components.map((c) => (
+        <div key={c.key} className="flex items-center gap-2 text-sm">
+          <span className="w-28 shrink-0 text-slate-300">{c.label}</span>
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-700/40">
+            <div className="h-full rounded-full" style={{ width: `${c.value}%`, backgroundColor: healthColor(c.value) }} />
+          </div>
+          <span className="w-10 shrink-0 text-right text-xs tabular-nums text-slate-400">{c.value}</span>
+          <span className="w-12 shrink-0 text-right text-[10px] text-slate-600">{Math.round(c.weight * 100)}% wt</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const W = 300, H = 56, pad = 4;
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = Math.max(1, max - min);
+  const x = (i: number) => pad + (i / (values.length - 1)) * (W - pad * 2);
+  const y = (v: number) => H - pad - ((v - min) / range) * (H - pad * 2);
+  const pts = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+  const last = values[values.length - 1];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 60 }}>
+      <polyline points={pts} fill="none" stroke={healthColor(last)} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={x(values.length - 1)} cy={y(last)} r="3" fill={healthColor(last)} />
+    </svg>
+  );
+}
+
 // ── 2b. Emotion Radar ─────────────────────────────────────────────────────
 type EmotionSlice = { emotion: string; value: number; share: number };
 const EMOTION_LABEL: Record<string, string> = {

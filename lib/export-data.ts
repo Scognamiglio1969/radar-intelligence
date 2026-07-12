@@ -8,7 +8,7 @@ import { getRecentAlerts } from '@/lib/alerts';
 import { getTrends } from '@/lib/trends';
 import { getNarratives } from '@/lib/narratives';
 import { getTimeline } from '@/lib/timeline';
-import { geoDistribution, emotionDistribution } from '@/lib/insights';
+import { geoDistribution, emotionDistribution, brandHealth } from '@/lib/insights';
 import { SOURCE_META } from '@/lib/connectors';
 import type { projects } from '@/lib/db/schema';
 
@@ -17,6 +17,7 @@ export type Project = typeof projects.$inferSelect;
 // Sezioni esportabili: id stabile + etichetta mostrata nel configuratore.
 export const EXPORT_SECTIONS = [
   ['kpi', 'Summary (KPIs)'],
+  ['health', 'Brand Health Index'],
   ['trends', 'Emerging trends'],
   ['volume', 'Volume by source'],
   ['sentiment', 'Sentiment'],
@@ -68,8 +69,9 @@ export async function collectExportData(project: Project, days = 30) {
       .orderBy(desc(mentions.publishedAt))
       .limit(3000),
   ]);
+  const health = await brandHealth(project.id, 14);
 
-  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, allMentions };
+  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, health, allMentions };
 }
 
 export type ExportData = Awaited<ReturnType<typeof collectExportData>>;

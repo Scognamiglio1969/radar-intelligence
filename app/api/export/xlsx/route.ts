@@ -83,6 +83,17 @@ export async function GET(req: Request) {
   for (const r of data.dashboard.sentimentDist) wsS.addRow({ s: r.sentiment, n: r.n });
   }
 
+  // 3a. Brand Health Index
+  if (has('health') && data.health.total > 0) {
+  const wsH = sheet(wb, 'Brand Health', [
+    { header: 'Metric', key: 'm', width: 22 },
+    { header: 'Value (0-100)', key: 'v', width: 14 },
+    { header: 'Weight', key: 'w', width: 10 },
+  ]);
+  wsH.addRow({ m: `OVERALL — ${data.health.grade}`, v: data.health.score, w: '100%' });
+  for (const c of data.health.components) wsH.addRow({ m: c.label, v: c.value, w: `${Math.round(c.weight * 100)}%` });
+  }
+
   // 3b. Emotion radar
   if (has('emotions') && data.emotions.length) {
   const wsE = sheet(wb, 'Emotion radar', [

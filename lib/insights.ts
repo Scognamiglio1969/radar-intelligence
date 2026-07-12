@@ -245,6 +245,77 @@ export async function currentProjectForInsights() {
 }
 
 // ---------------------------------------------------------------------------
+// 5. Brand Health Index (indice composito 0-100 + sotto-metriche + sparkline)
+// ---------------------------------------------------------------------------
+export type HealthComponent = { key: string; label: string; value: number; weight: number };
+export type BrandHealth = {
+  score: number; grade: string;
+  components: HealthComponent[];
+  spark: number[]; // indice sentiment giornaliero (0-100) sugli ultimi 14 giorni
+  total: number;
+};
+
+function grade(score: number): string {
+  return score >= 80 ? 'Excellent' : score >= 65 ? 'Good' : score >= 50 ? 'Fair' : 'At risk';
+}
+
+export async function brandHealth(projectId: number, days = 14): Promise<BrandHealth> {
+  const db = await getDb();
+  const now = Date.now();
+  const since = new Date(now - days * 86400_000).toISOString();
+  const midMs = now - (days / 2) * 86400_000;
+  const mid = new Date(midMs).toISOString();
+
+  const [agg] = (await db.execute(sql`
+    SELECT
+      count(*) AS total,
+      avg(sentiment_score) AS avg_sent,
+      count(*) FILTER (WHERE sentiment = 'positive') AS pos,
+      count(*) FILTER (WHERE sentiment = 'negative') AS neg,
+      count(*) FILTER (WHERE sentiment IN ('positive','negative')) AS classified,
+      count(*) FILTER (WHERE engagement_score > 0) AS resonant,
+      count(*) FILTER (WHERE published_at >= ${mid}::timestamptz) AS recent,
+      count(*) FILTER (WHERE published_at < ${mid}::timestamptz) AS older
+    FROM mentions
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+  `)).rows as {
+    total: number; avg_sent: number | null; pos: number; neg: number;
+    classified: number; resonant: number; recent: number; older: number;
+  }[];
+
+  const total = Number(agg?.total ?? 0);
+  const avgSent = agg?.avg_sent === null || agg?.avg_sent === undefined ? 0 : Number(agg.avg_sent);
+  const classified = Math.max(1, Number(agg?.classified ?? 0));
+  const older = Math.max(1, Number(agg?.older ?? 0));
+  const recent = Number(agg?.recent ?? 0);
+
+  const sentiment = Math.round(((avgSent + 1) / 2) * 100);
+  const positivity = Math.round((Number(agg?.pos ?? 0) / classified) * 100);
+  const changePct = ((recent - older) / older) * 100;
+  const momentum = Math.round(Math.max(0, Math.min(100, 50 + changePct / 2)));
+  const reach = Math.round((Number(agg?.resonant ?? 0) / Math.max(1, total)) * 100);
+
+  const components: HealthComponent[] = [
+    { key: 'sentiment', label: 'Sentiment', value: sentiment, weight: 0.35 },
+    { key: 'positivity', label: 'Positive share', value: positivity, weight: 0.25 },
+    { key: 'momentum', label: 'Momentum', value: momentum, weight: 0.2 },
+    { key: 'reach', label: 'Resonance', value: reach, weight: 0.2 },
+  ];
+  const score = total === 0 ? 0 : Math.round(components.reduce((s, c) => s + c.value * c.weight, 0));
+
+  // Sparkline: indice sentiment giornaliero (0-100) sugli ultimi 14 giorni.
+  const daily = (await db.execute(sql`
+    SELECT to_char(published_at AT TIME ZONE ${TZ}, 'YYYY-MM-DD') AS day, avg(sentiment_score) AS s
+    FROM mentions
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    GROUP BY day ORDER BY day
+  `)).rows as { day: string; s: number | null }[];
+  const spark = daily.map((d) => Math.round(((Number(d.s ?? 0) + 1) / 2) * 100));
+
+  return { score, grade: grade(score), components, spark, total };
+}
+
+// ---------------------------------------------------------------------------
 // 6. Distribuzione geografica (inferita dalla lingua della conversazione)
 // ---------------------------------------------------------------------------
 // La lingua è l'unico segnale geografico persistito su ogni mention: ogni

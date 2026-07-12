@@ -192,6 +192,12 @@ export async function GET(req: Request) {
     doc.y = y0 + 72;
   }
 
+  // ---- Brand Health Index ----
+  if (has('health') && data.health.total > 0) {
+    heading(`Brand Health Index — ${data.health.score}/100 (${data.health.grade})`);
+    hbars(data.health.components.map((c) => ({ label: c.label, value: c.value })));
+  }
+
   // ---- Trend ----
   if (has('trends') && data.trends.length) {
     heading('Emerging trends (ultime 24 ore)');

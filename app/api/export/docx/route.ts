@@ -81,6 +81,15 @@ export async function GET(req: Request) {
     );
   }
 
+  // Brand Health Index
+  if (has('health') && data.health.total > 0) {
+    children.push(h1(`Brand Health Index — ${data.health.score}/100 (${data.health.grade})`));
+    children.push(table(
+      ['Metric', 'Value (0-100)', 'Weight'],
+      data.health.components.map((c) => [c.label, String(c.value), `${Math.round(c.weight * 100)}%`]),
+    ));
+  }
+
   // Emerging trends
   if (has('trends') && data.trends.length) {
     children.push(h1('Emerging trends (ultime 24 ore)'));
