@@ -129,6 +129,30 @@ export async function GET(req: Request) {
     });
   }
 
+  // ── 4b. Geographic map (per area/lingua)
+  if (has('geo') && data.geo.length) {
+    const s4b = pptx.addSlide({ masterName: 'DARK' });
+    s4b.addText('Geographic map — conversation by area (language-inferred)', titleOpts);
+    const geo = data.geo.slice(0, 12);
+    s4b.addChart('bar', [{
+      name: 'Mentions',
+      labels: geo.map((g) => g.country),
+      values: geo.map((g) => g.volume),
+    }], {
+      x: 0.5, y: 1.3, w: 7.5, h: 5.4, barDir: 'bar',
+      chartColors: geo.map((g) => (g.sentiment === null ? '64748B' : g.sentiment > 0.15 ? '34D399' : g.sentiment < -0.15 ? 'F87171' : '94A3B8')),
+      catAxisLabelColor: MUTED, valAxisLabelColor: MUTED, showLegend: false,
+      valGridLine: { color: '1E2A4A' }, catGridLine: { style: 'none' },
+    });
+    s4b.addTable([
+      ['Area', 'Mentions', 'Share', 'Sentiment'].map((t) => ({
+        text: t, options: { bold: true, color: TEXT, fill: { color: PANEL }, fontSize: 12 },
+      })),
+      ...geo.map((g) => [g.country, String(g.volume), `${g.share}%`, g.sentiment === null ? 'n/a' : g.sentiment.toFixed(2)]
+        .map((t) => ({ text: t, options: { color: TEXT, fontSize: 11 } }))),
+    ], { x: 8.2, y: 1.3, w: 4.6, colW: [2.2, 0.9, 0.7, 0.8], border: { type: 'solid', color: '1E2A4A', pt: 1 } });
+  }
+
   // ── 5. Share of voice
   const totalBench = data.benchmark.reduce((s, r) => s + r.total, 0);
   if (has('benchmark') && totalBench > 0) {

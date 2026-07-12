@@ -135,6 +135,64 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
   );
 }
 
+// ── 6. Mappa geografica (proportional-symbol, equirettangolare) ───────────
+type GeoPoint = {
+  lang: string; country: string; flag: string;
+  lon: number; lat: number; volume: number; sentiment: number | null; share: number;
+};
+
+export function GeoBubbleMap({ points }: { points: GeoPoint[] }) {
+  const W = 1000, H = 500;
+  const px = (lon: number) => ((lon + 180) / 360) * W;
+  const py = (lat: number) => ((90 - lat) / 180) * H;
+  const maxVol = Math.max(1, ...points.map((p) => p.volume));
+  const r = (v: number) => 8 + Math.sqrt(v / maxVol) * 32;
+  const col = (s: number | null) => s === null ? '#64748b' : s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
+  // Etichette dei continenti come riferimento leggero (nessun path pesante).
+  const continents = [
+    ['NORTH AMERICA', -100, 45], ['SOUTH AMERICA', -60, -15], ['EUROPE', 15, 54],
+    ['AFRICA', 20, 3], ['ASIA', 90, 48], ['OCEANIA', 134, -25],
+  ] as const;
+  const meridians = [-150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150];
+  const parallels = [60, 30, 0, -30, -60];
+  const sorted = [...points].sort((a, b) => b.volume - a.volume);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 520 }}>
+      <defs>
+        <radialGradient id="geoGlow" cx="50%" cy="42%" r="65%">
+          <stop offset="0%" stopColor="#0f2036" />
+          <stop offset="100%" stopColor="#0a0f1f" />
+        </radialGradient>
+      </defs>
+      <rect x="0" y="0" width={W} height={H} rx="14" fill="url(#geoGlow)" stroke="#1e2a4a" />
+      {/* graticola */}
+      {meridians.map((m) => <line key={`m${m}`} x1={px(m)} y1="0" x2={px(m)} y2={H} stroke="#1b2740" strokeWidth="1" />)}
+      {parallels.map((p) => <line key={`p${p}`} x1="0" y1={py(p)} x2={W} y2={py(p)} stroke="#1b2740" strokeWidth="1" />)}
+      {continents.map(([name, lon, lat]) => (
+        <text key={name} x={px(lon as number)} y={py(lat as number)} textAnchor="middle"
+          fontSize="12" fill="#33415580" fontWeight={700} letterSpacing="2">{name}</text>
+      ))}
+      {/* bolle */}
+      {sorted.map((p) => {
+        const cx = px(p.lon), cy = py(p.lat), rad = r(p.volume), c = col(p.sentiment);
+        return (
+          <g key={p.lang}>
+            <title>{`${p.country} · ${p.volume} mentions · ${p.share}% · sentiment ${p.sentiment ?? 'n/a'}`}</title>
+            <circle cx={cx} cy={cy} r={rad} fill={c} fillOpacity={0.18} stroke={c} strokeOpacity={0.9} strokeWidth={1.5} />
+            <text x={cx} y={cy - 2} textAnchor="middle" fontSize={Math.min(26, rad)} >{p.flag}</text>
+            {rad > 20 && (
+              <text x={cx} y={cy + rad + 13} textAnchor="middle" fontSize="11" fill="#cbd5e1" fontWeight={600}>
+                {p.country} · {p.share}%
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function TreemapCell(props: {
   x?: number; y?: number; width?: number; height?: number; name?: string; sentiment?: string; size?: number;
 }) {

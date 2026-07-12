@@ -243,3 +243,77 @@ export async function getCausalChains(projectId: number, force = false): Promise
 export async function currentProjectForInsights() {
   return getCurrentProject();
 }
+
+// ---------------------------------------------------------------------------
+// 6. Distribuzione geografica (inferita dalla lingua della conversazione)
+// ---------------------------------------------------------------------------
+// La lingua è l'unico segnale geografico persistito su ogni mention: ogni
+// codice ISO 639-1 viene mappato al paese/area rappresentativa, con centroide
+// (lon/lat) per posizionarlo sulla mappa e bandiera per etichettarlo.
+type GeoMeta = { country: string; flag: string; lon: number; lat: number };
+const LANG_GEO: Record<string, GeoMeta> = {
+  it: { country: 'Italy', flag: '🇮🇹', lon: 12.5, lat: 42.5 },
+  en: { country: 'English-speaking', flag: '🇬🇧', lon: -2, lat: 52 },
+  es: { country: 'Spanish-speaking', flag: '🇪🇸', lon: -3.7, lat: 40.4 },
+  fr: { country: 'French-speaking', flag: '🇫🇷', lon: 2.3, lat: 46.6 },
+  de: { country: 'German-speaking', flag: '🇩🇪', lon: 10.4, lat: 51.2 },
+  pt: { country: 'Portuguese-speaking', flag: '🇧🇷', lon: -47, lat: -12 },
+  nl: { country: 'Netherlands', flag: '🇳🇱', lon: 5.3, lat: 52.1 },
+  pl: { country: 'Poland', flag: '🇵🇱', lon: 19.1, lat: 52 },
+  ru: { country: 'Russian-speaking', flag: '🇷🇺', lon: 45, lat: 56 },
+  ar: { country: 'Arabic-speaking', flag: '🇸🇦', lon: 45, lat: 24 },
+  zh: { country: 'Chinese-speaking', flag: '🇨🇳', lon: 104, lat: 35 },
+  ja: { country: 'Japan', flag: '🇯🇵', lon: 138, lat: 36 },
+  ko: { country: 'Korea', flag: '🇰🇷', lon: 127.8, lat: 36.5 },
+  tr: { country: 'Turkey', flag: '🇹🇷', lon: 35, lat: 39 },
+  ro: { country: 'Romania', flag: '🇷🇴', lon: 25, lat: 46 },
+  hu: { country: 'Hungary', flag: '🇭🇺', lon: 19.5, lat: 47.2 },
+  cs: { country: 'Czechia', flag: '🇨🇿', lon: 15.5, lat: 49.8 },
+  el: { country: 'Greece', flag: '🇬🇷', lon: 22, lat: 39 },
+  sv: { country: 'Sweden', flag: '🇸🇪', lon: 15, lat: 62 },
+  da: { country: 'Denmark', flag: '🇩🇰', lon: 9.5, lat: 56 },
+  fi: { country: 'Finland', flag: '🇫🇮', lon: 26, lat: 64 },
+  no: { country: 'Norway', flag: '🇳🇴', lon: 8.5, lat: 61 },
+  uk: { country: 'Ukraine', flag: '🇺🇦', lon: 31, lat: 49 },
+  he: { country: 'Israel', flag: '🇮🇱', lon: 35, lat: 31.5 },
+  hi: { country: 'India', flag: '🇮🇳', lon: 79, lat: 22 },
+  id: { country: 'Indonesia', flag: '🇮🇩', lon: 113, lat: -1 },
+  vi: { country: 'Vietnam', flag: '🇻🇳', lon: 106, lat: 16 },
+  th: { country: 'Thailand', flag: '🇹🇭', lon: 101, lat: 15 },
+  sk: { country: 'Slovakia', flag: '🇸🇰', lon: 19.5, lat: 48.7 },
+  bg: { country: 'Bulgaria', flag: '🇧🇬', lon: 25, lat: 42.7 },
+  hr: { country: 'Croatia', flag: '🇭🇷', lon: 15.5, lat: 45.1 },
+  sr: { country: 'Serbia', flag: '🇷🇸', lon: 21, lat: 44 },
+  ca: { country: 'Catalonia', flag: '🇪🇸', lon: 1.5, lat: 41.6 },
+  sl: { country: 'Slovenia', flag: '🇸🇮', lon: 14.8, lat: 46.1 },
+};
+
+export type GeoPoint = {
+  lang: string; country: string; flag: string;
+  lon: number; lat: number; volume: number; sentiment: number | null; share: number;
+};
+
+export async function geoDistribution(projectId: number, days = 30): Promise<GeoPoint[]> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const rows = (await db.execute(sql`
+    SELECT lower(language) AS lang, count(*) AS n, avg(sentiment_score) AS sent
+    FROM mentions
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+      AND language IS NOT NULL AND language <> ''
+    GROUP BY lower(language)
+    ORDER BY n DESC
+  `)).rows as { lang: string; n: number; sent: number | null }[];
+
+  const known = rows.filter((r) => LANG_GEO[r.lang]);
+  const total = known.reduce((s, r) => s + Number(r.n), 0) || 1;
+  return known.map((r) => {
+    const g = LANG_GEO[r.lang];
+    return {
+      lang: r.lang, country: g.country, flag: g.flag, lon: g.lon, lat: g.lat,
+      volume: Number(r.n),
+      sentiment: r.sent === null ? null : Math.round(Number(r.sent) * 100) / 100,
+      share: Math.round((Number(r.n) / total) * 1000) / 10,
+    };
+  });
+}

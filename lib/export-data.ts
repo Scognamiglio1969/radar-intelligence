@@ -8,6 +8,7 @@ import { getRecentAlerts } from '@/lib/alerts';
 import { getTrends } from '@/lib/trends';
 import { getNarratives } from '@/lib/narratives';
 import { getTimeline } from '@/lib/timeline';
+import { geoDistribution } from '@/lib/insights';
 import { SOURCE_META } from '@/lib/connectors';
 import type { projects } from '@/lib/db/schema';
 
@@ -20,6 +21,7 @@ export const EXPORT_SECTIONS = [
   ['volume', 'Volume by source'],
   ['sentiment', 'Sentiment'],
   ['topics', 'Top topics'],
+  ['geo', 'Geographic map'],
   ['benchmark', 'Benchmark'],
   ['audience', 'Audience'],
   ['content', 'Top content'],
@@ -48,7 +50,7 @@ export async function collectExportData(project: Project, days = 30) {
   const db = await getDb();
   const since = new Date(Date.now() - days * 86400_000);
 
-  const [dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, allMentions] = await Promise.all([
+  const [dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, allMentions] = await Promise.all([
     dashboardData(project.id),
     benchmarkData(project.id),
     audienceData(project.id),
@@ -58,13 +60,14 @@ export async function collectExportData(project: Project, days = 30) {
     getTrends(project.id),
     getNarratives(project.id),
     getTimeline(project.id),
+    geoDistribution(project.id, days),
     db.select().from(mentions)
       .where(and(eq(mentions.projectId, project.id), gte(mentions.publishedAt, since)))
       .orderBy(desc(mentions.publishedAt))
       .limit(3000),
   ]);
 
-  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, allMentions };
+  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, allMentions };
 }
 
 export type ExportData = Awaited<ReturnType<typeof collectExportData>>;

@@ -105,6 +105,18 @@ export async function GET(req: Request) {
     children.push(table(['Tema', 'Mentions'], data.dashboard.topTopics.map((t) => [t.topic, String(t.n)])));
   }
 
+  // Geographic map
+  if (has('geo') && data.geo.length) {
+    children.push(h1('Geographic map — conversation by area (language-inferred)'));
+    children.push(table(
+      ['Area / language', 'Mentions', 'Share', 'Avg sentiment'],
+      data.geo.map((g) => [
+        g.country, String(g.volume), `${g.share}%`,
+        g.sentiment === null ? '—' : g.sentiment.toFixed(2),
+      ]),
+    ));
+  }
+
   // Benchmark
   if (has('benchmark') && data.benchmark.length) {
     children.push(h1('Benchmark — share of voice (14 days)'));

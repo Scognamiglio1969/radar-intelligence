@@ -92,6 +92,20 @@ export async function GET(req: Request) {
   for (const r of data.dashboard.topTopics) wsT.addRow({ t: r.topic, n: Number(r.n) });
   }
 
+  // 4b. Geographic map (per lingua/area)
+  if (has('geo') && data.geo.length) {
+  const wsG = sheet(wb, 'Geographic map', [
+    { header: 'Area / language', key: 'c', width: 24 },
+    { header: 'Lang', key: 'l', width: 8 },
+    { header: 'Mentions', key: 'n', width: 10 },
+    { header: 'Share %', key: 'sh', width: 10 },
+    { header: 'Avg sentiment', key: 's', width: 16 },
+  ]);
+  for (const g of data.geo) {
+    wsG.addRow({ c: g.country, l: g.lang, n: g.volume, sh: g.share, s: g.sentiment });
+  }
+  }
+
   // 5. Benchmark
   if (has('benchmark')) {
   const total = data.benchmark.reduce((s, r) => s + r.total, 0);

@@ -223,6 +223,19 @@ export async function GET(req: Request) {
     hbars(data.dashboard.topTopics.slice(0, 12).map((t) => ({ label: t.topic, value: Number(t.n) })));
   }
 
+  // ---- Geographic map ----
+  if (has('geo') && data.geo.length) {
+    heading('Geographic map — by area (language-inferred)');
+    table(
+      ['Area / language', 'Mentions', 'Share', 'Sentiment'],
+      data.geo.map((g) => [
+        g.country, String(g.volume), `${g.share}%`,
+        g.sentiment === null ? '—' : g.sentiment.toFixed(2),
+      ]),
+      [0.42, 0.2, 0.19, 0.19], ['left', 'right', 'right', 'right'],
+    );
+  }
+
   // ---- Benchmark ----
   if (has('benchmark') && data.benchmark.length) {
     heading('Benchmark — share of voice');
