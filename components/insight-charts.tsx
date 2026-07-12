@@ -136,6 +136,57 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
   );
 }
 
+// ── 7. Momentum Quadrant (volume × accelerazione) ─────────────────────────
+type QuadrantPoint = { topic: string; volume: number; acceleration: number; sentiment: number; quadrant: string };
+const QUAD_COLOR: Record<string, string> = {
+  'Rising stars': '#34d399', 'Emerging': '#38bdf8', 'Steady': '#a78bfa', 'Declining': '#f87171',
+};
+
+export function MomentumQuadrant({ points }: { points: QuadrantPoint[] }) {
+  const W = 1000, H = 560, m = { t: 30, r: 30, b: 40, l: 50 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const maxVol = Math.max(1, ...points.map((p) => p.volume));
+  const vols = points.map((p) => p.volume).sort((a, b) => a - b);
+  const medianVol = vols[Math.floor(vols.length / 2)] ?? 0;
+  const aMin = -100, aMax = Math.max(100, ...points.map((p) => p.acceleration));
+  const px = (v: number) => m.l + (v / maxVol) * iw;
+  const py = (a: number) => m.t + (1 - (a - aMin) / (aMax - aMin)) * ih;
+  const r = (v: number) => 6 + Math.sqrt(v / maxVol) * 22;
+  const xMid = px(medianVol), yZero = py(0);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 560 }}>
+      {/* sfondi quadranti */}
+      <rect x={xMid} y={m.t} width={m.l + iw - xMid} height={yZero - m.t} fill="#34d39908" />
+      <rect x={m.l} y={m.t} width={xMid - m.l} height={yZero - m.t} fill="#38bdf808" />
+      <rect x={xMid} y={yZero} width={m.l + iw - xMid} height={m.t + ih - yZero} fill="#a78bfa08" />
+      <rect x={m.l} y={yZero} width={xMid - m.l} height={m.t + ih - yZero} fill="#f8717108" />
+      {/* linee divisorie */}
+      <line x1={m.l} y1={yZero} x2={m.l + iw} y2={yZero} stroke="#334155" strokeDasharray="5 5" />
+      <line x1={xMid} y1={m.t} x2={xMid} y2={m.t + ih} stroke="#334155" strokeDasharray="5 5" />
+      {/* etichette quadranti agli angoli */}
+      <text x={m.l + iw - 8} y={m.t + 20} textAnchor="end" fontSize="15" fontWeight={800} fill="#34d39970">RISING STARS</text>
+      <text x={m.l + 8} y={m.t + 20} textAnchor="start" fontSize="15" fontWeight={800} fill="#38bdf870">EMERGING</text>
+      <text x={m.l + iw - 8} y={m.t + ih - 10} textAnchor="end" fontSize="15" fontWeight={800} fill="#a78bfa70">STEADY</text>
+      <text x={m.l + 8} y={m.t + ih - 10} textAnchor="start" fontSize="15" fontWeight={800} fill="#f8717170">DECLINING</text>
+      {/* assi */}
+      <text x={m.l + iw / 2} y={H - 8} textAnchor="middle" fontSize="11" fill="#64748b">Volume →</text>
+      <text x={14} y={m.t + ih / 2} textAnchor="middle" fontSize="11" fill="#64748b" transform={`rotate(-90 14 ${m.t + ih / 2})`}>← declining   Acceleration   accelerating →</text>
+      {/* punti */}
+      {points.map((p) => {
+        const cx = px(p.volume), cy = py(p.acceleration), c = QUAD_COLOR[p.quadrant] ?? '#94a3b8';
+        return (
+          <g key={p.topic}>
+            <title>{`${p.topic} · ${p.volume} mentions · accel ${p.acceleration}% · ${p.quadrant}`}</title>
+            <circle cx={cx} cy={cy} r={r(p.volume)} fill={c} fillOpacity={0.22} stroke={c} strokeWidth={1.5} />
+            <text x={cx} y={cy - r(p.volume) - 4} textAnchor="middle" fontSize="11" fill="#cbd5e1">{p.topic}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ── 5. Brand Health Index (gauge + sotto-metriche + sparkline) ────────────
 type HealthComponent = { key: string; label: string; value: number; weight: number };
 const healthColor = (v: number) => v >= 80 ? '#34d399' : v >= 65 ? '#38bdf8' : v >= 50 ? '#fbbf24' : '#f87171';

@@ -229,6 +229,18 @@ export async function GET(req: Request) {
     hbars(data.dashboard.topTopics.slice(0, 12).map((t) => ({ label: t.topic, value: Number(t.n) })));
   }
 
+  // ---- Momentum quadrant ----
+  if (has('momentum') && data.momentum.length) {
+    heading('Momentum quadrant — volume × acceleration');
+    table(
+      ['Topic', 'Volume', 'Acceleration', 'Quadrant'],
+      [...data.momentum].sort((a, b) => b.volume - a.volume).map((p) => [
+        p.topic, String(p.volume), `${p.acceleration > 0 ? '+' : ''}${p.acceleration}%`, p.quadrant,
+      ]),
+      [0.4, 0.18, 0.22, 0.2], ['left', 'right', 'right', 'left'],
+    );
+  }
+
   // ---- Emotion radar ----
   if (has('emotions') && data.emotions.length) {
     heading('Emotion radar — emotional fingerprint');

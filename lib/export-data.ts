@@ -8,7 +8,7 @@ import { getRecentAlerts } from '@/lib/alerts';
 import { getTrends } from '@/lib/trends';
 import { getNarratives } from '@/lib/narratives';
 import { getTimeline } from '@/lib/timeline';
-import { geoDistribution, emotionDistribution, brandHealth } from '@/lib/insights';
+import { geoDistribution, emotionDistribution, brandHealth, momentumQuadrant } from '@/lib/insights';
 import { SOURCE_META } from '@/lib/connectors';
 import type { projects } from '@/lib/db/schema';
 
@@ -23,6 +23,7 @@ export const EXPORT_SECTIONS = [
   ['sentiment', 'Sentiment'],
   ['emotions', 'Emotion radar'],
   ['topics', 'Top topics'],
+  ['momentum', 'Momentum quadrant'],
   ['geo', 'Geographic map'],
   ['benchmark', 'Benchmark'],
   ['audience', 'Audience'],
@@ -52,7 +53,7 @@ export async function collectExportData(project: Project, days = 30) {
   const db = await getDb();
   const since = new Date(Date.now() - days * 86400_000);
 
-  const [dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, allMentions] = await Promise.all([
+  const [dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, allMentions] = await Promise.all([
     dashboardData(project.id),
     benchmarkData(project.id),
     audienceData(project.id),
@@ -64,6 +65,7 @@ export async function collectExportData(project: Project, days = 30) {
     getTimeline(project.id),
     geoDistribution(project.id, days),
     emotionDistribution(project.id, days),
+    momentumQuadrant(project.id, 14),
     db.select().from(mentions)
       .where(and(eq(mentions.projectId, project.id), gte(mentions.publishedAt, since)))
       .orderBy(desc(mentions.publishedAt))
@@ -71,7 +73,7 @@ export async function collectExportData(project: Project, days = 30) {
   ]);
   const health = await brandHealth(project.id, 14);
 
-  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, health, allMentions };
+  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, health, allMentions };
 }
 
 export type ExportData = Awaited<ReturnType<typeof collectExportData>>;

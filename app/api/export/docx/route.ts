@@ -114,6 +114,17 @@ export async function GET(req: Request) {
     children.push(table(['Tema', 'Mentions'], data.dashboard.topTopics.map((t) => [t.topic, String(t.n)])));
   }
 
+  // Momentum quadrant
+  if (has('momentum') && data.momentum.length) {
+    children.push(h1('Momentum quadrant — topics by volume × acceleration'));
+    children.push(table(
+      ['Topic', 'Volume', 'Acceleration', 'Quadrant'],
+      [...data.momentum].sort((a, b) => b.volume - a.volume).map((p) => [
+        p.topic, String(p.volume), `${p.acceleration > 0 ? '+' : ''}${p.acceleration}%`, p.quadrant,
+      ]),
+    ));
+  }
+
   // Emotion radar
   if (has('emotions') && data.emotions.length) {
     children.push(h1('Emotion radar — emotional fingerprint (30 days)'));

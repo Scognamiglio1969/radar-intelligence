@@ -113,6 +113,18 @@ export async function GET(req: Request) {
   for (const r of data.dashboard.topTopics) wsT.addRow({ t: r.topic, n: Number(r.n) });
   }
 
+  // 4a. Momentum quadrant
+  if (has('momentum') && data.momentum.length) {
+  const wsQ = sheet(wb, 'Momentum quadrant', [
+    { header: 'Topic', key: 't', width: 26 },
+    { header: 'Volume', key: 'v', width: 10 },
+    { header: 'Acceleration %', key: 'a', width: 15 },
+    { header: 'Quadrant', key: 'q', width: 16 },
+    { header: 'Avg sentiment', key: 's', width: 16 },
+  ]);
+  for (const p of data.momentum) wsQ.addRow({ t: p.topic, v: p.volume, a: p.acceleration, q: p.quadrant, s: p.sentiment });
+  }
+
   // 4b. Geographic map (per lingua/area)
   if (has('geo') && data.geo.length) {
   const wsG = sheet(wb, 'Geographic map', [

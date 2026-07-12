@@ -245,6 +245,59 @@ export async function currentProjectForInsights() {
 }
 
 // ---------------------------------------------------------------------------
+// 7. Momentum Quadrant (volume × accelerazione → matrice strategica 2×2)
+// ---------------------------------------------------------------------------
+export type QuadrantPoint = {
+  topic: string; volume: number; acceleration: number; sentiment: number; quadrant: string;
+};
+
+function quadrantOf(volHigh: boolean, accel: number): string {
+  if (accel >= 0) return volHigh ? 'Rising stars' : 'Emerging';
+  return volHigh ? 'Steady' : 'Declining';
+}
+
+export async function momentumQuadrant(projectId: number, days = 14): Promise<QuadrantPoint[]> {
+  const db = await getDb();
+  const now = Date.now();
+  const since = new Date(now - days * 86400_000).toISOString();
+  const mid = new Date(now - (days / 2) * 86400_000).toISOString();
+
+  const rows = (await db.execute(sql`
+    SELECT t AS topic,
+      count(*) AS volume,
+      avg(sentiment_score) AS sentiment,
+      count(*) FILTER (WHERE published_at >= ${mid}::timestamptz) AS recent,
+      count(*) FILTER (WHERE published_at < ${mid}::timestamptz) AS older
+    FROM mentions, jsonb_array_elements_text(topics) AS t
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    GROUP BY t
+    HAVING count(*) >= 4
+    ORDER BY count(*) DESC
+    LIMIT 30
+  `)).rows as { topic: string; volume: number; sentiment: number | null; recent: number; older: number }[];
+
+  if (rows.length === 0) return [];
+  const volumes = rows.map((r) => Number(r.volume)).sort((a, b) => a - b);
+  const medianVol = volumes[Math.floor(volumes.length / 2)];
+
+  return rows.map((r) => {
+    const recent = Number(r.recent), older = Number(r.older);
+    // Accelerazione: variazione % del volume nella seconda metà vs la prima.
+    let accel: number;
+    if (older === 0) accel = recent > 0 ? 100 : 0;
+    else accel = ((recent - older) / older) * 100;
+    accel = Math.max(-100, Math.min(200, Math.round(accel)));
+    const volume = Number(r.volume);
+    return {
+      topic: r.topic, volume,
+      acceleration: accel,
+      sentiment: r.sentiment === null ? 0 : Math.round(Number(r.sentiment) * 100) / 100,
+      quadrant: quadrantOf(volume >= medianVol, accel),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // 5. Brand Health Index (indice composito 0-100 + sotto-metriche + sparkline)
 // ---------------------------------------------------------------------------
 export type HealthComponent = { key: string; label: string; value: number; weight: number };
