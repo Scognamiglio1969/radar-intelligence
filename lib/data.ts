@@ -328,6 +328,20 @@ export async function getBenchmarkEntities(projectId: number) {
 }
 
 /** Alert delle ultime 24h: alimenta il badge rosso in sidebar. */
+/** Battito del progetto per la favicon live: volume e tono delle ultime 24h. */
+export async function getPulse(projectId: number): Promise<{ mentions24h: number; sentiment: number | null }> {
+  const db = await getDb();
+  const since = new Date(Date.now() - 24 * 3600_000);
+  const [row] = await db
+    .select({
+      n: sql<number>`count(*)`,
+      s: sql<number | null>`avg(${mentions.sentimentScore})`,
+    })
+    .from(mentions)
+    .where(and(eq(mentions.projectId, projectId), gte(mentions.publishedAt, since)));
+  return { mentions24h: Number(row?.n ?? 0), sentiment: row?.s === null || row?.s === undefined ? null : Number(row.s) };
+}
+
 export async function getRecentAlertCount(projectId: number): Promise<number> {
   const db = await getDb();
   const { alerts } = await import('@/lib/db/schema');

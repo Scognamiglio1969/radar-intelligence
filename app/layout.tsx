@@ -4,7 +4,8 @@ import './globals.css';
 import { Sidebar } from '@/components/sidebar';
 import { AutoRefresh } from '@/components/auto-refresh';
 import { ExportBar } from '@/components/export-bar';
-import { getCurrentProject, getLastIngestAt, getProjects, getRecentAlertCount } from '@/lib/data';
+import { getCurrentProject, getLastIngestAt, getProjects, getPulse, getRecentAlertCount } from '@/lib/data';
+import { LiveFavicon } from '@/components/live-favicon';
 import { getCurrentUser } from '@/lib/auth';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
@@ -28,6 +29,7 @@ export default async function RootLayout({
     getProjects(), getCurrentProject(), getLastIngestAt(), getCurrentUser(),
   ]);
   const alertCount = current ? await getRecentAlertCount(current.id) : 0;
+  const pulse = current ? await getPulse(current.id) : { mentions24h: 0, sentiment: null };
   const stale = !lastIngest || Date.now() - lastIngest.getTime() > 2 * 3600_000;
 
   const demo = process.env.DEMO_MODE === '1';
@@ -60,6 +62,7 @@ export default async function RootLayout({
           </div>
         </div>
         <AutoRefresh stale={stale} />
+        <LiveFavicon sentiment={pulse.sentiment} mentions24h={pulse.mentions24h} alerts={alertCount} />
       </body>
     </html>
   );
