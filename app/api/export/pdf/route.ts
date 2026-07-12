@@ -229,6 +229,18 @@ export async function GET(req: Request) {
     hbars(data.dashboard.topTopics.slice(0, 12).map((t) => ({ label: t.topic, value: Number(t.n) })));
   }
 
+  // ---- Semantic constellation ----
+  if (has('constellation') && data.constellation.nodes.length) {
+    heading('Semantic constellation — key terms');
+    hbars(data.constellation.nodes.slice(0, 14).map((n) => ({ label: n.term, value: n.freq })));
+    if (data.constellation.edges.length) {
+      para('Strongest co-occurrences:', { bold: true, size: 10, gap: 0.2 });
+      for (const e of data.constellation.edges.slice(0, 10)) {
+        para(`${e.a} + ${e.b} — ${e.weight}x`, { size: 9, color: MUTED, gap: 0.15 });
+      }
+    }
+  }
+
   // ---- Momentum quadrant ----
   if (has('momentum') && data.momentum.length) {
     heading('Momentum quadrant — volume × acceleration');

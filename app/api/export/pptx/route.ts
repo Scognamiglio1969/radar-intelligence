@@ -150,6 +150,33 @@ export async function GET(req: Request) {
     });
   }
 
+  // ── 4·constellation. Semantic constellation
+  if (has('constellation') && data.constellation.nodes.length) {
+    const sc = pptx.addSlide({ masterName: 'DARK' });
+    sc.addText('Semantic constellation — key terms & co-occurrence', titleOpts);
+    const top = data.constellation.nodes.slice(0, 14);
+    sc.addChart('bar', [{
+      name: 'Frequency',
+      labels: top.map((n) => n.term),
+      values: top.map((n) => n.freq),
+    }], {
+      x: 0.5, y: 1.3, w: 7.4, h: 5.4, barDir: 'bar',
+      chartColors: top.map((n) => n.sentiment > 0.15 ? '34D399' : n.sentiment < -0.15 ? 'F87171' : '94A3B8'),
+      catAxisLabelColor: TEXT, valAxisLabelColor: MUTED, showLegend: false,
+      valGridLine: { color: '1E2A4A' }, catGridLine: { style: 'none' },
+    });
+    if (data.constellation.edges.length) {
+      sc.addText('Strongest links', { x: 8.1, y: 1.3, w: 4.7, h: 0.4, fontSize: 14, bold: true, color: MUTED });
+      sc.addTable([
+        ['A + B', 'n'].map((t) => ({ text: t, options: { bold: true, color: TEXT, fill: { color: PANEL }, fontSize: 12 } })),
+        ...data.constellation.edges.slice(0, 12).map((e) => [
+          { text: `${e.a} + ${e.b}`, options: { color: TEXT, fontSize: 11 } },
+          { text: String(e.weight), options: { color: TEXT, fontSize: 11, align: 'right' as const } },
+        ]),
+      ], { x: 8.1, y: 1.8, w: 4.7, colW: [3.9, 0.8], border: { type: 'solid', color: '1E2A4A', pt: 1 } });
+    }
+  }
+
   // ── 4·momentum. Momentum quadrant
   if (has('momentum') && data.momentum.length) {
     const sq = pptx.addSlide({ masterName: 'DARK' });

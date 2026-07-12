@@ -113,6 +113,24 @@ export async function GET(req: Request) {
   for (const r of data.dashboard.topTopics) wsT.addRow({ t: r.topic, n: Number(r.n) });
   }
 
+  // 4·constellation. Semantic constellation (termini + co-occorrenze)
+  if (has('constellation') && data.constellation.nodes.length) {
+  const wsN = sheet(wb, 'Key terms', [
+    { header: 'Term', key: 't', width: 26 },
+    { header: 'Frequency', key: 'f', width: 12 },
+    { header: 'Avg sentiment', key: 's', width: 16 },
+  ]);
+  for (const n of data.constellation.nodes) wsN.addRow({ t: n.term, f: n.freq, s: n.sentiment });
+  if (data.constellation.edges.length) {
+    const wsE = sheet(wb, 'Term co-occurrence', [
+      { header: 'Term A', key: 'a', width: 24 },
+      { header: 'Term B', key: 'b', width: 24 },
+      { header: 'Together (n)', key: 'w', width: 12 },
+    ]);
+    for (const e of data.constellation.edges) wsE.addRow({ a: e.a, b: e.b, w: e.weight });
+  }
+  }
+
   // 4a. Momentum quadrant
   if (has('momentum') && data.momentum.length) {
   const wsQ = sheet(wb, 'Momentum quadrant', [

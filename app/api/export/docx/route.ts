@@ -114,6 +114,21 @@ export async function GET(req: Request) {
     children.push(table(['Tema', 'Mentions'], data.dashboard.topTopics.map((t) => [t.topic, String(t.n)])));
   }
 
+  // Semantic constellation
+  if (has('constellation') && data.constellation.nodes.length) {
+    children.push(h1('Semantic constellation — key terms'));
+    children.push(table(
+      ['Term', 'Frequency', 'Avg sentiment'],
+      data.constellation.nodes.map((n) => [n.term, String(n.freq), n.sentiment.toFixed(2)]),
+    ));
+    if (data.constellation.edges.length) {
+      children.push(h2('Strongest co-occurrences'));
+      for (const e of data.constellation.edges.slice(0, 15)) {
+        children.push(bullet(`${e.a} + ${e.b} — appear together ${e.weight}×`));
+      }
+    }
+  }
+
   // Momentum quadrant
   if (has('momentum') && data.momentum.length) {
     children.push(h1('Momentum quadrant — topics by volume × acceleration'));

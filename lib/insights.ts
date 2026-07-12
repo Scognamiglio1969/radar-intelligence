@@ -245,6 +245,61 @@ export async function currentProjectForInsights() {
 }
 
 // ---------------------------------------------------------------------------
+// 8. Costellazione semantica (frequenza termini + co-occorrenza + sentiment)
+// ---------------------------------------------------------------------------
+export type ConstellationNode = { term: string; freq: number; sentiment: number };
+export type ConstellationEdge = { a: string; b: string; weight: number };
+export type Constellation = { nodes: ConstellationNode[]; edges: ConstellationEdge[] };
+
+export async function semanticConstellation(projectId: number, days = 14, maxNodes = 26): Promise<Constellation> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+
+  // Frequenza e sentiment medio per topic
+  const freqRows = (await db.execute(sql`
+    SELECT t AS term, count(*) AS freq, avg(sentiment_score) AS sentiment
+    FROM mentions, jsonb_array_elements_text(topics) AS t
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    GROUP BY t
+    HAVING count(*) >= 3
+    ORDER BY count(*) DESC
+    LIMIT ${maxNodes}
+  `)).rows as { term: string; freq: number; sentiment: number | null }[];
+
+  const nodes: ConstellationNode[] = freqRows.map((r) => ({
+    term: r.term, freq: Number(r.freq),
+    sentiment: r.sentiment === null ? 0 : Math.round(Number(r.sentiment) * 100) / 100,
+  }));
+  const keep = new Set(nodes.map((n) => n.term));
+  if (nodes.length < 2) return { nodes, edges: [] };
+
+  // Co-occorrenza: coppie di topic presenti nella stessa mention (solo termini tenuti)
+  const rows = (await db.execute(sql`
+    SELECT topics FROM mentions
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+      AND topics IS NOT NULL AND jsonb_array_length(topics) >= 2
+  `)).rows as { topics: string[] }[];
+
+  const pairCount = new Map<string, number>();
+  for (const r of rows) {
+    const ts = [...new Set((r.topics ?? []).filter((t) => keep.has(t)))].sort();
+    for (let i = 0; i < ts.length; i++) {
+      for (let j = i + 1; j < ts.length; j++) {
+        const key = `${ts[i]}${ts[j]}`;
+        pairCount.set(key, (pairCount.get(key) ?? 0) + 1);
+      }
+    }
+  }
+  const edges: ConstellationEdge[] = [...pairCount.entries()]
+    .filter(([, w]) => w >= 2)
+    .map(([key, weight]) => { const [a, b] = key.split(''); return { a, b, weight }; })
+    .sort((x, y) => y.weight - x.weight)
+    .slice(0, 60);
+
+  return { nodes, edges };
+}
+
+// ---------------------------------------------------------------------------
 // 7. Momentum Quadrant (volume × accelerazione → matrice strategica 2×2)
 // ---------------------------------------------------------------------------
 export type QuadrantPoint = {

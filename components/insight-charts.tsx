@@ -136,6 +136,53 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
   );
 }
 
+// ── 8. Costellazione semantica (frequenza + co-occorrenza + sentiment) ────
+type CNode = { term: string; freq: number; sentiment: number };
+type CEdge = { a: string; b: string; weight: number };
+
+export function SemanticConstellation({ nodes, edges }: { nodes: CNode[]; edges: CEdge[] }) {
+  const W = 1000, H = 620, cx = W / 2, cy = H / 2;
+  const maxFreq = Math.max(1, ...nodes.map((n) => n.freq));
+  const col = (s: number) => s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
+  const nr = (f: number) => 8 + Math.sqrt(f / maxFreq) * 34;
+  // Layout deterministico: spirale ad angolo aureo, i termini più forti al centro.
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  const pos = new Map<string, { x: number; y: number }>();
+  const maxR = Math.min(W, H) / 2 - 70;
+  nodes.forEach((n, i) => {
+    const t = nodes.length <= 1 ? 0 : i / (nodes.length - 1);
+    const rad = Math.sqrt(t) * maxR;
+    const ang = i * golden;
+    pos.set(n.term, { x: cx + rad * Math.cos(ang), y: cy + rad * Math.sin(ang) });
+  });
+  const maxW = Math.max(1, ...edges.map((e) => e.weight));
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 620 }}>
+      <rect x="0" y="0" width={W} height={H} rx="14" fill="#0a0f1f" />
+      {/* archi di co-occorrenza */}
+      {edges.map((e, i) => {
+        const a = pos.get(e.a), b = pos.get(e.b);
+        if (!a || !b) return null;
+        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+          stroke="#38bdf8" strokeOpacity={0.1 + (e.weight / maxW) * 0.35} strokeWidth={0.5 + (e.weight / maxW) * 3} />;
+      })}
+      {/* stelle */}
+      {nodes.map((n) => {
+        const p = pos.get(n.term)!; const r = nr(n.freq); const c = col(n.sentiment);
+        return (
+          <g key={n.term}>
+            <title>{`${n.term} · ${n.freq} mentions · sentiment ${n.sentiment}`}</title>
+            <circle cx={p.x} cy={p.y} r={r} fill={c} fillOpacity={0.2} stroke={c} strokeWidth={1.5} />
+            <text x={p.x} y={p.y + r + 12} textAnchor="middle" fontSize={Math.max(10, Math.min(15, r * 0.6))}
+              fill="#e2e8f0" fontWeight={n.freq > maxFreq * 0.5 ? 700 : 400}>{n.term}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ── 7. Momentum Quadrant (volume × accelerazione) ─────────────────────────
 type QuadrantPoint = { topic: string; volume: number; acceleration: number; sentiment: number; quadrant: string };
 const QUAD_COLOR: Record<string, string> = {
