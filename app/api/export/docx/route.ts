@@ -144,6 +144,17 @@ export async function GET(req: Request) {
     }
   }
 
+  // Conversation flow
+  if (has('flow') && data.flow.links.length) {
+    const lbl = new Map(data.flow.nodes.map((n) => [n.key, n.label]));
+    children.push(h1('Conversation flow — Source → Topic → Sentiment'));
+    children.push(table(
+      ['From', 'To', 'Mentions'],
+      [...data.flow.links].sort((a, b) => b.value - a.value).slice(0, 25)
+        .map((l) => [String(lbl.get(l.source) ?? l.source), String(lbl.get(l.target) ?? l.target), String(l.value)]),
+    ));
+  }
+
   // Momentum quadrant
   if (has('momentum') && data.momentum.length) {
     children.push(h1('Momentum quadrant — topics by volume × acceleration'));

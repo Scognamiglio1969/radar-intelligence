@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { getDb, getMeta, setMeta } from '@/lib/db';
 import { benchmarkEntities } from '@/lib/db/schema';
+import { SOURCE_META } from '@/lib/connectors';
 import { getCurrentProject } from '@/lib/data';
 import { getTrends } from '@/lib/trends';
 import { getNarratives } from '@/lib/narratives';
@@ -243,6 +244,76 @@ export async function getCausalChains(projectId: number, force = false): Promise
 
 export async function currentProjectForInsights() {
   return getCurrentProject();
+}
+
+// ---------------------------------------------------------------------------
+// 3. Flusso della conversazione (Sankey: Fonte → Topic → Sentiment)
+// ---------------------------------------------------------------------------
+export type FlowNode = { key: string; label: string; layer: number; value: number; kind: string };
+export type FlowLink = { source: string; target: string; value: number };
+export type ConversationFlow = { nodes: FlowNode[]; links: FlowLink[] };
+
+export async function conversationFlow(projectId: number, days = 14): Promise<ConversationFlow> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+
+  const st = (await db.execute(sql`
+    SELECT source, t AS topic, count(*) AS n
+    FROM mentions, jsonb_array_elements_text(topics) AS t
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    GROUP BY source, t
+  `)).rows as { source: string; topic: string; n: number }[];
+
+  const ts = (await db.execute(sql`
+    SELECT t AS topic, coalesce(sentiment, 'neutral') AS sentiment, count(*) AS n
+    FROM mentions, jsonb_array_elements_text(topics) AS t
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    GROUP BY t, coalesce(sentiment, 'neutral')
+  `)).rows as { topic: string; sentiment: string; n: number }[];
+
+  // Top fonti e top topic per volume.
+  const srcTot = new Map<string, number>();
+  const topTot = new Map<string, number>();
+  for (const r of st) {
+    srcTot.set(r.source, (srcTot.get(r.source) ?? 0) + Number(r.n));
+    topTot.set(r.topic, (topTot.get(r.topic) ?? 0) + Number(r.n));
+  }
+  const topN = (m: Map<string, number>, k: number) =>
+    new Set([...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, k).map(([x]) => x));
+  const keepSrc = topN(srcTot, 6);
+  const keepTop = topN(topTot, 8);
+  const sentiments = ['positive', 'neutral', 'negative'];
+
+  const links: FlowLink[] = [];
+  const linkAgg = new Map<string, number>();
+  const addLink = (s: string, t: string, n: number) => linkAgg.set(`${s}${t}`, (linkAgg.get(`${s}${t}`) ?? 0) + n);
+
+  for (const r of st) {
+    if (!keepSrc.has(r.source) || !keepTop.has(r.topic)) continue;
+    addLink(`s:${r.source}`, `t:${r.topic}`, Number(r.n));
+  }
+  for (const r of ts) {
+    if (!keepTop.has(r.topic)) continue;
+    const sent = sentiments.includes(r.sentiment) ? r.sentiment : 'neutral';
+    addLink(`t:${r.topic}`, `x:${sent}`, Number(r.n));
+  }
+  for (const [key, value] of linkAgg) {
+    const [source, target] = key.split('');
+    links.push({ source, target, value });
+  }
+
+  // Nodi con valore = somma dei flussi entranti/uscenti.
+  const nodeVal = new Map<string, number>();
+  for (const l of links) {
+    nodeVal.set(l.source, (nodeVal.get(l.source) ?? 0) + l.value);
+    nodeVal.set(l.target, (nodeVal.get(l.target) ?? 0) + l.value);
+  }
+  const nodes: FlowNode[] = [];
+  for (const s of keepSrc) if (nodeVal.has(`s:${s}`)) nodes.push({ key: `s:${s}`, label: SOURCE_META[s]?.label ?? s, layer: 0, value: nodeVal.get(`s:${s}`)!, kind: 'source' });
+  for (const t of keepTop) if (nodeVal.has(`t:${t}`)) nodes.push({ key: `t:${t}`, label: t, layer: 1, value: nodeVal.get(`t:${t}`)!, kind: 'topic' });
+  for (const x of sentiments) if (nodeVal.has(`x:${x}`)) nodes.push({ key: `x:${x}`, label: x, layer: 2, value: nodeVal.get(`x:${x}`)!, kind: x });
+
+  return { nodes, links };
 }
 
 // ---------------------------------------------------------------------------

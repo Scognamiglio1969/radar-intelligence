@@ -194,6 +194,22 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── 4·flow. Conversation flow (tabella flussi principali)
+  if (has('flow') && data.flow.links.length) {
+    const lbl = new Map(data.flow.nodes.map((n) => [n.key, n.label]));
+    const sf = pptx.addSlide({ masterName: 'DARK' });
+    sf.addText('Conversation flow — Source → Topic → Sentiment', titleOpts);
+    const top = [...data.flow.links].sort((a, b) => b.value - a.value).slice(0, 18);
+    sf.addTable([
+      ['From', 'To', 'Mentions'].map((t) => ({ text: t, options: { bold: true, color: TEXT, fill: { color: PANEL }, fontSize: 13 } })),
+      ...top.map((l) => [
+        { text: String(lbl.get(l.source) ?? l.source), options: { color: TEXT, fontSize: 12 } },
+        { text: String(lbl.get(l.target) ?? l.target), options: { color: TEXT, fontSize: 12 } },
+        { text: String(l.value), options: { color: TEXT, fontSize: 12, align: 'right' as const } },
+      ]),
+    ], { x: 0.5, y: 1.3, w: 12.3, colW: [5.4, 5.4, 1.5], border: { type: 'solid', color: '1E2A4A', pt: 1 } });
+  }
+
   // ── 4·momentum. Momentum quadrant
   if (has('momentum') && data.momentum.length) {
     const sq = pptx.addSlide({ masterName: 'DARK' });

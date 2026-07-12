@@ -127,6 +127,19 @@ export async function GET(req: Request) {
   for (const r of data.dashboard.topTopics) wsT.addRow({ t: r.topic, n: Number(r.n) });
   }
 
+  // 4·flow. Conversation flow (Source → Topic → Sentiment)
+  if (has('flow') && data.flow.links.length) {
+  const lbl = new Map(data.flow.nodes.map((n) => [n.key, n.label]));
+  const wsF = sheet(wb, 'Conversation flow', [
+    { header: 'From', key: 'a', width: 24 },
+    { header: 'To', key: 'b', width: 24 },
+    { header: 'Mentions', key: 'n', width: 10 },
+  ]);
+  for (const l of [...data.flow.links].sort((a, b) => b.value - a.value)) {
+    wsF.addRow({ a: lbl.get(l.source) ?? l.source, b: lbl.get(l.target) ?? l.target, n: l.value });
+  }
+  }
+
   // 4·constellation. Semantic constellation (termini + co-occorrenze)
   if (has('constellation') && data.constellation.nodes.length) {
   const wsN = sheet(wb, 'Key terms', [

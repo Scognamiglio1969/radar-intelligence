@@ -139,6 +139,83 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
   );
 }
 
+// ── 3. Flusso della conversazione (Sankey Fonte → Topic → Sentiment) ──────
+type FlowNode = { key: string; label: string; layer: number; value: number; kind: string };
+type FlowLink = { source: string; target: string; value: number };
+
+export function SankeyFlow({ nodes, links, sourceColors }: {
+  nodes: FlowNode[]; links: FlowLink[]; sourceColors: Record<string, string>;
+}) {
+  const W = 1000, H = 580, nw = 14, gap = 14, pad = 10;
+  const colX = [40, W / 2 - nw / 2, W - 40 - nw];
+  const sentCol: Record<string, string> = { positive: '#34d399', neutral: '#94a3b8', negative: '#f87171' };
+  const nodeColor = (n: FlowNode) =>
+    n.kind === 'source' ? (sourceColors[n.label] ?? '#38bdf8')
+      : n.kind === 'topic' ? '#64748b' : (sentCol[n.kind] ?? '#94a3b8');
+
+  const layers = [0, 1, 2].map((l) => nodes.filter((n) => n.layer === l).sort((a, b) => b.value - a.value));
+  const layerTotal = layers.map((ns) => ns.reduce((s, n) => s + n.value, 0));
+  const maxTotal = Math.max(1, ...layerTotal);
+  const scale = (H - pad * 2 - gap * (Math.max(...layers.map((l) => l.length)) - 1)) / maxTotal;
+
+  const pos = new Map<string, { x: number; y: number; h: number }>();
+  layers.forEach((ns, li) => {
+    const totalH = ns.reduce((s, n) => s + n.value * scale, 0) + gap * (ns.length - 1);
+    let y = (H - totalH) / 2;
+    for (const n of ns) {
+      const h = Math.max(2, n.value * scale);
+      pos.set(n.key, { x: colX[li], y, h });
+      y += h + gap;
+    }
+  });
+
+  const srcOff = new Map<string, number>();
+  const tgtOff = new Map<string, number>();
+  const ribbons = links
+    .slice()
+    .sort((a, b) => b.value - a.value)
+    .map((l, i) => {
+      const s = pos.get(l.source), t = pos.get(l.target);
+      if (!s || !t) return null;
+      const th = Math.max(1, l.value * scale);
+      const sy = s.y + (srcOff.get(l.source) ?? 0) + th / 2;
+      const ty = t.y + (tgtOff.get(l.target) ?? 0) + th / 2;
+      srcOff.set(l.source, (srcOff.get(l.source) ?? 0) + th);
+      tgtOff.set(l.target, (tgtOff.get(l.target) ?? 0) + th);
+      const x0 = s.x + nw, x1 = t.x, mx = (x0 + x1) / 2;
+      const srcNode = nodes.find((n) => n.key === l.source)!;
+      const tgtNode = nodes.find((n) => n.key === l.target)!;
+      // Colore ribbon: se arriva al sentiment usa il colore sentiment, altrimenti la fonte.
+      const c = tgtNode.kind !== 'topic' ? (sentCol[tgtNode.kind] ?? '#64748b') : (sourceColors[srcNode.label] ?? '#64748b');
+      return (
+        <path key={i} d={`M${x0},${sy} C${mx},${sy} ${mx},${ty} ${x1},${ty}`}
+          fill="none" stroke={c} strokeOpacity={0.28} strokeWidth={th} />
+      );
+    });
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 600 }}>
+      {ribbons}
+      {nodes.map((n) => {
+        const p = pos.get(n.key); if (!p) return null;
+        const c = nodeColor(n);
+        const rightSide = n.layer === 2;
+        const midSide = n.layer === 1;
+        return (
+          <g key={n.key}>
+            <title>{`${n.label} · ${n.value}`}</title>
+            <rect x={p.x} y={p.y} width={nw} height={p.h} rx={3} fill={c} />
+            <text x={rightSide ? p.x - 6 : p.x + nw + 6} y={p.y + p.h / 2}
+              textAnchor={rightSide ? 'end' : 'start'} dominantBaseline="middle"
+              fontSize={midSide ? 12 : 13} fontWeight={n.layer === 1 ? 400 : 600}
+              fill={n.layer === 1 ? '#cbd5e1' : '#e2e8f0'}>{n.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ── 1. Share of Voice nel tempo (streamgraph) ─────────────────────────────
 type SovRow = { day: string;[k: string]: number | string };
 

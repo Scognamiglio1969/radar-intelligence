@@ -250,6 +250,18 @@ export async function GET(req: Request) {
     }
   }
 
+  // ---- Conversation flow ----
+  if (has('flow') && data.flow.links.length) {
+    const lbl = new Map(data.flow.nodes.map((n) => [n.key, n.label]));
+    heading('Conversation flow — Source → Topic → Sentiment');
+    table(
+      ['From', 'To', 'Mentions'],
+      [...data.flow.links].sort((a, b) => b.value - a.value).slice(0, 22)
+        .map((l) => [String(lbl.get(l.source) ?? l.source), String(lbl.get(l.target) ?? l.target), String(l.value)]),
+      [0.44, 0.44, 0.12], ['left', 'left', 'right'],
+    );
+  }
+
   // ---- Momentum quadrant ----
   if (has('momentum') && data.momentum.length) {
     heading('Momentum quadrant — volume × acceleration');
