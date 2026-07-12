@@ -333,23 +333,53 @@ type GeoPoint = {
 };
 
 export function GeoBubbleMap({ points }: { points: GeoPoint[] }) {
-  const W = 1000, H = 500;
+  const W = 1000, H = 520;
   const px = (lon: number) => ((lon + 180) / 360) * W;
   const py = (lat: number) => ((90 - lat) / 180) * H;
   const maxVol = Math.max(1, ...points.map((p) => p.volume));
-  const r = (v: number) => 8 + Math.sqrt(v / maxVol) * 32;
+  // Raggio smorzato (log) così il termine dominante non schiaccia gli altri;
+  // minimo leggibile 14px.
+  const r = (v: number) => 14 + (Math.log(1 + v) / Math.log(1 + maxVol)) * 40;
   const col = (s: number | null) => s === null ? '#64748b' : s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
-  // Etichette dei continenti come riferimento leggero (nessun path pesante).
   const continents = [
-    ['NORTH AMERICA', -100, 45], ['SOUTH AMERICA', -60, -15], ['EUROPE', 15, 54],
-    ['AFRICA', 20, 3], ['ASIA', 90, 48], ['OCEANIA', 134, -25],
+    ['N. AMERICA', -100, 46], ['S. AMERICA', -62, -18], ['EUROPE', 12, 60],
+    ['AFRICA', 22, 2], ['ASIA', 96, 50], ['OCEANIA', 136, -26],
   ] as const;
-  const meridians = [-150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150];
-  const parallels = [60, 30, 0, -30, -60];
-  const sorted = [...points].sort((a, b) => b.volume - a.volume);
+  const meridians = [-120, -60, 0, 60, 120];
+  const parallels = [45, 0, -45];
+
+  // Cartogramma di Dorling: parto dagli ancoraggi geografici e risolvo le
+  // collisioni spingendo i cerchi finché non si sovrappongono più, con un
+  // richiamo debole verso l'ancora. Deterministico (nessuna animazione).
+  type N = GeoPoint & { ax: number; ay: number; x: number; y: number; rad: number };
+  const nodes: N[] = points.map((p) => {
+    const ax = px(p.lon), ay = py(p.lat);
+    return { ...p, ax, ay, x: ax, y: ay, rad: r(p.volume) };
+  }).sort((a, b) => b.rad - a.rad);
+
+  const pad = 4;
+  for (let iter = 0; iter < 400; iter++) {
+    for (const n of nodes) { n.x += (n.ax - n.x) * 0.015; n.y += (n.ay - n.y) * 0.015; }
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d = Math.hypot(dx, dy) || 0.01;
+        const min = a.rad + b.rad + pad;
+        if (d < min) {
+          const push = (min - d) / 2, ux = dx / d, uy = dy / d;
+          a.x -= ux * push; a.y -= uy * push; b.x += ux * push; b.y += uy * push;
+        }
+      }
+    }
+    for (const n of nodes) {
+      n.x = Math.max(n.rad + 6, Math.min(W - n.rad - 6, n.x));
+      n.y = Math.max(n.rad + 8, Math.min(H - n.rad - 22, n.y));
+    }
+  }
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 520 }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 540 }}>
       <defs>
         <radialGradient id="geoGlow" cx="50%" cy="42%" r="65%">
           <stop offset="0%" stopColor="#0f2036" />
@@ -357,26 +387,32 @@ export function GeoBubbleMap({ points }: { points: GeoPoint[] }) {
         </radialGradient>
       </defs>
       <rect x="0" y="0" width={W} height={H} rx="14" fill="url(#geoGlow)" stroke="#1e2a4a" />
-      {/* graticola */}
-      {meridians.map((m) => <line key={`m${m}`} x1={px(m)} y1="0" x2={px(m)} y2={H} stroke="#1b2740" strokeWidth="1" />)}
-      {parallels.map((p) => <line key={`p${p}`} x1="0" y1={py(p)} x2={W} y2={py(p)} stroke="#1b2740" strokeWidth="1" />)}
+      {meridians.map((m) => <line key={`m${m}`} x1={px(m)} y1="0" x2={px(m)} y2={H} stroke="#16223c" strokeWidth="1" />)}
+      {parallels.map((p) => <line key={`p${p}`} x1="0" y1={py(p)} x2={W} y2={py(p)} stroke="#16223c" strokeWidth="1" />)}
       {continents.map(([name, lon, lat]) => (
         <text key={name} x={px(lon as number)} y={py(lat as number)} textAnchor="middle"
-          fontSize="12" fill="#33415580" fontWeight={700} letterSpacing="2">{name}</text>
+          fontSize="12" fill="#2a3a5a" fontWeight={700} letterSpacing="2">{name}</text>
       ))}
-      {/* bolle */}
-      {sorted.map((p) => {
-        const cx = px(p.lon), cy = py(p.lat), rad = r(p.volume), c = col(p.sentiment);
+      {/* linee guida verso l'ancora geografica */}
+      {nodes.map((n) => {
+        const moved = Math.hypot(n.x - n.ax, n.y - n.ay);
+        if (moved < n.rad * 0.8) return null;
+        return <line key={`l${n.lang}`} x1={n.ax} y1={n.ay} x2={n.x} y2={n.y} stroke="#334155" strokeWidth="1" strokeDasharray="2 3" />;
+      })}
+      {nodes.map((n) => (
+        <circle key={`a${n.lang}`} cx={n.ax} cy={n.ay} r="2" fill="#475569" />
+      ))}
+      {/* bolle spostate */}
+      {nodes.map((n) => {
+        const c = col(n.sentiment);
         return (
-          <g key={p.lang}>
-            <title>{`${p.country} · ${p.volume} mentions · ${p.share}% · sentiment ${p.sentiment ?? 'n/a'}`}</title>
-            <circle cx={cx} cy={cy} r={rad} fill={c} fillOpacity={0.18} stroke={c} strokeOpacity={0.9} strokeWidth={1.5} />
-            <text x={cx} y={cy - 2} textAnchor="middle" fontSize={Math.min(26, rad)} >{p.flag}</text>
-            {rad > 20 && (
-              <text x={cx} y={cy + rad + 13} textAnchor="middle" fontSize="11" fill="#cbd5e1" fontWeight={600}>
-                {p.country} · {p.share}%
-              </text>
-            )}
+          <g key={n.lang}>
+            <title>{`${n.country} · ${n.volume} mentions · ${n.share}% · sentiment ${n.sentiment ?? 'n/a'}`}</title>
+            <circle cx={n.x} cy={n.y} r={n.rad} fill={c} fillOpacity={0.2} stroke={c} strokeOpacity={0.95} strokeWidth={1.5} />
+            <text x={n.x} y={n.y + 2} textAnchor="middle" fontSize={Math.min(30, n.rad * 0.9)}>{n.flag}</text>
+            <text x={n.x} y={n.y + n.rad + 14} textAnchor="middle" fontSize="11" fill="#cbd5e1" fontWeight={600}>
+              {n.country} · {n.share}%
+            </text>
           </g>
         );
       })}
