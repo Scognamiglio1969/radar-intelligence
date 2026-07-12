@@ -171,6 +171,19 @@ export async function GET(req: Request) {
   }
   }
 
+  // 4c. Share of Voice over time (giorno × entità)
+  if (has('sov') && data.sov.entities.length) {
+  const wsSov = sheet(wb, 'Share of Voice', [
+    { header: 'Day', key: 'day', width: 12 },
+    ...data.sov.entities.map((e) => ({ header: e, key: e, width: 16 })),
+  ]);
+  for (const row of data.sov.days) {
+    const r: Record<string, string | number> = { day: String(row.day) };
+    for (const e of data.sov.entities) r[e] = Number(row[e] ?? 0);
+    wsSov.addRow(r);
+  }
+  }
+
   // 5. Benchmark
   if (has('benchmark')) {
   const total = data.benchmark.reduce((s, r) => s + r.total, 0);

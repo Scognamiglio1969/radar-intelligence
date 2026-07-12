@@ -253,6 +253,23 @@ export async function GET(req: Request) {
     ], { x: 8.2, y: 1.3, w: 4.6, colW: [2.2, 0.9, 0.7, 0.8], border: { type: 'solid', color: '1E2A4A', pt: 1 } });
   }
 
+  // ── 4·sov. Share of Voice over time (area impilata)
+  if (has('sov') && data.sov.entities.length && data.sov.days.length) {
+    const ss = pptx.addSlide({ masterName: 'DARK' });
+    ss.addText('Share of Voice over time (30 days)', titleOpts);
+    const labels = data.sov.days.map((d) => String(d.day).slice(5));
+    ss.addChart('area', data.sov.entities.map((e) => ({
+      name: e,
+      labels,
+      values: data.sov.days.map((d) => Number(d[e] ?? 0)),
+    })), {
+      x: 0.5, y: 1.3, w: 12.3, h: 5.4, barGrouping: 'stacked',
+      chartColors: data.sov.entities.map((_, i) => ENTITY_COLORS[i % ENTITY_COLORS.length]),
+      catAxisLabelColor: MUTED, valAxisLabelColor: MUTED, showLegend: true, legendPos: 'b', legendColor: MUTED,
+      valGridLine: { color: '1E2A4A' }, catGridLine: { style: 'none' },
+    });
+  }
+
   // ── 5. Share of voice
   const totalBench = data.benchmark.reduce((s, r) => s + r.total, 0);
   if (has('benchmark') && totalBench > 0) {

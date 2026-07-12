@@ -176,6 +176,17 @@ export async function GET(req: Request) {
     ));
   }
 
+  // Share of Voice over time (riassunto per entità)
+  if (has('sov') && data.sov.entities.length) {
+    const totals = data.sov.entities.map((e) => ({ e, n: data.sov.days.reduce((s, d) => s + Number(d[e] ?? 0), 0) }));
+    const grand = totals.reduce((s, t) => s + t.n, 0) || 1;
+    children.push(h1('Share of Voice over time (30 days)'));
+    children.push(table(
+      ['Entity', 'Mentions', 'Share of voice'],
+      totals.sort((a, b) => b.n - a.n).map((t) => [t.e, String(t.n), `${((t.n / grand) * 100).toFixed(1)}%`]),
+    ));
+  }
+
   // Benchmark
   if (has('benchmark') && data.benchmark.length) {
     children.push(h1('Benchmark — share of voice (14 days)'));

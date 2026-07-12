@@ -8,7 +8,7 @@ import { getRecentAlerts } from '@/lib/alerts';
 import { getTrends } from '@/lib/trends';
 import { getNarratives } from '@/lib/narratives';
 import { getTimeline } from '@/lib/timeline';
-import { geoDistribution, emotionDistribution, brandHealthReport, momentumQuadrant, semanticConstellation } from '@/lib/insights';
+import { geoDistribution, emotionDistribution, brandHealthReport, momentumQuadrant, semanticConstellation, sovOverTime } from '@/lib/insights';
 import { SOURCE_META } from '@/lib/connectors';
 import type { projects } from '@/lib/db/schema';
 
@@ -27,6 +27,7 @@ export const EXPORT_SECTIONS = [
   ['constellation', 'Semantic constellation'],
   ['geo', 'Geographic map'],
   ['benchmark', 'Benchmark'],
+  ['sov', 'Share of Voice over time'],
   ['audience', 'Audience'],
   ['content', 'Top content'],
   ['narratives', 'Narratives'],
@@ -54,7 +55,7 @@ export async function collectExportData(project: Project, days = 30) {
   const db = await getDb();
   const since = new Date(Date.now() - days * 86400_000);
 
-  const [dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, allMentions] = await Promise.all([
+  const [dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, sov, allMentions] = await Promise.all([
     dashboardData(project.id),
     benchmarkData(project.id),
     audienceData(project.id),
@@ -68,6 +69,7 @@ export async function collectExportData(project: Project, days = 30) {
     emotionDistribution(project.id, days),
     momentumQuadrant(project.id, 14),
     semanticConstellation(project.id, 14),
+    sovOverTime(project.id, 30),
     db.select().from(mentions)
       .where(and(eq(mentions.projectId, project.id), gte(mentions.publishedAt, since)))
       .orderBy(desc(mentions.publishedAt))
@@ -75,7 +77,7 @@ export async function collectExportData(project: Project, days = 30) {
   ]);
   const health = await brandHealthReport(project.id, 14);
 
-  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, health, allMentions };
+  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, sov, health, allMentions };
 }
 
 export type ExportData = Awaited<ReturnType<typeof collectExportData>>;

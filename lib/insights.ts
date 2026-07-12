@@ -246,6 +246,46 @@ export async function currentProjectForInsights() {
 }
 
 // ---------------------------------------------------------------------------
+// 1. Share of Voice nel tempo (streamgraph delle entità benchmark)
+// ---------------------------------------------------------------------------
+export type SovSeries = { entities: string[]; days: { day: string;[entity: string]: number | string }[] };
+
+export async function sovOverTime(projectId: number, days = 30): Promise<SovSeries> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const entities = await db.select().from(benchmarkEntities).where(eq(benchmarkEntities.projectId, projectId));
+  if (entities.length === 0) return { entities: [], days: [] };
+
+  // Griglia giorni completa (anche i giorni a zero) per uno streamgraph continuo.
+  const grid: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    grid.push(new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10));
+  }
+  const byDay = new Map<string, Record<string, number>>();
+  for (const d of grid) byDay.set(d, {});
+
+  for (const e of entities) {
+    const kws = e.keywords.length ? e.keywords : [e.name];
+    const rows = (await db.execute(sql`
+      SELECT to_char(published_at AT TIME ZONE ${TZ}, 'YYYY-MM-DD') AS day, count(*) AS n
+      FROM mentions
+      WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz${kwFilter(kws)}
+      GROUP BY day
+    `)).rows as { day: string; n: number }[];
+    const m = new Map(rows.map((r) => [r.day, Number(r.n)]));
+    for (const d of grid) {
+      const rec = byDay.get(d)!;
+      rec[e.name] = m.get(d) ?? 0;
+    }
+  }
+
+  return {
+    entities: entities.map((e) => e.name),
+    days: grid.map((d) => ({ day: d, ...byDay.get(d)! })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 8. Costellazione semantica (frequenza termini + co-occorrenza + sentiment)
 // ---------------------------------------------------------------------------
 export type ConstellationNode = { term: string; freq: number; sentiment: number };

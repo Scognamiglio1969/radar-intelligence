@@ -281,6 +281,14 @@ export async function GET(req: Request) {
     );
   }
 
+  // ---- Share of Voice over time ----
+  if (has('sov') && data.sov.entities.length) {
+    const totals = data.sov.entities.map((e) => ({ e, n: data.sov.days.reduce((s, d) => s + Number(d[e] ?? 0), 0) }));
+    const grand = totals.reduce((s, t) => s + t.n, 0) || 1;
+    heading('Share of Voice over time (30 days)');
+    hbars(totals.sort((a, b) => b.n - a.n).map((t) => ({ label: `${t.e} (${((t.n / grand) * 100).toFixed(0)}%)`, value: t.n })));
+  }
+
   // ---- Benchmark ----
   if (has('benchmark') && data.benchmark.length) {
     heading('Benchmark — share of voice');

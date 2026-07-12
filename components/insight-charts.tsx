@@ -4,7 +4,10 @@ import {
   ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip,
   ReferenceLine, Cell, Treemap,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  AreaChart, Area, Legend,
 } from 'recharts';
+
+const SERIES_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#f472b6', '#22d3ee', '#c084fc'];
 
 const TOOLTIP = { backgroundColor: '#16203c', border: '1px solid #1e2a4a', borderRadius: 8, fontSize: 12, color: '#e2e8f0' };
 const sentColor = (s: number) => s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
@@ -132,6 +135,28 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
     <ResponsiveContainer width="100%" height={360}>
       <Treemap data={data} dataKey="size" stroke="#0a0f1f" aspectRatio={4 / 3}
         content={<TreemapCell />} />
+    </ResponsiveContainer>
+  );
+}
+
+// ── 1. Share of Voice nel tempo (streamgraph) ─────────────────────────────
+type SovRow = { day: string;[k: string]: number | string };
+
+export function ShareOfVoiceStream({ entities, days }: { entities: string[]; days: SovRow[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={440}>
+      <AreaChart data={days} stackOffset="wiggle" margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+        <XAxis dataKey="day" tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
+          tickFormatter={(d: string) => d.slice(5)} minTickGap={28} />
+        <Tooltip contentStyle={TOOLTIP} labelStyle={{ color: '#e2e8f0' }}
+          formatter={(v, name) => [`${Number(v)} mentions`, String(name)]} />
+        <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
+        {entities.map((e, i) => (
+          <Area key={e} type="monotone" dataKey={e} stackId="1"
+            stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+            fill={SERIES_COLORS[i % SERIES_COLORS.length]} fillOpacity={0.75} strokeWidth={0} />
+        ))}
+      </AreaChart>
     </ResponsiveContainer>
   );
 }
