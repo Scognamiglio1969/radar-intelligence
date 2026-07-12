@@ -100,7 +100,7 @@ export async function runPipeline(opts: { full?: boolean } = {}) {
           const topTrend = (await getTrends(project.id))[0]?.topic;
           await notifyDailyDigest(project.name, {
             mentions24h: Number(agg.n),
-            sentiment: avg === null ? 'in analisi' : avg > 0.15 ? 'positive' : avg < -0.15 ? 'negative' : 'neutral',
+            sentiment: avg === null ? 'analyzing' : avg > 0.15 ? 'positive' : avg < -0.15 ? 'negative' : 'neutral',
             topTrend,
           });
         }

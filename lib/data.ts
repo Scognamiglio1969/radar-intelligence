@@ -7,6 +7,15 @@ import {
 import { NEWS_SOURCES } from '@/lib/connectors';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 
+/** Normalizza un valore sentiment (incl. legacy IT) a una delle 3 etichette EN. */
+function normSentimentValue(s: string | null): 'positive' | 'neutral' | 'negative' {
+  switch ((s ?? '').toLowerCase()) {
+    case 'positive': case 'positivo': return 'positive';
+    case 'negative': case 'negativo': return 'negative';
+    default: return 'neutral';
+  }
+}
+
 /** Progetti visibili all'utente corrente: i propri + quelli condivisi (admin: tutti). */
 export async function getProjects() {
   const db = await getDb();
@@ -51,11 +60,20 @@ export async function dashboardData(projectId: number) {
     GROUP BY 1, 2 ORDER BY 1
   `);
 
-  const sentimentDist = await db.select({
+  const sentimentDistRaw = await db.select({
     sentiment: mentions.sentiment, n: sql<number>`count(*)`,
   }).from(mentions)
     .where(and(eq(mentions.projectId, projectId), gte(mentions.publishedAt, d7), isNotNull(mentions.sentiment)))
     .groupBy(mentions.sentiment);
+
+  // Fold every value (incl. legacy Italian: positivo/neutro/negativo) into the
+  // three canonical English buckets so the donut never splits into duplicates.
+  const sentimentBuckets = new Map<string, number>();
+  for (const r of sentimentDistRaw) {
+    const key = normSentimentValue(r.sentiment);
+    sentimentBuckets.set(key, (sentimentBuckets.get(key) ?? 0) + Number(r.n));
+  }
+  const sentimentDist = [...sentimentBuckets.entries()].map(([sentiment, n]) => ({ sentiment, n }));
 
   const topTopics = await db.execute(sql`
     SELECT t AS topic, count(*) AS n
@@ -79,7 +97,7 @@ export async function dashboardData(projectId: number) {
       sources: Number(kpi.sources),
     },
     volumeByDay: volumeByDay.rows as { day: string; source: string; n: number }[],
-    sentimentDist: sentimentDist.map((r) => ({ sentiment: r.sentiment ?? 'in attesa', n: Number(r.n) })),
+    sentimentDist: sentimentDist.map((r) => ({ sentiment: r.sentiment ?? 'pending', n: Number(r.n) })),
     topTopics: topTopics.rows as { topic: string; n: number }[],
     latest,
     latestBrief: latestBrief ?? null,
