@@ -1,11 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import {
   ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip,
   ReferenceLine, Cell, Treemap,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   AreaChart, Area, Legend,
 } from 'recharts';
+
+import { WORLD, WORLD_VIEWBOX } from '@/lib/world-geo';
 
 const SERIES_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#f472b6', '#22d3ee', '#c084fc'];
 
@@ -219,6 +222,8 @@ type FlowLink = { source: string; target: string; value: number };
 export function SankeyFlow({ nodes, links, sourceColors }: {
   nodes: FlowNode[]; links: FlowLink[]; sourceColors: Record<string, string>;
 }) {
+  // Focus = chiave di un nodo fonte (s:) o sentiment (x:); isola quel flusso.
+  const [focus, setFocus] = useState<string | null>(null);
   const W = 1000, H = 580, nw = 14, gap = 14, pad = 10;
   const colX = [40, W / 2 - nw / 2, W - 40 - nw];
   const sentCol: Record<string, string> = { positive: '#34d399', neutral: '#94a3b8', negative: '#f87171' };
@@ -242,6 +247,20 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
     }
   });
 
+  // Topic collegati al nodo in focus (per illuminare l'intero percorso 3 colonne).
+  const focusTopics = new Set<string>();
+  if (focus?.startsWith('s:')) for (const l of links) { if (l.source === focus) focusTopics.add(l.target); }
+  if (focus?.startsWith('x:')) for (const l of links) { if (l.target === focus) focusTopics.add(l.source); }
+  const isActive = (l: FlowLink): boolean => {
+    if (!focus) return true;
+    if (focus.startsWith('s:')) return l.source === focus || focusTopics.has(l.source);
+    return l.target === focus || focusTopics.has(l.target);
+  };
+  const nodeActive = (n: FlowNode): boolean => {
+    if (!focus) return true;
+    return n.key === focus || focusTopics.has(n.key);
+  };
+
   const srcOff = new Map<string, number>();
   const tgtOff = new Map<string, number>();
   const ribbons = links
@@ -258,34 +277,59 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
       const x0 = s.x + nw, x1 = t.x, mx = (x0 + x1) / 2;
       const srcNode = nodes.find((n) => n.key === l.source)!;
       const tgtNode = nodes.find((n) => n.key === l.target)!;
-      // Colore ribbon: se arriva al sentiment usa il colore sentiment, altrimenti la fonte.
       const c = tgtNode.kind !== 'topic' ? (sentCol[tgtNode.kind] ?? '#64748b') : (sourceColors[srcNode.label] ?? '#64748b');
       return (
         <path key={i} d={`M${x0},${sy} C${mx},${sy} ${mx},${ty} ${x1},${ty}`}
-          fill="none" stroke={c} strokeOpacity={0.28} strokeWidth={th} />
+          fill="none" stroke={c} strokeOpacity={isActive(l) ? 0.42 : 0.04} strokeWidth={th}
+          style={{ transition: 'stroke-opacity .15s' }} />
       );
     });
 
+  const sources = layers[0], sentiments = layers[2];
+  const Chip = ({ node }: { node: FlowNode }) => {
+    const on = focus === node.key;
+    return (
+      <button onClick={() => setFocus(on ? null : node.key)}
+        className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${on ? 'border-sky-400 bg-sky-500/15 text-slate-100' : 'border-[var(--border)] text-slate-400 hover:text-slate-200'}`}>
+        <span className="size-2.5 rounded-full" style={{ backgroundColor: nodeColor(node) }} />{node.label}
+      </button>
+    );
+  };
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 600 }}>
-      {ribbons}
-      {nodes.map((n) => {
-        const p = pos.get(n.key); if (!p) return null;
-        const c = nodeColor(n);
-        const rightSide = n.layer === 2;
-        const midSide = n.layer === 1;
-        return (
-          <g key={n.key}>
-            <title>{`${n.label} · ${n.value}`}</title>
-            <rect x={p.x} y={p.y} width={nw} height={p.h} rx={3} fill={c} />
-            <text x={rightSide ? p.x - 6 : p.x + nw + 6} y={p.y + p.h / 2}
-              textAnchor={rightSide ? 'end' : 'start'} dominantBaseline="middle"
-              fontSize={midSide ? 12 : 13} fontWeight={n.layer === 1 ? 400 : 600}
-              fill={n.layer === 1 ? '#cbd5e1' : '#e2e8f0'}>{n.label}</text>
-          </g>
-        );
-      })}
-    </svg>
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-[11px] uppercase tracking-wide text-slate-600">Isolate:</span>
+        {sources.map((n) => <Chip key={n.key} node={n} />)}
+        <span className="mx-1 text-slate-700">·</span>
+        {sentiments.map((n) => <Chip key={n.key} node={n} />)}
+        {focus && (
+          <button onClick={() => setFocus(null)} className="ml-1 rounded-full px-2.5 py-1 text-xs text-sky-400 hover:text-sky-300">clear ✕</button>
+        )}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 600 }}>
+        {ribbons}
+        {nodes.map((n) => {
+          const p = pos.get(n.key); if (!p) return null;
+          const c = nodeColor(n);
+          const rightSide = n.layer === 2;
+          const midSide = n.layer === 1;
+          const clickable = n.layer !== 1;
+          const dim = !nodeActive(n);
+          return (
+            <g key={n.key} opacity={dim ? 0.3 : 1} onClick={clickable ? () => setFocus(focus === n.key ? null : n.key) : undefined}
+              style={{ cursor: clickable ? 'pointer' : 'default', transition: 'opacity .15s' }}>
+              <title>{`${n.label} · ${n.value}`}</title>
+              <rect x={p.x} y={p.y} width={nw} height={p.h} rx={3} fill={c} />
+              <text x={rightSide ? p.x - 6 : p.x + nw + 6} y={p.y + p.h / 2}
+                textAnchor={rightSide ? 'end' : 'start'} dominantBaseline="middle"
+                fontSize={midSide ? 12 : 13} fontWeight={n.layer === 1 ? 400 : 600}
+                fill={n.layer === 1 ? '#cbd5e1' : '#e2e8f0'}>{n.label}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
@@ -436,6 +480,31 @@ export function BrandHealthGauge({ score, grade, label = 'Health Index' }: { sco
   );
 }
 
+const riskColor = (v: number) => v >= 75 ? '#f87171' : v >= 50 ? '#fb923c' : v >= 25 ? '#fbbf24' : '#34d399';
+
+export function RiskGauge({ risk, level }: { risk: number; level: string }) {
+  const R = 80, C = 100, sw = 16;
+  const start = 135, sweep = 270;
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  const pt = (deg: number) => [C + R * Math.cos(rad(deg)), C + R * Math.sin(rad(deg))];
+  const arc = (frac: number) => {
+    const a0 = start, a1 = start + sweep * frac;
+    const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
+    const large = sweep * frac > 180 ? 1 : 0;
+    return `M ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1}`;
+  };
+  const col = riskColor(risk);
+  return (
+    <svg viewBox="0 0 200 190" className="w-full" style={{ maxHeight: 260 }}>
+      <path d={arc(1)} fill="none" stroke="#1e2a4a" strokeWidth={sw} strokeLinecap="round" />
+      <path d={arc(Math.max(0.001, risk / 100))} fill="none" stroke={col} strokeWidth={sw} strokeLinecap="round" />
+      <text x={C} y={C - 4} textAnchor="middle" fontSize="46" fontWeight={800} fill="#f1f5f9">{risk}</text>
+      <text x={C} y={C + 22} textAnchor="middle" fontSize="13" fill={col} fontWeight={700} letterSpacing="1">{level.toUpperCase()}</text>
+      <text x={C} y={C + 40} textAnchor="middle" fontSize="10" fill="#64748b">Risk index</text>
+    </svg>
+  );
+}
+
 export function HealthBars({ components }: { components: HealthComponent[] }) {
   return (
     <div className="flex flex-col gap-3">
@@ -520,94 +589,40 @@ export function EmotionRadar({ data }: { data: EmotionSlice[] }) {
   );
 }
 
-// ── 6. Mappa geografica (proportional-symbol, equirettangolare) ───────────
+// ── 6. Mappa geografica (choropleth su mappa mondiale reale) ──────────────
 type GeoPoint = {
-  lang: string; country: string; flag: string;
-  lon: number; lat: number; volume: number; sentiment: number | null; share: number;
+  lang: string; country: string; flag: string; iso: string[];
+  volume: number; sentiment: number | null; share: number;
 };
 
 export function GeoBubbleMap({ points }: { points: GeoPoint[] }) {
-  const W = 1000, H = 520;
-  const px = (lon: number) => ((lon + 180) / 360) * W;
-  const py = (lat: number) => ((90 - lat) / 180) * H;
-  const maxVol = Math.max(1, ...points.map((p) => p.volume));
-  // Raggio smorzato (log) così il termine dominante non schiaccia gli altri;
-  // minimo leggibile 14px.
-  const r = (v: number) => 14 + (Math.log(1 + v) / Math.log(1 + maxVol)) * 40;
-  const col = (s: number | null) => s === null ? '#64748b' : s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
-  const continents = [
-    ['N. AMERICA', -100, 46], ['S. AMERICA', -62, -18], ['EUROPE', 12, 60],
-    ['AFRICA', 22, 2], ['ASIA', 96, 50], ['OCEANIA', 136, -26],
-  ] as const;
-  const meridians = [-120, -60, 0, 60, 120];
-  const parallels = [45, 0, -45];
+  const sentCol = (s: number | null) => s === null ? '#64748b' : s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
+  const maxShare = Math.max(1, ...points.map((p) => p.share));
 
-  // Cartogramma di Dorling: parto dagli ancoraggi geografici e risolvo le
-  // collisioni spingendo i cerchi finché non si sovrappongono più, con un
-  // richiamo debole verso l'ancora. Deterministico (nessuna animazione).
-  type N = GeoPoint & { ax: number; ay: number; x: number; y: number; rad: number };
-  const nodes: N[] = points.map((p) => {
-    const ax = px(p.lon), ay = py(p.lat);
-    return { ...p, ax, ay, x: ax, y: ay, rad: r(p.volume) };
-  }).sort((a, b) => b.rad - a.rad);
-
-  const pad = 4;
-  for (let iter = 0; iter < 400; iter++) {
-    for (const n of nodes) { n.x += (n.ax - n.x) * 0.015; n.y += (n.ay - n.y) * 0.015; }
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i], b = nodes[j];
-        let dx = b.x - a.x, dy = b.y - a.y;
-        let d = Math.hypot(dx, dy) || 0.01;
-        const min = a.rad + b.rad + pad;
-        if (d < min) {
-          const push = (min - d) / 2, ux = dx / d, uy = dy / d;
-          a.x -= ux * push; a.y -= uy * push; b.x += ux * push; b.y += uy * push;
-        }
-      }
-    }
-    for (const n of nodes) {
-      n.x = Math.max(n.rad + 6, Math.min(W - n.rad - 6, n.x));
-      n.y = Math.max(n.rad + 8, Math.min(H - n.rad - 22, n.y));
-    }
+  // Ogni paese → la lingua con più volume che lo rivendica (risolve i paesi
+  // condivisi, es. Canada EN/FR, Svizzera DE/FR).
+  const claim = new Map<string, GeoPoint>();
+  for (const p of [...points].sort((a, b) => b.volume - a.volume)) {
+    for (const iso of p.iso) if (!claim.has(iso)) claim.set(iso, p);
   }
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 540 }}>
+    <svg viewBox={WORLD_VIEWBOX} className="w-full" style={{ maxHeight: 540 }}>
       <defs>
-        <radialGradient id="geoGlow" cx="50%" cy="42%" r="65%">
-          <stop offset="0%" stopColor="#0f2036" />
+        <radialGradient id="geoGlow" cx="50%" cy="45%" r="70%">
+          <stop offset="0%" stopColor="#0d1730" />
           <stop offset="100%" stopColor="#0a0f1f" />
         </radialGradient>
       </defs>
-      <rect x="0" y="0" width={W} height={H} rx="14" fill="url(#geoGlow)" stroke="#1e2a4a" />
-      {meridians.map((m) => <line key={`m${m}`} x1={px(m)} y1="0" x2={px(m)} y2={H} stroke="#16223c" strokeWidth="1" />)}
-      {parallels.map((p) => <line key={`p${p}`} x1="0" y1={py(p)} x2={W} y2={py(p)} stroke="#16223c" strokeWidth="1" />)}
-      {continents.map(([name, lon, lat]) => (
-        <text key={name} x={px(lon as number)} y={py(lat as number)} textAnchor="middle"
-          fontSize="12" fill="#2a3a5a" fontWeight={700} letterSpacing="2">{name}</text>
-      ))}
-      {/* linee guida verso l'ancora geografica */}
-      {nodes.map((n) => {
-        const moved = Math.hypot(n.x - n.ax, n.y - n.ay);
-        if (moved < n.rad * 0.8) return null;
-        return <line key={`l${n.lang}`} x1={n.ax} y1={n.ay} x2={n.x} y2={n.y} stroke="#334155" strokeWidth="1" strokeDasharray="2 3" />;
-      })}
-      {nodes.map((n) => (
-        <circle key={`a${n.lang}`} cx={n.ax} cy={n.ay} r="2" fill="#475569" />
-      ))}
-      {/* bolle spostate */}
-      {nodes.map((n) => {
-        const c = col(n.sentiment);
+      <rect x="0" y="0" width="1000" height="500" rx="14" fill="url(#geoGlow)" />
+      {WORLD.map((c) => {
+        const p = claim.get(c.id);
+        const col = p ? sentCol(p.sentiment) : '#1a2540';
+        const op = p ? 0.3 + (p.share / maxShare) * 0.6 : 1;
         return (
-          <g key={n.lang}>
-            <title>{`${n.country} · ${n.volume} mentions · ${n.share}% · sentiment ${n.sentiment ?? 'n/a'}`}</title>
-            <circle cx={n.x} cy={n.y} r={n.rad} fill={c} fillOpacity={0.2} stroke={c} strokeOpacity={0.95} strokeWidth={1.5} />
-            <text x={n.x} y={n.y + 2} textAnchor="middle" fontSize={Math.min(30, n.rad * 0.9)}>{n.flag}</text>
-            <text x={n.x} y={n.y + n.rad + 14} textAnchor="middle" fontSize="11" fill="#cbd5e1" fontWeight={600}>
-              {n.country} · {n.share}%
-            </text>
-          </g>
+          <path key={c.id} d={c.d} fill={col} fillOpacity={op} stroke="#0a0f1f" strokeWidth={0.4}>
+            <title>{p ? `${c.name} · ${p.country} · ${p.share}% · sentiment ${p.sentiment ?? 'n/a'}` : c.name}</title>
+          </path>
         );
       })}
     </svg>

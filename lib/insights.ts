@@ -247,6 +247,97 @@ export async function currentProjectForInsights() {
 }
 
 // ---------------------------------------------------------------------------
+// 9. Anatomia del picco / rischio (gauge di rischio + autopsia dello spike)
+// ---------------------------------------------------------------------------
+export type CrisisDriver = { label: string; value: number };
+export type PeakContent = { title: string; url: string | null; source: string; sentiment: string | null };
+export type CrisisAnatomy = {
+  risk: number; level: string;
+  drivers: CrisisDriver[];
+  peak: {
+    day: string; volume: number; negShare: number; sentiment: number;
+    topics: { topic: string; n: number }[]; content: PeakContent[];
+  } | null;
+};
+
+function riskLevel(r: number): string {
+  return r >= 75 ? 'Critical' : r >= 50 ? 'Elevated' : r >= 25 ? 'Watch' : 'Calm';
+}
+
+export async function crisisAnatomy(projectId: number, days = 14): Promise<CrisisAnatomy> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+
+  const daily = (await db.execute(sql`
+    SELECT to_char(published_at AT TIME ZONE ${TZ}, 'YYYY-MM-DD') AS day,
+      count(*) AS n,
+      count(*) FILTER (WHERE sentiment = 'negative') AS neg,
+      avg(sentiment_score) AS s
+    FROM mentions
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    GROUP BY day ORDER BY day
+  `)).rows as { day: string; n: number; neg: number; s: number | null }[];
+
+  if (daily.length === 0) return { risk: 0, level: 'Calm', drivers: [], peak: null };
+
+  const totalVol = daily.reduce((a, d) => a + Number(d.n), 0);
+  const recent = daily.slice(-2);
+  const prior = daily.slice(0, -2);
+  const recentVol = recent.reduce((a, d) => a + Number(d.n), 0);
+  const recentNeg = recent.reduce((a, d) => a + Number(d.neg), 0);
+  const recentDailyAvg = recentVol / Math.max(1, recent.length);
+  const priorDailyAvg = prior.reduce((a, d) => a + Number(d.n), 0) / Math.max(1, prior.length);
+
+  const negShare48 = recentVol ? recentNeg / recentVol : 0;
+  const spike = priorDailyAvg > 0 ? recentDailyAvg / priorDailyAvg : 1;
+
+  // Alert recenti ad alta severità (ultimi 7 giorni).
+  const alerts = await getRecentAlerts(projectId, 20);
+  const weekAgo = Date.now() - 7 * 86400_000;
+  const highAlerts = alerts.filter((a) => a.severity === 'high' && new Date(a.createdAt).getTime() >= weekAgo).length;
+
+  const cNeg = Math.round(Math.min(50, negShare48 * 100 * 0.9));
+  const cSpike = Math.round(Math.max(0, Math.min(30, (spike - 1) * 40)));
+  const cAlert = Math.min(20, highAlerts * 10);
+  const risk = Math.max(0, Math.min(100, cNeg + cSpike + cAlert));
+  const drivers: CrisisDriver[] = [
+    { label: 'Negative share (48h)', value: cNeg },
+    { label: 'Volume spike', value: cSpike },
+    { label: 'Active severe alerts', value: cAlert },
+  ];
+
+  // Picco: giorno di massimo volume.
+  const peakRow = [...daily].sort((a, b) => Number(b.n) - Number(a.n))[0];
+  const peakDay = peakRow.day;
+  const peakTopics = (await db.execute(sql`
+    SELECT t AS topic, count(*) AS n
+    FROM mentions, jsonb_array_elements_text(topics) AS t
+    WHERE project_id = ${projectId}
+      AND to_char(published_at AT TIME ZONE ${TZ}, 'YYYY-MM-DD') = ${peakDay}
+    GROUP BY t ORDER BY n DESC LIMIT 5
+  `)).rows as { topic: string; n: number }[];
+  const peakContent = (await db.execute(sql`
+    SELECT title, url, source, sentiment
+    FROM mentions
+    WHERE project_id = ${projectId}
+      AND to_char(published_at AT TIME ZONE ${TZ}, 'YYYY-MM-DD') = ${peakDay}
+    ORDER BY (sentiment = 'negative') DESC, engagement_score DESC
+    LIMIT 5
+  `)).rows as PeakContent[];
+
+  return {
+    risk, level: riskLevel(risk), drivers,
+    peak: {
+      day: peakDay, volume: Number(peakRow.n),
+      negShare: Math.round((Number(peakRow.neg) / Math.max(1, Number(peakRow.n))) * 100),
+      sentiment: peakRow.s === null ? 0 : Math.round(Number(peakRow.s) * 100) / 100,
+      topics: peakTopics.map((t) => ({ topic: t.topic, n: Number(t.n) })),
+      content: peakContent,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 4. Rete degli influencer (autori collegati dalla community condivisa)
 // ---------------------------------------------------------------------------
 export type NetNode = { id: string; label: string; community: string; source: string; posts: number; engagement: number };
@@ -642,42 +733,45 @@ export async function brandHealthReport(projectId: number, days = 14): Promise<H
 // La lingua è l'unico segnale geografico persistito su ogni mention: ogni
 // codice ISO 639-1 viene mappato al paese/area rappresentativa, con centroide
 // (lon/lat) per posizionarlo sulla mappa e bandiera per etichettarlo.
-type GeoMeta = { country: string; flag: string; lon: number; lat: number };
+type GeoMeta = { country: string; flag: string; iso: string[] };
+// Ogni lingua → i paesi (ISO 3166-1 numerico, come nel world-atlas) dove è
+// prevalente. Così l'inglese si distribuisce su US/UK/CA/AU/…, lo spagnolo su
+// Spagna + America Latina, ecc.: la mappa si riempie davvero.
 const LANG_GEO: Record<string, GeoMeta> = {
-  it: { country: 'Italy', flag: '🇮🇹', lon: 12.5, lat: 42.5 },
-  en: { country: 'English-speaking', flag: '🇬🇧', lon: -2, lat: 52 },
-  es: { country: 'Spanish-speaking', flag: '🇪🇸', lon: -3.7, lat: 40.4 },
-  fr: { country: 'French-speaking', flag: '🇫🇷', lon: 2.3, lat: 46.6 },
-  de: { country: 'German-speaking', flag: '🇩🇪', lon: 10.4, lat: 51.2 },
-  pt: { country: 'Portuguese-speaking', flag: '🇧🇷', lon: -47, lat: -12 },
-  nl: { country: 'Netherlands', flag: '🇳🇱', lon: 5.3, lat: 52.1 },
-  pl: { country: 'Poland', flag: '🇵🇱', lon: 19.1, lat: 52 },
-  ru: { country: 'Russian-speaking', flag: '🇷🇺', lon: 45, lat: 56 },
-  ar: { country: 'Arabic-speaking', flag: '🇸🇦', lon: 45, lat: 24 },
-  zh: { country: 'Chinese-speaking', flag: '🇨🇳', lon: 104, lat: 35 },
-  ja: { country: 'Japan', flag: '🇯🇵', lon: 138, lat: 36 },
-  ko: { country: 'Korea', flag: '🇰🇷', lon: 127.8, lat: 36.5 },
-  tr: { country: 'Turkey', flag: '🇹🇷', lon: 35, lat: 39 },
-  ro: { country: 'Romania', flag: '🇷🇴', lon: 25, lat: 46 },
-  hu: { country: 'Hungary', flag: '🇭🇺', lon: 19.5, lat: 47.2 },
-  cs: { country: 'Czechia', flag: '🇨🇿', lon: 15.5, lat: 49.8 },
-  el: { country: 'Greece', flag: '🇬🇷', lon: 22, lat: 39 },
-  sv: { country: 'Sweden', flag: '🇸🇪', lon: 15, lat: 62 },
-  da: { country: 'Denmark', flag: '🇩🇰', lon: 9.5, lat: 56 },
-  fi: { country: 'Finland', flag: '🇫🇮', lon: 26, lat: 64 },
-  no: { country: 'Norway', flag: '🇳🇴', lon: 8.5, lat: 61 },
-  uk: { country: 'Ukraine', flag: '🇺🇦', lon: 31, lat: 49 },
-  he: { country: 'Israel', flag: '🇮🇱', lon: 35, lat: 31.5 },
-  hi: { country: 'India', flag: '🇮🇳', lon: 79, lat: 22 },
-  id: { country: 'Indonesia', flag: '🇮🇩', lon: 113, lat: -1 },
-  vi: { country: 'Vietnam', flag: '🇻🇳', lon: 106, lat: 16 },
-  th: { country: 'Thailand', flag: '🇹🇭', lon: 101, lat: 15 },
-  sk: { country: 'Slovakia', flag: '🇸🇰', lon: 19.5, lat: 48.7 },
-  bg: { country: 'Bulgaria', flag: '🇧🇬', lon: 25, lat: 42.7 },
-  hr: { country: 'Croatia', flag: '🇭🇷', lon: 15.5, lat: 45.1 },
-  sr: { country: 'Serbia', flag: '🇷🇸', lon: 21, lat: 44 },
-  ca: { country: 'Catalonia', flag: '🇪🇸', lon: 1.5, lat: 41.6 },
-  sl: { country: 'Slovenia', flag: '🇸🇮', lon: 14.8, lat: 46.1 },
+  it: { country: 'Italian', flag: '🇮🇹', iso: ['380'] },
+  en: { country: 'English', flag: '🇬🇧', iso: ['840', '826', '124', '036', '372', '554', '710'] },
+  es: { country: 'Spanish', flag: '🇪🇸', iso: ['724', '484', '032', '170', '152', '604', '862', '218', '600', '858', '068', '320', '340', '222', '558', '188', '214', '591'] },
+  fr: { country: 'French', flag: '🇫🇷', iso: ['250', '056', '384', '466', '686'] },
+  de: { country: 'German', flag: '🇩🇪', iso: ['276', '040', '756'] },
+  pt: { country: 'Portuguese', flag: '🇧🇷', iso: ['076', '620', '024', '508'] },
+  nl: { country: 'Dutch', flag: '🇳🇱', iso: ['528'] },
+  pl: { country: 'Polish', flag: '🇵🇱', iso: ['616'] },
+  ru: { country: 'Russian', flag: '🇷🇺', iso: ['643', '112', '398'] },
+  ar: { country: 'Arabic', flag: '🇸🇦', iso: ['682', '818', '784', '504', '368', '012', '400', '760', '434', '788', '887', '414', '512', '634', '048'] },
+  zh: { country: 'Chinese', flag: '🇨🇳', iso: ['156', '158'] },
+  ja: { country: 'Japanese', flag: '🇯🇵', iso: ['392'] },
+  ko: { country: 'Korean', flag: '🇰🇷', iso: ['410'] },
+  tr: { country: 'Turkish', flag: '🇹🇷', iso: ['792'] },
+  ro: { country: 'Romanian', flag: '🇷🇴', iso: ['642'] },
+  hu: { country: 'Hungarian', flag: '🇭🇺', iso: ['348'] },
+  cs: { country: 'Czech', flag: '🇨🇿', iso: ['203'] },
+  el: { country: 'Greek', flag: '🇬🇷', iso: ['300'] },
+  sv: { country: 'Swedish', flag: '🇸🇪', iso: ['752'] },
+  da: { country: 'Danish', flag: '🇩🇰', iso: ['208'] },
+  fi: { country: 'Finnish', flag: '🇫🇮', iso: ['246'] },
+  no: { country: 'Norwegian', flag: '🇳🇴', iso: ['578'] },
+  uk: { country: 'Ukrainian', flag: '🇺🇦', iso: ['804'] },
+  he: { country: 'Hebrew', flag: '🇮🇱', iso: ['376'] },
+  hi: { country: 'Hindi', flag: '🇮🇳', iso: ['356'] },
+  id: { country: 'Indonesian', flag: '🇮🇩', iso: ['360'] },
+  vi: { country: 'Vietnamese', flag: '🇻🇳', iso: ['704'] },
+  th: { country: 'Thai', flag: '🇹🇭', iso: ['764'] },
+  sk: { country: 'Slovak', flag: '🇸🇰', iso: ['703'] },
+  bg: { country: 'Bulgarian', flag: '🇧🇬', iso: ['100'] },
+  hr: { country: 'Croatian', flag: '🇭🇷', iso: ['191'] },
+  sr: { country: 'Serbian', flag: '🇷🇸', iso: ['688'] },
+  ca: { country: 'Catalan', flag: '🇪🇸', iso: ['724'] },
+  sl: { country: 'Slovenian', flag: '🇸🇮', iso: ['705'] },
 };
 
 // ---------------------------------------------------------------------------
@@ -707,8 +801,8 @@ export async function emotionDistribution(projectId: number, days = 30): Promise
 }
 
 export type GeoPoint = {
-  lang: string; country: string; flag: string;
-  lon: number; lat: number; volume: number; sentiment: number | null; share: number;
+  lang: string; country: string; flag: string; iso: string[];
+  volume: number; sentiment: number | null; share: number;
 };
 
 export async function geoDistribution(projectId: number, days = 30): Promise<GeoPoint[]> {
@@ -728,7 +822,7 @@ export async function geoDistribution(projectId: number, days = 30): Promise<Geo
   return known.map((r) => {
     const g = LANG_GEO[r.lang];
     return {
-      lang: r.lang, country: g.country, flag: g.flag, lon: g.lon, lat: g.lat,
+      lang: r.lang, country: g.country, flag: g.flag, iso: g.iso,
       volume: Number(r.n),
       sentiment: r.sent === null ? null : Math.round(Number(r.sent) * 100) / 100,
       share: Math.round((Number(r.n) / total) * 1000) / 10,

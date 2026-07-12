@@ -271,6 +271,16 @@ export async function GET(req: Request) {
     }
   }
 
+  // Crisis radar & peak
+  if (has('crisis') && data.crisis.peak) {
+    const pk = data.crisis.peak;
+    children.push(h1(`Crisis radar — risk ${data.crisis.risk}/100 (${data.crisis.level})`));
+    children.push(p(`Risk drivers: ${data.crisis.drivers.map((d) => `${d.label} +${d.value}`).join(' · ')}`));
+    children.push(h2(`Peak day: ${pk.day} — ${pk.volume} mentions, ${pk.negShare}% negative`));
+    if (pk.topics.length) children.push(p(`Topics: ${pk.topics.map((t) => `${t.topic} (${t.n})`).join(', ')}`));
+    for (const c of pk.content) children.push(bullet(`[${sourceLabel(c.source)}] ${c.title}`));
+  }
+
   const doc = new Document({
     creator: 'Radar By Scognamiglio 2026',
     styles: { default: { document: { run: { font: 'Calibri', size: 21 } } } },

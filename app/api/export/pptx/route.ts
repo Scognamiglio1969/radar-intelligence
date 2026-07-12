@@ -121,6 +121,24 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── Crisis radar & peak anatomy
+  if (has('crisis') && data.crisis.peak) {
+    const rc = data.crisis.risk >= 75 ? 'F87171' : data.crisis.risk >= 50 ? 'FB923C' : data.crisis.risk >= 25 ? 'FBBF24' : '34D399';
+    const cr = pptx.addSlide({ masterName: 'DARK' });
+    cr.addText('Crisis radar & peak anatomy', titleOpts);
+    cr.addShape('roundRect', { x: 0.5, y: 1.6, w: 4.2, h: 4.6, fill: { color: PANEL }, line: { color: '1E2A4A' }, rectRadius: 0.1 });
+    cr.addText(String(data.crisis.risk), { x: 0.5, y: 2.3, w: 4.2, h: 1.6, fontSize: 92, bold: true, color: rc, align: 'center' });
+    cr.addText(data.crisis.level.toUpperCase(), { x: 0.5, y: 3.95, w: 4.2, h: 0.5, fontSize: 20, bold: true, color: rc, align: 'center', charSpacing: 2 });
+    cr.addText('Risk index · 0–100', { x: 0.5, y: 4.6, w: 4.2, h: 0.4, fontSize: 12, color: MUTED, align: 'center' });
+    const p = data.crisis.peak;
+    cr.addText([
+      { text: `Peak day: ${p.day}\n`, options: { fontSize: 15, bold: true, color: TEXT } },
+      { text: `${p.volume} mentions · ${p.negShare}% negative · avg sentiment ${p.sentiment}\n\n`, options: { fontSize: 13, color: MUTED } },
+      { text: `Topics: ${p.topics.map((t) => `${t.topic} (${t.n})`).join(', ')}\n\n`, options: { fontSize: 13, color: ACCENT } },
+      ...p.content.map((c) => ({ text: `• ${c.title}\n`, options: { fontSize: 12, color: TEXT } })),
+    ], { x: 5.1, y: 1.7, w: 7.7, h: 4.5, valign: 'top' });
+  }
+
   // ── Emerging trends
   if (has('trends') && data.trends.length) {
     const st = pptx.addSlide({ masterName: 'DARK' });

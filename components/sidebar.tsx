@@ -7,7 +7,7 @@ import {
   Radar, LayoutDashboard, Ear, Newspaper, BarChart3, Users,
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
-  UserCog, LogOut, UserCircle2, ScatterChart, Grid3x3, TrendingDown, Boxes, Workflow, Globe2, HeartPulse, Gauge, LayoutGrid, Sparkles, Activity, Waypoints,
+  UserCog, LogOut, UserCircle2, ScatterChart, Grid3x3, TrendingDown, Boxes, Workflow, Globe2, HeartPulse, Gauge, LayoutGrid, Sparkles, Activity, Waypoints, ShieldAlert,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
@@ -37,6 +37,7 @@ const NAV: ({ href: string; label: string; icon: typeof Radar } | { section: str
   { href: '/insights/emotions', label: 'Emotion radar', icon: HeartPulse },
   { href: '/insights/heatmap', label: 'Hourly heatmap', icon: Grid3x3 },
   { href: '/insights/waterfall', label: 'Sentiment waterfall', icon: TrendingDown },
+  { href: '/insights/crisis', label: 'Crisis radar', icon: ShieldAlert },
   { href: '/insights/network', label: 'Influencer network', icon: Network },
   { href: '/insights/constellation', label: 'Semantic constellation', icon: Sparkles },
   { href: '/insights/clusters', label: 'Conversation clusters', icon: Boxes },

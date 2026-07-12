@@ -304,6 +304,21 @@ export async function GET(req: Request) {
   }
   }
 
+  // 7b. Crisis radar & peak
+  if (has('crisis') && data.crisis.peak) {
+  const wsCr = sheet(wb, 'Crisis radar', [
+    { header: 'Metric', key: 'm', width: 26 },
+    { header: 'Value', key: 'v', width: 40 },
+  ]);
+  wsCr.addRow({ m: 'Risk index (0-100)', v: `${data.crisis.risk} — ${data.crisis.level}` });
+  for (const d of data.crisis.drivers) wsCr.addRow({ m: d.label, v: `+${d.value}` });
+  wsCr.addRow({ m: 'Peak day', v: data.crisis.peak.day });
+  wsCr.addRow({ m: 'Peak volume', v: data.crisis.peak.volume });
+  wsCr.addRow({ m: 'Peak negative %', v: `${data.crisis.peak.negShare}%` });
+  wsCr.addRow({ m: 'Peak topics', v: data.crisis.peak.topics.map((t) => `${t.topic} (${t.n})`).join(', ') });
+  for (const c of data.crisis.peak.content) wsCr.addRow({ m: `Content [${sourceLabel(c.source)}]`, v: c.title });
+  }
+
   // 8. Alert e Brief
   if (has('alerts')) {
   const wsAl = sheet(wb, 'Alert', [

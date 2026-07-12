@@ -370,6 +370,15 @@ export async function GET(req: Request) {
   }
 
   // ---- Alert ----
+  if (has('crisis') && data.crisis.peak) {
+    const pk = data.crisis.peak;
+    heading(`Crisis radar — risk ${data.crisis.risk}/100 (${data.crisis.level})`);
+    para(`Risk drivers: ${data.crisis.drivers.map((d) => `${d.label} +${d.value}`).join('  ·  ')}`, { size: 9, color: MUTED, gap: 0.3 });
+    para(`Peak day: ${pk.day} — ${pk.volume} mentions, ${pk.negShare}% negative, avg sentiment ${pk.sentiment}`, { bold: true, size: 10, gap: 0.2 });
+    if (pk.topics.length) para(`Topics: ${pk.topics.map((t) => `${t.topic} (${t.n})`).join(', ')}`, { size: 9, color: MUTED, gap: 0.3 });
+    for (const c of pk.content) para(`• [${sourceLabel(c.source)}] ${c.title}`, { size: 9, gap: 0.15 });
+  }
+
   if (has('alerts') && data.alerts.length) {
     heading('Alert recenti');
     for (const a of data.alerts.slice(0, 12)) {
