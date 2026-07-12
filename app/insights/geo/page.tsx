@@ -23,7 +23,7 @@ export default async function GeoInsightPage() {
           <GeoBubbleMap points={points} />
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-500">
             <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-emerald-400/70" /> positive</span>
-            <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-slate-400/70" /> neutral</span>
+            <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-blue-400/70" /> neutral</span>
             <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-red-400/70" /> negative</span>
             <span className="ml-auto">Hover a country for its language, share and sentiment. Geography is inferred from language, not precise location.</span>
           </div>

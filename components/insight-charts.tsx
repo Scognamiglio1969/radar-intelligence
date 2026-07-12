@@ -333,22 +333,32 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
   );
 }
 
-// ── 1. Share of Voice nel tempo (streamgraph) ─────────────────────────────
+// ── 1. Share of Voice nel tempo (area 100% impilata = quota reale) ────────
 type SovRow = { day: string;[k: string]: number | string };
 
 export function ShareOfVoiceStream({ entities, days }: { entities: string[]; days: SovRow[] }) {
+  // Ordino le entità per volume totale (la più grande in basso, base stabile).
+  const totals = new Map(entities.map((e) => [e, days.reduce((s, d) => s + Number(d[e] ?? 0), 0)]));
+  const ordered = [...entities].sort((a, b) => (totals.get(b) ?? 0) - (totals.get(a) ?? 0));
+  const colOf = (e: string) => SERIES_COLORS[entities.indexOf(e) % SERIES_COLORS.length];
   return (
     <ResponsiveContainer width="100%" height={440}>
-      <AreaChart data={days} stackOffset="wiggle" margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+      <AreaChart data={days} stackOffset="expand" margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
         <XAxis dataKey="day" tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
           tickFormatter={(d: string) => d.slice(5)} minTickGap={28} />
+        <YAxis tickFormatter={(v: number) => `${Math.round(v * 100)}%`} tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false} width={40} />
         <Tooltip contentStyle={TOOLTIP} labelStyle={{ color: '#e2e8f0' }}
-          formatter={(v, name) => [`${Number(v)} mentions`, String(name)]} />
+          formatter={(v, name, item) => {
+            const row = item?.payload as SovRow | undefined;
+            const dayTotal = row ? entities.reduce((s, e) => s + Number(row[e] ?? 0), 0) : 0;
+            const n = Number(v);
+            const pct = dayTotal ? Math.round((n / dayTotal) * 100) : 0;
+            return [`${pct}%  ·  ${n} mentions`, String(name)];
+          }} />
         <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-        {entities.map((e, i) => (
-          <Area key={e} type="monotone" dataKey={e} stackId="1"
-            stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-            fill={SERIES_COLORS[i % SERIES_COLORS.length]} fillOpacity={0.75} strokeWidth={0} />
+        {ordered.map((e) => (
+          <Area key={e} type="monotone" dataKey={e} stackId="1" name={e}
+            stroke={colOf(e)} fill={colOf(e)} fillOpacity={0.8} strokeWidth={0} />
         ))}
       </AreaChart>
     </ResponsiveContainer>
@@ -596,8 +606,9 @@ type GeoPoint = {
 };
 
 export function GeoBubbleMap({ points }: { points: GeoPoint[] }) {
-  const sentCol = (s: number | null) => s === null ? '#64748b' : s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
+  const sentCol = (s: number | null) => s === null ? '#64748b' : s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#60a5fa';
   const maxShare = Math.max(1, ...points.map((p) => p.share));
+  const fmtShare = (s: number) => s < 0.1 ? '<0.1%' : `${s}%`;
 
   // Ogni paese → la lingua con più volume che lo rivendica (risolve i paesi
   // condivisi, es. Canada EN/FR, Svizzera DE/FR).
@@ -611,17 +622,23 @@ export function GeoBubbleMap({ points }: { points: GeoPoint[] }) {
       <defs>
         <radialGradient id="geoGlow" cx="50%" cy="45%" r="70%">
           <stop offset="0%" stopColor="#0d1730" />
-          <stop offset="100%" stopColor="#0a0f1f" />
+          <stop offset="100%" stopColor="#080c18" />
         </radialGradient>
       </defs>
       <rect x="0" y="0" width="1000" height="500" rx="14" fill="url(#geoGlow)" />
       {WORLD.map((c) => {
         const p = claim.get(c.id);
-        const col = p ? sentCol(p.sentiment) : '#1a2540';
-        const op = p ? 0.3 + (p.share / maxShare) * 0.6 : 1;
+        if (!p) {
+          return <path key={c.id} d={c.d} fill="#141d33" fillOpacity={1} stroke="#0a1122" strokeWidth={0.4}>
+            <title>{c.name}</title>
+          </path>;
+        }
+        const col = sentCol(p.sentiment);
+        // Opacità = radice della quota (le grandi spiccano, le piccole restano tenui ma visibili).
+        const op = 0.45 + Math.sqrt(p.share / maxShare) * 0.5;
         return (
-          <path key={c.id} d={c.d} fill={col} fillOpacity={op} stroke="#0a0f1f" strokeWidth={0.4}>
-            <title>{p ? `${c.name} · ${p.country} · ${p.share}% · sentiment ${p.sentiment ?? 'n/a'}` : c.name}</title>
+          <path key={c.id} d={c.d} fill={col} fillOpacity={op} stroke={col} strokeOpacity={0.55} strokeWidth={0.5}>
+            <title>{`${c.name} · ${p.flag} ${p.country} · ${p.volume} mentions · ${fmtShare(p.share)} · sentiment ${p.sentiment ?? 'n/a'}`}</title>
           </path>
         );
       })}
