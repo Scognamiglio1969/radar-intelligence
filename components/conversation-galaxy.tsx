@@ -9,16 +9,28 @@ type Props = {
   sources: Source[]; stars: Star[];
 };
 
+// Pseudo-random deterministico (posizioni stabili tra i frame).
 function rand(n: number): number {
   const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
   return x - Math.floor(x);
 }
 const bucketOf = (s: number): 'positive' | 'neutral' | 'negative' =>
   s > 0.15 ? 'positive' : s < -0.15 ? 'negative' : 'neutral';
-const sentColor = (b: string): [number, number, number] =>
-  b === 'positive' ? [52, 211, 153] : b === 'negative' ? [248, 113, 113] : [125, 211, 252];
-const coreColor = (v: number) => v >= 80 ? '#34d399' : v >= 65 ? '#38bdf8' : v >= 50 ? '#fbbf24' : '#f87171';
-const hexA = (hex: string, a: number) => hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+const coreColor = (v: number) => v >= 80 ? '#7ef7c2' : v >= 65 ? '#ffd98a' : v >= 50 ? '#ffb45e' : '#ff7a6b';
+
+// Colori "naturali" dei satelliti di sentiment (toni minerali, non neon).
+const MOON: Record<string, { base: string; lit: string }> = {
+  positive: { base: '#2f9e6e', lit: '#a9f0cd' },
+  neutral: { base: '#5b7ba6', lit: '#cfe2ff' },
+  negative: { base: '#b0473f', lit: '#ffb3a3' },
+};
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+const mix = (a: [number, number, number], b: [number, number, number], t: number): string =>
+  `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
 
 export function ConversationGalaxy({ title, core, grade, total, avgSentiment, sources, stars }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,24 +49,57 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const N = Math.max(1, sources.length);
-    const Hs = 78;                 // ampiezza verticale del sentiment (netta)
-    // Orbite delle fonti attorno al sole: anelli concentrici.
-    const hub = sources.map((_, i) => ({
-      theta: (i / N) * Math.PI * 2,
-      dist: 130 + (N === 1 ? 120 : (i / (N - 1)) * 200), // 130..330 annidati
-      spd: 0.00007 * (1 + (N - i) * 0.12),               // interni più veloci
+
+    // Split di sentiment per fonte → dimensione dei 3 satelliti (scala 1..10).
+    const split = sources.map((_, i) => {
+      let pos = 0, neu = 0, neg = 0;
+      for (const st of stars) {
+        if (st.si !== i) continue;
+        const b = bucketOf(st.s);
+        if (b === 'positive') pos++; else if (b === 'negative') neg++; else neu++;
+      }
+      const tot = Math.max(1, pos + neu + neg);
+      const ten = (v: number) => v === 0 ? 0 : Math.max(1, Math.round((v / tot) * 10));
+      return { pos: ten(pos), neu: ten(neu), neg: ten(neg), nPos: pos, nNeu: neu, nNeg: neg, tot };
+    });
+
+    const maxCount = Math.max(1, ...sources.map((s) => s.count));
+
+    // Pianeti su orbite annidate attorno al sole.
+    const planets = sources.map((src, i) => ({
+      i,
+      theta: rand(i * 13.7) * Math.PI * 2,
+      dist: 150 + (N === 1 ? 130 : (i / (N - 1)) * 210),
+      spd: 0.000055 * (1 + (N - i) * 0.16),
+      r: 11 + Math.sqrt(src.count / maxCount) * 15,
+      rgb: hexToRgb(src.color),
     }));
-    // Stelle: orbita locale attorno alla propria fonte + altezza = sentiment.
-    const st = stars.map((s, i) => ({
-      si: s.si,
-      bucket: bucketOf(s.s),
-      col: sentColor(bucketOf(s.s)),
-      rl: 26 + rand(i * 2.3) * 26,          // raggio orbita locale
-      phase: rand(i * 9.1) * Math.PI * 2,   // fase iniziale
-      lspd: 0.00018 + rand(i * 4.7) * 0.0003,
-      y: s.s * Hs,                          // altezza per sentiment (×2 vs prima)
-      size: 1.7 + s.e * 4.2,                // stelle più grandi
-      tw: rand(i * 5.3) * Math.PI * 2,
+    // 3 satelliti per pianeta: positive / neutral / negative.
+    type Moon = { si: number; bucket: 'positive' | 'neutral' | 'negative'; ten: number; orbR: number; phase: number; spd: number; incl: number };
+    const moons: Moon[] = [];
+    planets.forEach((p, i) => {
+      const sp = split[i];
+      const defs: ['positive' | 'neutral' | 'negative', number][] = [
+        ['positive', sp.pos], ['neutral', sp.neu], ['negative', sp.neg],
+      ];
+      defs.forEach(([bucket, ten], k) => {
+        if (ten <= 0) return;
+        moons.push({
+          si: i, bucket, ten,
+          orbR: p.r + 14 + k * 11,
+          phase: rand(i * 31 + k * 7) * Math.PI * 2,
+          spd: 0.00075 - k * 0.00018,
+          incl: (rand(i * 17 + k * 3) - 0.5) * 0.9,
+        });
+      });
+    });
+
+    // Starfield + nebulose (normalizzati, ricalcolati al resize).
+    const bgStars = Array.from({ length: 240 }, (_, i) => ({
+      nx: rand(i * 3.3), ny: rand(i * 8.9),
+      r: 0.3 + rand(i * 5.1) * 1.1,
+      tw: rand(i * 2.7) * Math.PI * 2,
+      spdTw: 0.001 + rand(i * 6.3) * 0.003,
     }));
 
     let W = 0, H = 0, cx = 0, cy = 0, dpr = 1;
@@ -68,10 +113,10 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
     resize();
     const ro = new ResizeObserver(resize); ro.observe(canvas);
 
-    const tilt = 0.5, camZ = 640, FOV = 700;
+    const tilt = 0.46, camZ = 660, FOV = 720;
     const cosX = Math.cos(tilt), sinX = Math.sin(tilt);
-    let rotY = 0.5, vel = 0.0016, dragging = false, lastX = 0, idle = 0;
-    const AUTO = 0.0016;
+    let rotY = 0.4, vel = 0.0012, dragging = false, lastX = 0, idle = 0;
+    const AUTO = 0.0012;
     const onDown = (e: PointerEvent) => { dragging = true; lastX = e.clientX; idle = 0; canvas.setPointerCapture(e.pointerId); };
     const onMove = (e: PointerEvent) => { if (!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; vel = dx * 0.0008; rotY += dx * 0.006; };
     const onUp = () => { dragging = false; };
@@ -85,15 +130,34 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       const persp = FOV / (camZ - z2);
       return { sx: cx + x1 * persp, sy: cy - y2 * persp, z: z2, persp };
     };
-    // Disegna un anello (cerchio nel piano x-z) proiettato.
-    const drawRing = (ox: number, oz: number, rad: number, cY: number, sY: number, stroke: string, w: number) => {
-      ctx.beginPath();
-      for (let k = 0; k <= 40; k++) {
-        const a = (k / 40) * Math.PI * 2;
-        const p = project(ox + rad * Math.cos(a), 0, oz + rad * Math.sin(a), cY, sY);
-        k === 0 ? ctx.moveTo(p.sx, p.sy) : ctx.lineTo(p.sx, p.sy);
-      }
-      ctx.strokeStyle = stroke; ctx.lineWidth = w; ctx.stroke();
+
+    // Sfera "fotografica": luce dal sole (al centro dello schermo, c0),
+    // gradiente spostato verso il lato illuminato, terminatore morbido,
+    // lato notte quasi nero, sottile rim light.
+    const drawSphere = (
+      sx: number, sy: number, r: number,
+      rgb: [number, number, number], litRgb: [number, number, number],
+      sunX: number, sunY: number, alpha: number,
+    ) => {
+      const dx = sunX - sx, dy = sunY - sy;
+      const d = Math.hypot(dx, dy) || 1;
+      const lx = sx + (dx / d) * r * 0.5, ly = sy + (dy / d) * r * 0.5;
+      const g = ctx.createRadialGradient(lx, ly, r * 0.08, sx, sy, r * 1.02);
+      g.addColorStop(0, mix(litRgb, [255, 255, 255], 0.35));
+      g.addColorStop(0.28, mix(rgb, litRgb, 0.55));
+      g.addColorStop(0.62, mix(rgb, [8, 10, 18], 0.35));
+      g.addColorStop(1, 'rgb(5,7,13)');
+      ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.fillStyle = g; ctx.fill();
+      // rim light sul bordo illuminato
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.clip();
+      const rim = ctx.createRadialGradient(lx, ly, r * 0.7, lx, ly, r * 1.5);
+      rim.addColorStop(0, 'rgba(255,255,255,0.12)'); rim.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = rim; ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
+      ctx.restore();
+      ctx.globalAlpha = 1;
     };
 
     let raf = 0, t0 = performance.now(), clock = 0;
@@ -104,80 +168,128 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       if (!reduce) rotY += vel * (dt / 16.7);
       const cY = Math.cos(rotY), sY = Math.sin(rotY);
       const selS = selSrcRef.current, selX = selSentRef.current;
-      const srcOn = (i: number) => selS.size === 0 || selS.has(i);
-      const starOn = (si: number, b: string) => (selS.size === 0 || selS.has(si)) && (selX.size === 0 || selX.has(b));
+      const planetOn = (i: number) => selS.size === 0 || selS.has(i);
+      const moonOn = (m: Moon) => planetOn(m.si) && (selX.size === 0 || selX.has(m.bucket));
 
-      ctx.clearRect(0, 0, W, H);
-      const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.6);
-      bg.addColorStop(0, 'rgba(20,32,58,0.5)'); bg.addColorStop(1, 'rgba(8,12,24,0)');
-      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      // ── Cielo: nero profondo + nebulose + stelline che brillano ──
+      ctx.fillStyle = '#020308';
+      ctx.fillRect(0, 0, W, H);
+      const neb1 = ctx.createRadialGradient(W * 0.78, H * 0.22, 0, W * 0.78, H * 0.22, W * 0.5);
+      neb1.addColorStop(0, 'rgba(38,52,110,0.16)'); neb1.addColorStop(1, 'transparent');
+      ctx.fillStyle = neb1; ctx.fillRect(0, 0, W, H);
+      const neb2 = ctx.createRadialGradient(W * 0.15, H * 0.8, 0, W * 0.15, H * 0.8, W * 0.45);
+      neb2.addColorStop(0, 'rgba(74,38,110,0.12)'); neb2.addColorStop(1, 'transparent');
+      ctx.fillStyle = neb2; ctx.fillRect(0, 0, W, H);
+      for (const b of bgStars) {
+        const tw = reduce ? 0.7 : 0.45 + 0.55 * Math.abs(Math.sin(clock * b.spdTw + b.tw));
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(235,240,255,${0.25 + tw * 0.55})`;
+        ctx.arc(b.nx * W, b.ny * H, b.r * tw, 0, Math.PI * 2); ctx.fill();
+      }
 
-      // posizioni correnti degli hub (fonti che orbitano il sole)
-      const hp = hub.map((h, i) => {
-        const ang = h.theta + h.spd * clock;
-        return { x: h.dist * Math.cos(ang), z: h.dist * Math.sin(ang), dist: h.dist, i };
+      // posizione del sole a schermo
+      const c0 = project(0, 0, 0, cY, sY);
+      const sunR = 34 * c0.persp;
+      const cc = coreColor(core);
+      const ccRgb = hexToRgb(cc);
+
+      // orbite: appena percettibili
+      ctx.strokeStyle = 'rgba(255,255,255,0.045)'; ctx.lineWidth = 1;
+      for (const p of planets) {
+        ctx.beginPath();
+        for (let k = 0; k <= 60; k++) {
+          const a = (k / 60) * Math.PI * 2;
+          const pr = project(p.dist * Math.cos(a), 0, p.dist * Math.sin(a), cY, sY);
+          k === 0 ? ctx.moveTo(pr.sx, pr.sy) : ctx.lineTo(pr.sx, pr.sy);
+        }
+        ctx.stroke();
+      }
+
+      // ── Corpi celesti con depth sort (sole, pianeti, lune) ──
+      type Body = { z: number; draw: () => void };
+      const bodies: Body[] = [];
+
+      // Sole fotografico: nucleo bianco-caldo, fotosfera, corona lunga, flare.
+      bodies.push({
+        z: c0.z, draw: () => {
+          const halo = ctx.createRadialGradient(c0.sx, c0.sy, 0, c0.sx, c0.sy, sunR * 7);
+          halo.addColorStop(0, `rgba(${ccRgb[0]},${ccRgb[1]},${ccRgb[2]},0.5)`);
+          halo.addColorStop(0.25, `rgba(${ccRgb[0]},${ccRgb[1]},${ccRgb[2]},0.13)`);
+          halo.addColorStop(1, 'transparent');
+          ctx.fillStyle = halo;
+          ctx.beginPath(); ctx.arc(c0.sx, c0.sy, sunR * 7, 0, Math.PI * 2); ctx.fill();
+          // flare orizzontale (lente)
+          const flare = ctx.createLinearGradient(c0.sx - sunR * 6, c0.sy, c0.sx + sunR * 6, c0.sy);
+          flare.addColorStop(0, 'transparent');
+          flare.addColorStop(0.5, `rgba(255,250,235,${reduce ? 0.14 : 0.1 + 0.05 * Math.sin(clock * 0.0012)})`);
+          flare.addColorStop(1, 'transparent');
+          ctx.fillStyle = flare;
+          ctx.fillRect(c0.sx - sunR * 6, c0.sy - 1.2, sunR * 12, 2.4);
+          // fotosfera
+          const ph = ctx.createRadialGradient(c0.sx - sunR * 0.2, c0.sy - sunR * 0.2, 0, c0.sx, c0.sy, sunR);
+          ph.addColorStop(0, '#ffffff');
+          ph.addColorStop(0.45, '#fff6dc');
+          ph.addColorStop(0.85, cc);
+          ph.addColorStop(1, mix(ccRgb, [40, 20, 5], 0.35));
+          ctx.beginPath(); ctx.arc(c0.sx, c0.sy, sunR, 0, Math.PI * 2);
+          ctx.fillStyle = ph; ctx.fill();
+        },
       });
 
-      // anelli orbitali delle fonti attorno al sole
-      for (let i = 0; i < hub.length; i++) {
-        drawRing(0, 0, hub[i].dist, cY, sY, hexA(sources[i].color, srcOn(i) ? 0.16 : 0.05), 1);
-      }
-      // anelli locali attorno a ciascuna fonte
-      for (const h of hp) {
-        drawRing(h.x, h.z, 40, cY, sY, hexA(sources[h.i].color, srcOn(h.i) ? 0.22 : 0.05), 1);
-      }
-
-      // glow del sole (dietro)
-      const c0 = project(0, 0, 0, cY, sY);
-      const coreR = 44 * c0.persp, cc = coreColor(core);
-      const cg = ctx.createRadialGradient(c0.sx, c0.sy, 0, c0.sx, c0.sy, coreR * 2.6);
-      cg.addColorStop(0, cc + 'cc'); cg.addColorStop(0.4, cc + '33'); cg.addColorStop(1, 'transparent');
-      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(c0.sx, c0.sy, coreR * 2.6, 0, Math.PI * 2); ctx.fill();
-
-      // stelle (orbitano la loro fonte), depth-sorted
-      type P = { sx: number; sy: number; z: number; r: number; a: number; col: [number, number, number]; tw: number };
-      const pts: P[] = [];
-      for (let i = 0; i < st.length; i++) {
-        const s = st[i]; if (!starOn(s.si, s.bucket)) continue;
-        const h = hp[s.si]; if (!h) continue;
-        const la = s.phase + s.lspd * clock;
-        const wx = h.x + s.rl * Math.cos(la), wz = h.z + s.rl * Math.sin(la), wy = s.y;
-        const pr = project(wx, wy, wz, cY, sY);
-        const depth = (pr.z + 380) / 760;
-        pts.push({ sx: pr.sx, sy: pr.sy, z: pr.z, r: s.size * pr.persp, a: 0.3 + depth * 0.7, col: s.col, tw: s.tw });
-      }
-      pts.sort((p, q) => p.z - q.z);
-      ctx.globalCompositeOperation = 'lighter';
-      for (const p of pts) {
-        const tw = reduce ? 1 : 0.78 + 0.22 * Math.sin(clock * 0.004 + p.tw);
-        ctx.beginPath();
-        ctx.fillStyle = `rgba(${p.col[0]},${p.col[1]},${p.col[2]},${p.a * tw})`;
-        ctx.arc(p.sx, p.sy, Math.max(0.6, p.r), 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.globalCompositeOperation = 'source-over';
-
-      // hub delle fonti + etichette (davanti alle stelle di fondo)
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      for (const h of hp) {
-        const pr = project(h.x, 0, h.z, cY, sY);
-        const front = (pr.z + 380) / 760;
-        const on = srcOn(h.i);
-        const a = (on ? 0.5 : 0.18) + front * 0.5;
-        ctx.beginPath(); ctx.fillStyle = hexA(sources[h.i].color, a);
-        ctx.arc(pr.sx, pr.sy, 4.5 * pr.persp, 0, Math.PI * 2); ctx.fill();
-        ctx.font = '600 12px system-ui, sans-serif';
-        ctx.fillStyle = `rgba(203,213,225,${a})`;
-        ctx.fillText(sources[h.i].label, pr.sx + 8, pr.sy);
+      // Pianeti + etichette
+      const planetScreen: { sx: number; sy: number; r: number; z: number }[] = [];
+      for (const p of planets) {
+        const ang = p.theta + p.spd * clock;
+        const wx = p.dist * Math.cos(ang), wz = p.dist * Math.sin(ang);
+        const pr = project(wx, 0, wz, cY, sY);
+        const r = p.r * pr.persp;
+        planetScreen[p.i] = { sx: pr.sx, sy: pr.sy, r, z: pr.z };
+        const on = planetOn(p.i);
+        const lit: [number, number, number] = [
+          Math.round(p.rgb[0] + (255 - p.rgb[0]) * 0.55),
+          Math.round(p.rgb[1] + (255 - p.rgb[1]) * 0.55),
+          Math.round(p.rgb[2] + (255 - p.rgb[2]) * 0.55),
+        ];
+        bodies.push({
+          z: pr.z, draw: () => {
+            drawSphere(pr.sx, pr.sy, r, p.rgb, lit, c0.sx, c0.sy, on ? 1 : 0.16);
+          },
+        });
       }
 
-      // sole: disco + health
-      ctx.beginPath(); ctx.arc(c0.sx, c0.sy, coreR, 0, Math.PI * 2);
-      ctx.fillStyle = '#0b1120'; ctx.fill(); ctx.strokeStyle = cc; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = '#f1f5f9'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = `700 ${Math.round(coreR * 0.82)}px system-ui, sans-serif`;
-      ctx.fillText(String(core), c0.sx, c0.sy - coreR * 0.08);
-      ctx.font = `600 ${Math.round(coreR * 0.26)}px system-ui, sans-serif`;
-      ctx.fillStyle = cc; ctx.fillText(grade.toUpperCase(), c0.sx, c0.sy + coreR * 0.52);
+      // Lune di sentiment (orbitano il proprio pianeta, con inclinazione)
+      for (const m of moons) {
+        const p = planets[m.si];
+        const ang = p.theta + p.spd * clock;
+        const px = p.dist * Math.cos(ang), pz = p.dist * Math.sin(ang);
+        const la = m.phase + m.spd * clock;
+        const mx = px + m.orbR * Math.cos(la);
+        const my = Math.sin(la) * m.orbR * Math.sin(m.incl);
+        const mz = pz + m.orbR * Math.sin(la) * Math.cos(m.incl);
+        const pr = project(mx, my, mz, cY, sY);
+        const r = (2 + m.ten * 1.15) * pr.persp;
+        const col = MOON[m.bucket];
+        const on = moonOn(m);
+        if (!on) continue;
+        bodies.push({
+          z: pr.z, draw: () => {
+            drawSphere(pr.sx, pr.sy, r, hexToRgb(col.base), hexToRgb(col.lit), c0.sx, c0.sy, planetOn(m.si) ? 1 : 0.16);
+          },
+        });
+      }
+
+      bodies.sort((a, b) => a.z - b.z);
+      for (const b of bodies) b.draw();
+
+      // etichette (sopra tutto, discrete)
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.font = '500 11px system-ui, sans-serif';
+      for (const p of planets) {
+        const ps = planetScreen[p.i]; if (!ps) continue;
+        const on = planetOn(p.i);
+        ctx.fillStyle = `rgba(210,220,240,${on ? 0.75 : 0.2})`;
+        ctx.fillText(sources[p.i].label, ps.sx, ps.sy + ps.r + 6);
+      }
 
       raf = requestAnimationFrame(frame);
     };
@@ -191,15 +303,14 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
   }, [stars, sources, core, grade]);
 
   const sentiments: { key: string; label: string; color: string }[] = [
-    { key: 'positive', label: 'positive', color: '#34d399' },
-    { key: 'neutral', label: 'neutral', color: '#7dd3fc' },
-    { key: 'negative', label: 'negative', color: '#f87171' },
+    { key: 'positive', label: 'positive', color: '#2f9e6e' },
+    { key: 'neutral', label: 'neutral', color: '#5b7ba6' },
+    { key: 'negative', label: 'negative', color: '#b0473f' },
   ];
   const anySel = selSrc.size > 0 || selSent.size > 0;
 
   return (
     <div>
-      {/* Filtri: fonti × sentiment (multi-selezione, incrocio) */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         <span className="mr-1 text-[11px] uppercase tracking-wide text-slate-600">Sources:</span>
         {sources.map((s, i) => {
@@ -227,17 +338,20 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
         )}
       </div>
 
-      <div className="relative w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[#080c18]" style={{ height: 560 }}>
+      <div className="relative w-full overflow-hidden rounded-xl border border-[var(--border)] bg-black" style={{ height: 580 }}>
         <canvas ref={canvasRef} className="size-full cursor-grab touch-none active:cursor-grabbing" />
         <div className="pointer-events-none absolute left-4 top-4 text-sm">
           <p className="text-xs uppercase tracking-widest text-slate-500">Conversation galaxy</p>
           <p className="mt-0.5 text-lg font-semibold text-slate-100">{title}</p>
           <div className="mt-2 flex gap-4 text-xs text-slate-400">
+            <span>health <span className="font-semibold text-slate-100">{core}</span> · {grade}</span>
             <span><span className="text-slate-200">{total.toLocaleString('en-US')}</span> mentions</span>
             <span>sentiment <span className={avgSentiment > 0.15 ? 'text-emerald-400' : avgSentiment < -0.15 ? 'text-red-400' : 'text-sky-300'}>{avgSentiment > 0 ? '+' : ''}{avgSentiment}</span></span>
           </div>
         </div>
-        <p className="pointer-events-none absolute bottom-3 left-4 text-[11px] text-slate-600">Drag to rotate · sources orbit the sun, mentions orbit their source · height = sentiment · size = engagement</p>
+        <p className="pointer-events-none absolute bottom-3 left-4 text-[11px] text-slate-600">
+          The sun is your Health Index · planets are sources (size = volume) · each planet has 3 moons sized 1–10 by its sentiment split · drag to rotate
+        </p>
       </div>
     </div>
   );
