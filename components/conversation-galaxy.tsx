@@ -136,21 +136,48 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
     scene.add(glow); disposables.push(glowTex, glowMat);
 
     // ── Etichette sprite ──
+    // Nome fonte: testo grande su pillola scura semi-trasparente (leggibile ovunque).
     const makeLabel = (text: string) => {
       const c = document.createElement('canvas');
-      const fs = 42; c.width = 512; c.height = 96;
+      c.width = 640; c.height = 160;
       const cctx = c.getContext('2d')!;
-      cctx.font = `500 ${fs}px system-ui, sans-serif`;
+      cctx.font = '700 64px system-ui, sans-serif';
+      const tw = Math.min(600, cctx.measureText(text).width + 64);
+      const x0 = (640 - tw) / 2;
+      cctx.fillStyle = 'rgba(4,7,14,0.72)';
+      cctx.beginPath();
+      cctx.roundRect(x0, 28, tw, 104, 52);
+      cctx.fill();
+      cctx.strokeStyle = 'rgba(148,163,184,0.35)'; cctx.lineWidth = 3; cctx.stroke();
       cctx.textAlign = 'center'; cctx.textBaseline = 'middle';
-      cctx.shadowColor = 'rgba(0,0,0,0.9)'; cctx.shadowBlur = 10;
-      cctx.fillStyle = 'rgba(225,232,247,0.95)';
-      cctx.fillText(text, 256, 48);
+      cctx.fillStyle = 'rgba(238,243,252,0.98)';
+      cctx.fillText(text, 320, 82);
       const t = new THREE.CanvasTexture(c);
       const m = new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false });
       const s = new THREE.Sprite(m);
-      s.scale.set(30, 5.6, 1);
+      s.scale.set(34, 8.5, 1);
       disposables.push(t, m);
       return s;
+    };
+    // Numero del valore di sentiment (1..10) accanto alla luna.
+    const makeNumber = (n: number, color: string) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const cctx = c.getContext('2d')!;
+      cctx.font = '800 84px system-ui, sans-serif';
+      cctx.textAlign = 'center'; cctx.textBaseline = 'middle';
+      cctx.shadowColor = 'rgba(0,0,0,0.95)'; cctx.shadowBlur = 14;
+      cctx.fillStyle = color;
+      cctx.fillText(String(n), 64, 68);
+      const t = new THREE.CanvasTexture(c);
+      const m = new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false });
+      const s = new THREE.Sprite(m);
+      s.scale.set(6, 6, 1);
+      disposables.push(t, m);
+      return s;
+    };
+    const MOON_NUM_COLOR: Record<string, string> = {
+      positive: '#8df0c2', neutral: '#b8cdf0', negative: '#ff9d8a',
     };
 
     // ── Sistemi planetari: pianeta texture reale + 3 lune roccia tinta ──
@@ -161,7 +188,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
 
     type System = {
       group: THREE.Group; planet: THREE.Mesh; dist: number; theta: number; spd: number;
-      moons: { mesh: THREE.Mesh; bucket: string; orbR: number; phase: number; spd: number; incl: number }[];
+      moons: { mesh: THREE.Mesh; num: THREE.Sprite; mr: number; bucket: string; orbR: number; phase: number; spd: number; incl: number }[];
       idx: number;
     };
     const systems: System[] = sources.map((src, i) => {
@@ -175,7 +202,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       disposables.push(pGeo, pMat);
 
       const label = makeLabel(src.label);
-      label.position.set(0, -(r + 7), 0);
+      label.position.set(0, -(r + 10), 0);
       group.add(label);
 
       const moons = split[i]
@@ -186,9 +213,11 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
           const mr = 0.9 + ten * 0.34; // scala 1..10 → raggio, sempre << pianeta
           mesh.scale.setScalar(mr);
           group.add(mesh);
+          const num = makeNumber(ten, MOON_NUM_COLOR[bucket]);
+          group.add(num);
           disposables.push(mMat);
           return {
-            mesh, bucket,
+            mesh, num, mr, bucket,
             orbR: r + 5 + k * 4.2,
             phase: rand(i * 31 + k * 7) * Math.PI * 2,
             spd: (0.32 - k * 0.07) * (reduce ? 0 : 1),
@@ -233,13 +262,16 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
         sys.group.visible = selS.size === 0 || selS.has(sys.idx);
         for (const m of sys.moons) {
           const la = m.phase + t * m.spd;
-          m.mesh.position.set(
-            Math.cos(la) * m.orbR,
-            Math.sin(la) * m.orbR * Math.sin(m.incl),
-            Math.sin(la) * m.orbR * Math.cos(m.incl),
-          );
+          const mx = Math.cos(la) * m.orbR;
+          const my = Math.sin(la) * m.orbR * Math.sin(m.incl);
+          const mz = Math.sin(la) * m.orbR * Math.cos(m.incl);
+          m.mesh.position.set(mx, my, mz);
           m.mesh.rotation.y = t * 0.3;
-          m.mesh.visible = selX.size === 0 || selX.has(m.bucket);
+          // il numero segue la luna, appena sopra di essa
+          m.num.position.set(mx, my + m.mr + 3, mz);
+          const vis = selX.size === 0 || selX.has(m.bucket);
+          m.mesh.visible = vis;
+          m.num.visible = vis;
         }
       }
       fillLight.position.copy(camera.position);
