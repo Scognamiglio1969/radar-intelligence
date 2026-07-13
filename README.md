@@ -31,7 +31,7 @@ just want to collect data).
 - **Brand vs Market Health Index**: one 0–100 score for the whole theme, and — when you
   flag one benchmark entity as *your brand* — your brand's score next to the market and a
   competitive ranking.
-- **11 advanced insight visualizations** (see below), from a live 3D "Conversation Galaxy"
+- **12 advanced insight visualizations** (see below), from a live 3D "Conversation Galaxy"
   to a Share-of-Voice streamgraph, a Source→Topic→Sentiment Sankey and a real-world map.
 - **Content Studio**: turn a concept into a multi-format kit, explore alternative hooks,
   refine drafts conversationally in your brand voice.
@@ -94,7 +94,7 @@ features turn on immediately.
 | Benchmark | Share of voice, trends and comparative sentiment across configurable entities |
 | Audience | Most active communities, languages, influential authors, topics by community |
 | Content | Engagement ranking (per-platform percentile) + AI quality score |
-| Advanced insights | 11 dedicated visualizations — see the section below |
+| Advanced insights | 12 dedicated visualizations — see the section below |
 | Content Studio | Concept → multi-format kit, Hook Lab, conversational refinement |
 | Alerts / Brief | Auto-detected volume spikes & sentiment drops; daily executive brief |
 | War Room | Full-screen live view for a wall display |
@@ -116,6 +116,7 @@ PDF / PowerPoint / Word / Excel exports:
 | **Geographic map** | Real-world choropleth: each language shades its countries (English → US/UK/CA/AU, Spanish → Latin America…), colored by sentiment. |
 | **Semantic constellation** | Key terms as a star map — size = frequency, color = sentiment, links = co-occurrence. |
 | **Influencer network** | Force-directed graph of the top authors, clustered by community, sized by engagement. |
+| **Author pyramid** | Authors tiered by influence (mega / macro / micro / long tail) with the share of reach each tier holds — is your conversation carried by a few big voices or broadly distributed? |
 | **Crisis radar** | A risk gauge plus the anatomy of the biggest spike: what drove it, and the content that weighed most. |
 | **Topics · Heatmap · Waterfall · Clusters · Cause-effect** | Topic×sentiment map, hourly heatmap, sentiment waterfall, conversation clusters, AI cause-effect chains. |
 
