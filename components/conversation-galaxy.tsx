@@ -33,6 +33,8 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
   const [selSent, setSelSent] = useState<Set<string>>(new Set());
   const selSrcRef = useRef(selSrc); selSrcRef.current = selSrc;
   const selSentRef = useRef(selSent); selSentRef.current = selSent;
+  const [hatch, setHatch] = useState(false);
+  const hatchRef = useRef(() => {}); hatchRef.current = () => setHatch(true);
   const toggle = <T,>(set: React.Dispatch<React.SetStateAction<Set<T>>>, k: T) =>
     set((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
@@ -191,13 +193,17 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       moons: { mesh: THREE.Mesh; num: THREE.Sprite; mr: number; bucket: string; orbR: number; phase: number; spd: number; incl: number }[];
       idx: number;
     };
+    const planetMeshes: THREE.Mesh[] = []; // per il raycast (easter egg sulla Terra)
     const systems: System[] = sources.map((src, i) => {
       const group = new THREE.Group();
       const r = 7.5 + Math.sqrt(src.count / maxCount) * 9;
+      const texName = PLANET_TEX[i % PLANET_TEX.length];
       const pGeo = new THREE.SphereGeometry(r, 48, 32);
-      const pMat = new THREE.MeshStandardMaterial({ map: tex(PLANET_TEX[i % PLANET_TEX.length]), roughness: 0.9, metalness: 0 });
+      const pMat = new THREE.MeshStandardMaterial({ map: tex(texName), roughness: 0.9, metalness: 0 });
       const planet = new THREE.Mesh(pGeo, pMat);
       planet.rotation.z = (rand(i * 8.8) - 0.5) * 0.5; // leggera inclinazione assiale
+      planet.userData.isEarth = texName === '2k_earth_daymap';
+      planetMeshes.push(planet);
       group.add(planet);
       disposables.push(pGeo, pMat);
 
@@ -247,6 +253,26 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       disposables.push(g, m);
     }
 
+    // ── Easter egg: click sulla Terra ──
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let downPt: { x: number; y: number } | null = null;
+    const onCanvasDown = (e: PointerEvent) => { downPt = { x: e.clientX, y: e.clientY }; };
+    const onCanvasUp = (e: PointerEvent) => {
+      if (!downPt) return;
+      const moved = Math.hypot(e.clientX - downPt.x, e.clientY - downPt.y);
+      downPt = null;
+      if (moved > 6) return; // era un drag, non un click
+      const rect = renderer.domElement.getBoundingClientRect();
+      ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(ndc, camera);
+      const hit = raycaster.intersectObjects(planetMeshes, false)[0];
+      if (hit && (hit.object as THREE.Mesh).userData.isEarth) hatchRef.current();
+    };
+    renderer.domElement.addEventListener('pointerdown', onCanvasDown);
+    renderer.domElement.addEventListener('pointerup', onCanvasUp);
+
     // ── Loop ──
     const clockT = new THREE.Clock();
     let raf = 0;
@@ -292,6 +318,8 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       cancelAnimationFrame(raf);
       ro.disconnect();
       controls.dispose();
+      renderer.domElement.removeEventListener('pointerdown', onCanvasDown);
+      renderer.domElement.removeEventListener('pointerup', onCanvasUp);
       for (const d of disposables) d.dispose();
       renderer.dispose();
       mount.removeChild(renderer.domElement);
@@ -346,12 +374,59 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
           </div>
         </div>
         <p className="pointer-events-none absolute bottom-3 left-4 max-w-[70%] text-[11px] text-slate-600">
-          Drag to orbit · scroll to fly closer · planets = sources (size = volume) · 3 moons each, sized 1–10 by sentiment split
+Click the Earth for a surprise · drag to orbit · scroll to fly closer · planets = sources (size = volume) · 3 moons each, sized 1–10 by sentiment split
         </p>
         <p className="pointer-events-none absolute bottom-3 right-4 text-[10px] text-slate-700">
           Textures © Solar System Scope · CC BY 4.0
         </p>
+
+        {hatch && <EggHatch onClose={() => setHatch(false)} />}
       </div>
+    </div>
+  );
+}
+
+// ── 🥚 Easter egg: clic sulla Terra → l'uovo si schiude in un pulcino ──
+function EggHatch({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 9000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+  const shards = Array.from({ length: 8 }, (_, i) => {
+    const a = (i / 8) * Math.PI * 2 + 0.3;
+    return { dx: `${Math.cos(a) * 180}px`, dy: `${Math.sin(a) * 140 - 40}px`, r: `${(i % 2 ? 1 : -1) * 220}deg`, d: `${1.5 + i * 0.02}s` };
+  });
+  return (
+    <div onClick={onClose}
+      className="absolute inset-0 z-50 flex cursor-pointer flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+      <style>{`
+        @keyframes eggWobble{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
+        @keyframes eggOut{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.35) translateY(-10px)}}
+        @keyframes chickIn{0%{opacity:0;transform:translateY(60px) scale(.25)}60%{opacity:1;transform:translateY(-14px) scale(1.1)}100%{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes eggTextIn{to{opacity:1;transform:translateY(0)}}
+        @keyframes eggShard{0%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--r))}}
+        .egg-mask{-webkit-mask:radial-gradient(circle at 50% 46%,#000 52%,transparent 70%);mask:radial-gradient(circle at 50% 46%,#000 52%,transparent 70%)}
+      `}</style>
+      <div className="relative" style={{ width: 340, height: 340 }}>
+        <img src="/egg/chick.jpg" alt="chick" draggable={false}
+          className="egg-mask absolute left-1/2 top-1/2 w-[320px] -translate-x-1/2 -translate-y-1/2 opacity-0"
+          style={{ animation: 'chickIn .8s cubic-bezier(.2,1.5,.4,1) 1.7s forwards' }} />
+        <img src="/egg/egg.jpg" alt="egg" draggable={false}
+          className="egg-mask absolute left-1/2 top-1/2 w-[220px] -translate-x-1/2 -translate-y-1/2"
+          style={{ animation: 'eggWobble .28s ease-in-out 0s 5, eggOut .5s ease-in 1.5s forwards', transformOrigin: '50% 80%' }} />
+        {shards.map((s, i) => (
+          <span key={i} className="absolute left-1/2 top-1/2 size-3 rounded-[2px] bg-[#f3efe6]"
+            style={{ ['--dx' as string]: s.dx, ['--dy' as string]: s.dy, ['--r' as string]: s.r,
+              animation: `eggShard .9s ease-out ${s.d} forwards`, opacity: 0 }} />
+        ))}
+      </div>
+      <p className="mt-2 max-w-md px-6 text-center text-lg font-semibold text-slate-100 opacity-0"
+        style={{ transform: 'translateY(14px)', animation: 'eggTextIn .7s ease 2.5s forwards' }}>
+        Massimo Scognamiglio &amp; Anthropic Claude had a lot of fun together 🐣
+      </p>
+      <p className="mt-3 text-xs text-slate-500 opacity-0" style={{ animation: 'eggTextIn .6s ease 3.2s forwards' }}>
+        (tap anywhere to close)
+      </p>
     </div>
   );
 }
