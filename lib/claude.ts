@@ -31,20 +31,68 @@ export async function claudeAvailable(): Promise<boolean> {
   return Boolean(await anthropicKey());
 }
 
-/** Monthly API spend cap in USD (env API_BUDGET_USD, default 6). */
-export function monthlyBudgetUsd(): number {
+/** API spend cap in USD. Admin-configurable (meta), else env API_BUDGET_USD, else 6. */
+export async function budgetUsd(): Promise<number> {
+  const { getMeta } = await import('@/lib/db');
+  const meta = await getMeta<number>('api_budget_usd');
+  if (typeof meta === 'number' && meta > 0) return meta;
   const n = Number(process.env.API_BUDGET_USD);
   return Number.isFinite(n) && n > 0 ? n : 6;
 }
 
-/** Current-month API spend in USD. */
-export async function monthSpendUsd(): Promise<number> {
+/** Start of the current spend window: last manual reset, or the 1st of this month if never reset. */
+export async function spendResetAt(): Promise<Date> {
+  const { getMeta } = await import('@/lib/db');
+  const iso = await getMeta<string>('spend_reset_at');
+  if (iso) { const d = new Date(iso); if (!Number.isNaN(d.getTime())) return d; }
+  const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+/** API spend in USD since the last reset (this is what the budget cap checks against). */
+export async function currentSpendUsd(): Promise<number> {
   const db = await getDb();
-  const start = new Date();
-  start.setDate(1); start.setHours(0, 0, 0, 0);
+  const since = await spendResetAt();
   const [row] = await db.select({ cost: sql<number | null>`sum(${apiUsage.costUsd})` })
-    .from(apiUsage).where(gte(apiUsage.ts, start));
+    .from(apiUsage).where(gte(apiUsage.ts, since));
   return Number(row.cost ?? 0);
+}
+
+/** All-time API spend in USD across every user — never affected by resets. */
+export async function lifetimeSpendUsd(): Promise<{ cost: number; calls: number }> {
+  const db = await getDb();
+  const [row] = await db.select({
+    cost: sql<number | null>`sum(${apiUsage.costUsd})`,
+    calls: sql<number>`count(*)`,
+  }).from(apiUsage);
+  return { cost: Number(row.cost ?? 0), calls: Number(row.calls ?? 0) };
+}
+
+/** Full cost-control snapshot for the admin UI. */
+export async function costControl() {
+  const db = await getDb();
+  const [budget, since, lifetime] = await Promise.all([budgetUsd(), spendResetAt(), lifetimeSpendUsd()]);
+  const [cur] = await db.select({
+    cost: sql<number | null>`sum(${apiUsage.costUsd})`,
+    calls: sql<number>`count(*)`,
+    inTok: sql<number | null>`sum(${apiUsage.inputTokens})`,
+    outTok: sql<number | null>`sum(${apiUsage.outputTokens})`,
+  }).from(apiUsage).where(gte(apiUsage.ts, since));
+  const byPurpose = await db.select({
+    purpose: apiUsage.purpose,
+    cost: sql<number | null>`sum(${apiUsage.costUsd})`,
+    calls: sql<number>`count(*)`,
+  }).from(apiUsage).where(gte(apiUsage.ts, since)).groupBy(apiUsage.purpose);
+  return {
+    budget,
+    resetAt: since.toISOString(),
+    current: {
+      cost: Number(cur.cost ?? 0), calls: Number(cur.calls ?? 0),
+      inTok: Number(cur.inTok ?? 0), outTok: Number(cur.outTok ?? 0),
+    },
+    byPurpose: byPurpose.map((p) => ({ purpose: p.purpose, cost: Number(p.cost ?? 0), calls: Number(p.calls) })),
+    lifetime,
+  };
 }
 
 export const MODELS = { haiku: HAIKU, sonnet: SONNET };
@@ -63,10 +111,10 @@ export async function callClaude(model: string, purpose: string, system: string,
   if (!client) return null;
   system = sanitize(system);
   user = sanitize(user);
-  // Emergency brake: never exceed the monthly cap.
-  const spend = await monthSpendUsd();
-  if (spend >= monthlyBudgetUsd()) {
-    console.warn(`[claude] spend cap reached ($${spend.toFixed(2)}/$${monthlyBudgetUsd()}): "${purpose}" call skipped`);
+  // Emergency brake: never exceed the spend cap (since last reset).
+  const [spend, budget] = await Promise.all([currentSpendUsd(), budgetUsd()]);
+  if (spend >= budget) {
+    console.warn(`[claude] spend cap reached ($${spend.toFixed(2)}/$${budget}): "${purpose}" call skipped`);
     return null;
   }
   const msg = await client.messages.create({

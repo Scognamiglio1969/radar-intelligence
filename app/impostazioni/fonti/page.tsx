@@ -1,11 +1,11 @@
 import { Info } from 'lucide-react';
 import { getMeta } from '@/lib/db';
-import { monthCost } from '@/lib/data';
 import { CONNECTORS } from '@/lib/connectors';
 import { getConnectorCredStatuses, hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { ConnectorKeys } from '@/components/connector-keys';
-import { claudeAvailable, monthlyBudgetUsd } from '@/lib/claude';
+import { CostControl } from '@/components/cost-control';
+import { claudeAvailable, costControl } from '@/lib/claude';
 import { PageHeader, fmtDate } from '@/components/ui';
 import type { SourceStatus } from '@/lib/ingest';
 
@@ -34,11 +34,11 @@ export default async function FontiPage() {
   // Hydrate saved keys before reading the "active" status of the connectors.
   await hydrateConnectorCredentials();
   const [cost, sourceStatus, credStatuses, currentUser] = await Promise.all([
-    monthCost(), getMeta<SourceStatus>('source_status'), getConnectorCredStatuses(), getCurrentUser(),
+    costControl(), getMeta<SourceStatus>('source_status'), getConnectorCredStatuses(), getCurrentUser(),
   ]);
   const canEditKeys = isAdmin(currentUser);
-  const budget = monthlyBudgetUsd();
-  const budgetPct = Math.min(100, (cost.cost / budget) * 100);
+  const budget = cost.budget;
+  const budgetPct = Math.min(100, (cost.current.cost / budget) * 100);
 
   return (
     <>
@@ -102,12 +102,12 @@ export default async function FontiPage() {
           </section>
         )}
         <section className="panel h-fit px-5 py-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-300">Claude API budget (current month)</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-300">AI spend & budget</h2>
           {await claudeAvailable() ? (
             <>
               <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold">${cost.cost.toFixed(2)}</p>
-                <p className="text-sm text-slate-500">of ${budget.toFixed(2)} available</p>
+                <p className="text-3xl font-bold">${cost.current.cost.toFixed(2)}</p>
+                <p className="text-sm text-slate-500">of ${budget.toFixed(2)} — since last reset</p>
               </div>
               <div className="mt-2 h-2 rounded bg-white/5">
                 <div
@@ -116,21 +116,31 @@ export default async function FontiPage() {
                 />
               </div>
               <p className="mt-2 text-xs text-slate-500">
-                {cost.calls.toLocaleString('en-US')} calls · {(cost.inTok / 1000).toFixed(0)}k input tokens · {(cost.outTok / 1000).toFixed(0)}k output.
-                Once the cap is reached, the app stops calling Claude until next month (data collection keeps running).
+                {cost.current.calls.toLocaleString('en-US')} calls · {(cost.current.inTok / 1000).toFixed(0)}k input tokens · {(cost.current.outTok / 1000).toFixed(0)}k output.
+                Once the cap is reached, the app stops calling the AI (data collection keeps running).
               </p>
-              <div className="mt-3 flex flex-col gap-1.5">
-                {cost.byPurpose.map((p) => (
-                  <div key={p.purpose} className="flex justify-between text-xs">
-                    <span className="text-slate-400">{p.purpose.replace(/_/g, ' ')}</span>
-                    <span className="text-slate-500">${p.cost.toFixed(3)} · {p.calls} calls</span>
-                  </div>
-                ))}
-              </div>
+              {cost.byPurpose.length > 0 && (
+                <div className="mt-3 flex flex-col gap-1.5">
+                  {cost.byPurpose.map((p) => (
+                    <div key={p.purpose} className="flex justify-between text-xs">
+                      <span className="text-slate-400">{p.purpose.replace(/_/g, ' ')}</span>
+                      <span className="text-slate-500">${p.cost.toFixed(3)} · {p.calls} calls</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {canEditKeys && (
+                <CostControl
+                  budget={cost.budget}
+                  lifetimeCost={cost.lifetime.cost}
+                  lifetimeCalls={cost.lifetime.calls}
+                  resetAt={cost.resetAt}
+                />
+              )}
             </>
           ) : (
             <p className="text-sm text-amber-400/90">
-              No Claude key yet: add one above (or set ANTHROPIC_API_KEY). Data collection works, but sentiment, briefs and ratings stay pending.
+              No AI key yet: add one above (or set ANTHROPIC_API_KEY). Data collection works, but sentiment, briefs and ratings stay pending.
             </p>
           )}
         </section>

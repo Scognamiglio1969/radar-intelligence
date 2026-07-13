@@ -4,8 +4,35 @@ import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
-import { getDb } from '@/lib/db';
+import { getDb, setMeta } from '@/lib/db';
 import { benchmarkEntities, projects, shareLinks } from '@/lib/db/schema';
+import { getCurrentUser, isAdmin } from '@/lib/auth';
+import { verifyPasswordHash } from '@/lib/password';
+
+export type ActionResult = { ok: boolean; msg: string };
+
+/** Admin: set the API spend budget (USD). */
+export async function updateApiBudget(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!isAdmin(user)) return { ok: false, msg: 'Admins only.' };
+  const amount = Number(formData.get('budget'));
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, msg: 'Enter a positive amount.' };
+  await setMeta('api_budget_usd', Math.round(amount * 100) / 100);
+  revalidatePath('/impostazioni/fonti');
+  return { ok: true, msg: `Budget set to $${amount.toFixed(2)}.` };
+}
+
+/** Admin: reset the spend counter (starts a new window). Requires the admin's own password. */
+export async function resetApiSpend(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!isAdmin(user) || !user) return { ok: false, msg: 'Admins only.' };
+  const password = String(formData.get('password') ?? '');
+  if (!password) return { ok: false, msg: 'Enter your account password.' };
+  if (!verifyPasswordHash(password, user.passwordHash)) return { ok: false, msg: 'Incorrect password.' };
+  await setMeta('spend_reset_at', new Date().toISOString());
+  revalidatePath('/impostazioni/fonti');
+  return { ok: true, msg: 'Spend counter reset. The all-time total is unchanged.' };
+}
 
 function parseKeywords(raw: string): string[] {
   return [...new Set(raw.split(',').map((s) => s.trim()).filter(Boolean))].slice(0, 10);
