@@ -25,11 +25,18 @@ just want to collect data).
   and Reddit / YouTube with a free API key.
 - **6 premium connectors ready** (X, Instagram, Facebook, TikTok, LinkedIn, NewsAPI) —
   drop in a key and the source turns on.
-- **AI analysis with Claude**: sentiment, relevance scoring, story clustering, daily
-  executive briefs, conversation clusters, cause-effect chains, quality scores.
+- **AI analysis with Claude**: sentiment, **emotion** (joy/trust/fear/anger/sadness/
+  surprise), relevance scoring, story clustering, daily executive briefs, conversation
+  clusters, cause-effect chains, quality scores.
+- **Brand vs Market Health Index**: one 0–100 score for the whole theme, and — when you
+  flag one benchmark entity as *your brand* — your brand's score next to the market and a
+  competitive ranking.
+- **11 advanced insight visualizations** (see below), from a live 3D "Conversation Galaxy"
+  to a Share-of-Voice streamgraph, a Source→Topic→Sentiment Sankey and a real-world map.
 - **Content Studio**: turn a concept into a multi-format kit, explore alternative hooks,
   refine drafts conversationally in your brand voice.
-- **Exports**: branded PDF, PowerPoint, Word, Excel. Read-only share links.
+- **Exports**: branded PDF, PowerPoint, Word, Excel — every insight included. Read-only
+  share links.
 
 ## Try it in 30 seconds (local, zero config)
 
@@ -87,11 +94,30 @@ features turn on immediately.
 | Benchmark | Share of voice, trends and comparative sentiment across configurable entities |
 | Audience | Most active communities, languages, influential authors, topics by community |
 | Content | Engagement ranking (per-platform percentile) + AI quality score |
-| Insights | Topics × Sentiment, hourly heatmap, sentiment waterfall, clusters, cause-effect |
+| Advanced insights | 11 dedicated visualizations — see the section below |
 | Content Studio | Concept → multi-format kit, Hook Lab, conversational refinement |
 | Alerts / Brief | Auto-detected volume spikes & sentiment drops; daily executive brief |
 | War Room | Full-screen live view for a wall display |
-| Settings | Projects & keywords, team, sources status, API budget |
+| Settings | Projects & keywords, team (mark one entity as *your brand*), sources status, API budget |
+
+## Advanced insights
+
+A suite of purpose-built visualizations, each on its own page and each included in the
+PDF / PowerPoint / Word / Excel exports:
+
+| Insight | What it shows |
+|---|---|
+| **Conversation Galaxy** ✦ | The whole conversation as a real WebGL solar system: the sun is your Health Index, planets are sources (size = volume) with photographic NASA-based textures, and each planet has three moons sized 1–10 by its sentiment split. Drag to orbit, scroll to fly closer. |
+| **Health Index** | One 0–100 composite (sentiment, positive share, momentum, resonance). Market health always; **Brand health + competitive ranking** when you flag *your brand*. |
+| **Share of Voice** | 100% stacked area of each entity's share of the conversation over time, plus an explicit 30-day ranking. |
+| **Conversation flow** | Source → Topic → Sentiment Sankey. **Multi-select cross-filtering**: pick any sources × sentiments to isolate a sub-flow (e.g. what drives negativity in two sources). Rich hover tooltips. |
+| **Momentum quadrant** | Topics by volume × acceleration: Rising stars / Emerging / Steady / Declining. |
+| **Emotion radar** | The emotional fingerprint beyond sentiment (joy, trust, fear, anger, sadness, surprise). |
+| **Geographic map** | Real-world choropleth: each language shades its countries (English → US/UK/CA/AU, Spanish → Latin America…), colored by sentiment. |
+| **Semantic constellation** | Key terms as a star map — size = frequency, color = sentiment, links = co-occurrence. |
+| **Influencer network** | Force-directed graph of the top authors, clustered by community, sized by engagement. |
+| **Crisis radar** | A risk gauge plus the anatomy of the biggest spike: what drove it, and the content that weighed most. |
+| **Topics · Heatmap · Waterfall · Clusters · Cause-effect** | Topic×sentiment map, hourly heatmap, sentiment waterfall, conversation clusters, AI cause-effect chains. |
 
 ## Architecture
 
@@ -99,9 +125,13 @@ features turn on immediately.
 - **Postgres**: Neon in production, embedded **PGlite** for local dev (zero setup)
 - **Drizzle ORM**, schema created & migrated automatically on boot
 - **Claude** (`@anthropic-ai/sdk`) with a hard monthly spend cap
+- **Recharts** + hand-built SVG/Canvas charts, and **three.js** for the 3D galaxy
 - Pluggable **connectors** (`lib/connectors/`) — adding a source is one small file
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for a walk-through of adding a connector.
+
+Planet/sun/moon textures in the Conversation Galaxy are © [Solar System Scope](https://www.solarsystemscope.com/textures/),
+licensed **CC BY 4.0**.
 
 ## Legal & responsible use
 
