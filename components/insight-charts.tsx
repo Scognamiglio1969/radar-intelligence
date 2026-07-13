@@ -490,6 +490,43 @@ export function SemanticConstellation({ nodes, edges }: { nodes: CNode[]; edges:
   );
 }
 
+// ── 10. Piramide degli autori (tiering di influenza) ──────────────────────
+type AuthorTier = { key: string; label: string; authors: number; reach: number; sharePct: number; examples: string[] };
+const TIER_COLOR: Record<string, string> = {
+  mega: '#fbbf24', macro: '#a78bfa', micro: '#38bdf8', longtail: '#64748b',
+};
+
+export function AuthorPyramid({ tiers }: { tiers: AuthorTier[] }) {
+  const W = 1000, H = 460, apex = 70, maxW = 860, top = 20, bottom = H - 20;
+  const cx = W / 2;
+  const maxCount = Math.max(1, ...tiers.map((t) => t.authors));
+  // Larghezza di ogni livello ∝ radice del numero di autori (i "mega" pochi → stretti).
+  const widthOf = (count: number) => apex + Math.sqrt(count / maxCount) * (maxW - apex);
+  const bandH = (bottom - top) / Math.max(1, tiers.length);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 480 }}>
+      {tiers.map((t, i) => {
+        const y0 = top + i * bandH, y1 = y0 + bandH - 4;
+        const tw = i === 0 ? apex : widthOf(tiers[i - 1].authors);
+        const bw = widthOf(t.authors);
+        const c = TIER_COLOR[t.key] ?? '#64748b';
+        return (
+          <g key={t.key}>
+            <title>{`${t.label} · ${t.authors} authors · ${t.sharePct}% of reach`}</title>
+            <path d={`M${cx - tw / 2},${y0} L${cx + tw / 2},${y0} L${cx + bw / 2},${y1} L${cx - bw / 2},${y1} Z`}
+              fill={c} fillOpacity={0.28} stroke={c} strokeWidth={1.5} />
+            <text x={cx} y={(y0 + y1) / 2 - 8} textAnchor="middle" fontSize="15" fontWeight={700} fill="#e2e8f0">{t.label}</text>
+            <text x={cx} y={(y0 + y1) / 2 + 12} textAnchor="middle" fontSize="12" fill="#94a3b8">
+              {t.authors.toLocaleString('en-US')} author{t.authors === 1 ? '' : 's'} · <tspan fill={c} fontWeight={700}>{t.sharePct}%</tspan> of reach
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ── 7. Momentum Quadrant (volume × accelerazione) ─────────────────────────
 type QuadrantPoint = { topic: string; volume: number; acceleration: number; sentiment: number; quadrant: string };
 const QUAD_COLOR: Record<string, string> = {

@@ -127,6 +127,20 @@ export async function GET(req: Request) {
   for (const r of data.dashboard.topTopics) wsT.addRow({ t: r.topic, n: Number(r.n) });
   }
 
+  // 4·pyramid. Author influence pyramid
+  if (has('pyramid') && data.pyramid.tiers.length) {
+  const wsPy = sheet(wb, 'Author pyramid', [
+    { header: 'Tier', key: 't', width: 16 },
+    { header: 'Authors', key: 'a', width: 10 },
+    { header: 'Reach', key: 'r', width: 12 },
+    { header: 'Share of reach %', key: 's', width: 16 },
+    { header: 'Examples', key: 'e', width: 40 },
+  ]);
+  for (const t of data.pyramid.tiers) {
+    wsPy.addRow({ t: t.label, a: t.authors, r: Math.round(t.reach), s: t.sharePct, e: t.examples.join(', ') });
+  }
+  }
+
   // 4·network. Influencer network (top autori per community)
   if (has('network') && data.network.nodes.length) {
   const wsNet = sheet(wb, 'Influencer network', [

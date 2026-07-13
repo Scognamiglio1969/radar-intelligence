@@ -212,6 +212,23 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── 4·pyramid. Author influence pyramid
+  if (has('pyramid') && data.pyramid.tiers.length) {
+    const sp = pptx.addSlide({ masterName: 'DARK' });
+    sp.addText('Author influence pyramid — reach concentration', titleOpts);
+    const tcol: Record<string, string> = { mega: 'FBBF24', macro: 'A78BFA', micro: '38BDF8', longtail: '64748B' };
+    sp.addChart('bar', [{
+      name: 'Share of reach %',
+      labels: data.pyramid.tiers.map((t) => `${t.label} (${t.authors})`),
+      values: data.pyramid.tiers.map((t) => t.sharePct),
+    }], {
+      x: 0.5, y: 1.3, w: 12.3, h: 5.4, barDir: 'bar',
+      chartColors: data.pyramid.tiers.map((t) => tcol[t.key] ?? '64748B'),
+      catAxisLabelColor: TEXT, valAxisLabelColor: MUTED, showLegend: false,
+      valAxisMinVal: 0, valGridLine: { color: '1E2A4A' }, catGridLine: { style: 'none' },
+    });
+  }
+
   // ── 4·network. Influencer network (top autori)
   if (has('network') && data.network.nodes.length) {
     const sn = pptx.addSlide({ masterName: 'DARK' });

@@ -247,6 +247,58 @@ export async function currentProjectForInsights() {
 }
 
 // ---------------------------------------------------------------------------
+// 10. Piramide degli autori (tiering di influenza + concentrazione della reach)
+// ---------------------------------------------------------------------------
+export type AuthorTier = {
+  key: string; label: string; authors: number; reach: number; sharePct: number; examples: string[];
+};
+export type AuthorPyramid = { tiers: AuthorTier[]; totalAuthors: number; topConcentration: number };
+
+export async function authorPyramid(projectId: number, days = 14): Promise<AuthorPyramid> {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const rows = (await db.execute(sql`
+    SELECT coalesce(author_handle, author) AS id,
+      count(*) AS posts, sum(engagement_score) AS reach
+    FROM mentions
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+      AND coalesce(author_handle, author) IS NOT NULL AND coalesce(author_handle, author) <> ''
+    GROUP BY coalesce(author_handle, author)
+    ORDER BY sum(engagement_score) DESC NULLS LAST
+  `)).rows as { id: string; posts: number; reach: number }[];
+
+  const authors = rows.map((r) => ({ id: r.id, reach: Math.max(0, Number(r.reach ?? 0)) }));
+  const n = authors.length;
+  if (n === 0) return { tiers: [], totalAuthors: 0, topConcentration: 0 };
+
+  const totalReach = authors.reduce((s, a) => s + a.reach, 0) || 1;
+  // Confini per rango: top 5% / 20% / 50% / resto.
+  const b1 = Math.max(1, Math.round(n * 0.05));
+  const b2 = Math.max(b1 + 1, Math.round(n * 0.2));
+  const b3 = Math.max(b2 + 1, Math.round(n * 0.5));
+  const defs: { key: string; label: string; from: number; to: number }[] = [
+    { key: 'mega', label: 'Mega voices', from: 0, to: b1 },
+    { key: 'macro', label: 'Macro', from: b1, to: b2 },
+    { key: 'micro', label: 'Micro', from: b2, to: b3 },
+    { key: 'longtail', label: 'Long tail', from: b3, to: n },
+  ];
+  const tiers: AuthorTier[] = defs
+    .map((d) => {
+      const slice = authors.slice(d.from, d.to);
+      const reach = slice.reduce((s, a) => s + a.reach, 0);
+      return {
+        key: d.key, label: d.label, authors: slice.length, reach,
+        sharePct: Math.round((reach / totalReach) * 1000) / 10,
+        examples: slice.slice(0, 3).map((a) => a.id),
+      };
+    })
+    .filter((t) => t.authors > 0);
+
+  const topConcentration = tiers[0]?.sharePct ?? 0; // % di reach in mano ai "mega"
+  return { tiers, totalAuthors: n, topConcentration };
+}
+
+// ---------------------------------------------------------------------------
 // ★ Conversation Galaxy — riassunto 3D vivo dell'intera conversazione
 // ---------------------------------------------------------------------------
 export type GalaxyStar = { si: number; s: number; e: number; age: number };

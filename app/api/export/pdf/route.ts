@@ -250,6 +250,12 @@ export async function GET(req: Request) {
     }
   }
 
+  // ---- Author pyramid ----
+  if (has('pyramid') && data.pyramid.tiers.length) {
+    heading(`Author influence pyramid — top tier holds ${data.pyramid.topConcentration}% of reach`);
+    hbars(data.pyramid.tiers.map((t) => ({ label: `${t.label} (${t.authors})`, value: t.sharePct })));
+  }
+
   // ---- Influencer network ----
   if (has('network') && data.network.nodes.length) {
     heading('Influencer network — top voices by community');

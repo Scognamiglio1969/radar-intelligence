@@ -144,6 +144,15 @@ export async function GET(req: Request) {
     }
   }
 
+  // Author pyramid
+  if (has('pyramid') && data.pyramid.tiers.length) {
+    children.push(h1(`Author influence pyramid — top tier holds ${data.pyramid.topConcentration}% of reach`));
+    children.push(table(
+      ['Tier', 'Authors', 'Share of reach', 'Examples'],
+      data.pyramid.tiers.map((t) => [t.label, String(t.authors), `${t.sharePct}%`, t.examples.join(', ')]),
+    ));
+  }
+
   // Influencer network
   if (has('network') && data.network.nodes.length) {
     children.push(h1('Influencer network — top voices by community'));
