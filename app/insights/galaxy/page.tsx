@@ -14,7 +14,7 @@ export default async function GalaxyInsightPage() {
     <>
       <PageHeader
         title="Conversation Galaxy"
-        subtitle="The whole conversation as a living 3D map (last 14 days). Every star is a mention — clustered into constellations by source, its height set by sentiment, its size by engagement; the pulsing core is your Health Index. Drag to spin it."
+        subtitle="Your conversation as a real solar system (last 14 days). Each planet is a source — sized by volume — orbiting the sun, whose glow reflects your Health Index. Every planet has three moons sized 1–10 by its sentiment split: positive, neutral, negative. Drag to orbit, scroll to fly closer."
       />
       {g.stars.length < 5 ? (
         <EmptyState message="Not enough mentions yet to render the galaxy." />
