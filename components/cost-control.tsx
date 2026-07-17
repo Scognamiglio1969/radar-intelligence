@@ -1,16 +1,17 @@
 'use client';
 
 import { useActionState } from 'react';
-import { RotateCcw, Save, Lock } from 'lucide-react';
-import { updateApiBudget, resetApiSpend, type ActionResult } from '@/app/settings/actions';
+import { RotateCcw, Save, Lock, FlaskConical } from 'lucide-react';
+import { updateApiBudget, resetApiSpend, updateAnalystModel, type ActionResult } from '@/app/settings/actions';
 
 const INIT: ActionResult = { ok: false, msg: '' };
 
-export function CostControl({ budget, lifetimeCost, lifetimeCalls, resetAt }: {
-  budget: number; lifetimeCost: number; lifetimeCalls: number; resetAt: string;
+export function CostControl({ budget, lifetimeCost, lifetimeCalls, resetAt, analystModel }: {
+  budget: number; lifetimeCost: number; lifetimeCalls: number; resetAt: string; analystModel: string;
 }) {
   const [budgetState, budgetAction, budgetPending] = useActionState(updateApiBudget, INIT);
   const [resetState, resetAction, resetPending] = useActionState(resetApiSpend, INIT);
+  const [modelState, modelAction, modelPending] = useActionState(updateAnalystModel, INIT);
 
   return (
     <div className="mt-4 flex flex-col gap-4 border-t border-[var(--border)] pt-4">
@@ -49,6 +50,23 @@ export function CostControl({ budget, lifetimeCost, lifetimeCalls, resetAt }: {
           Zeroes the budget counter and starts a new window from now. Requires your admin password. Last reset:{' '}
           <span className="text-slate-500">{new Date(resetAt).toLocaleString('en-US')}</span>.
         </p>
+      </div>
+
+      {/* Modello del Data Scientist */}
+      <div>
+        <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <FlaskConical className="size-3.5" /> Data Scientist model
+        </h3>
+        <form action={modelAction} className="flex flex-wrap items-center gap-2">
+          <input name="model" defaultValue={analystModel}
+            className="w-56 rounded-lg border border-[var(--border)] bg-white/5 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-500" />
+          <button type="submit" disabled={modelPending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">
+            <Save className="size-3.5" />{modelPending ? 'Saving…' : 'Save model'}
+          </button>
+          {modelState.msg && <span className={`text-xs ${modelState.ok ? 'text-emerald-400' : 'text-red-400'}`}>{modelState.msg}</span>}
+        </form>
+        <p className="mt-1 text-[11px] text-slate-600">The agentic Data Scientist needs a top model: Opus 4.8+, Fable 5+, or a top OpenAI/Grok. Batch tagging keeps using the cheaper model.</p>
       </div>
 
       {/* Totale storico */}

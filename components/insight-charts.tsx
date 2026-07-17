@@ -721,12 +721,15 @@ type GeoPoint = {
 };
 
 export function GeoBubbleMap({ points }: { points: GeoPoint[] }) {
-  const sentCol = (s: number | null) => s === null ? '#64748b' : s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#60a5fa';
+  // Onesto: la mappa mostra il VOLUME della conversazione per LINGUA (un solo
+  // colore, intensità = quota), NON un sentiment "per paese" — un paese non è
+  // un sentiment e una lingua si può usare ovunque. Il sentiment sta nella
+  // legenda per-lingua, non spalmato sui confini.
   const maxShare = Math.max(1, ...points.map((p) => p.share));
   const fmtShare = (s: number) => s < 0.1 ? '<0.1%' : `${s}%`;
+  const sentLabel = (s: number | null) => s === null ? 'n/a' : s > 0.15 ? `positive (${s})` : s < -0.15 ? `negative (${s})` : `neutral (${s})`;
 
-  // Ogni paese → la lingua con più volume che lo rivendica (risolve i paesi
-  // condivisi, es. Canada EN/FR, Svizzera DE/FR).
+  // Ogni paese → la lingua con più volume che lo "rappresenta" (dove è parlata).
   const claim = new Map<string, GeoPoint>();
   for (const p of [...points].sort((a, b) => b.volume - a.volume)) {
     for (const iso of p.iso) if (!claim.has(iso)) claim.set(iso, p);
@@ -748,12 +751,11 @@ export function GeoBubbleMap({ points }: { points: GeoPoint[] }) {
             <title>{c.name}</title>
           </path>;
         }
-        const col = sentCol(p.sentiment);
-        // Opacità = radice della quota (le grandi spiccano, le piccole restano tenui ma visibili).
-        const op = 0.45 + Math.sqrt(p.share / maxShare) * 0.5;
+        // Un solo colore (sky), intensità per quota di conversazione.
+        const op = 0.25 + Math.sqrt(p.share / maxShare) * 0.65;
         return (
-          <path key={c.id} d={c.d} fill={col} fillOpacity={op} stroke={col} strokeOpacity={0.55} strokeWidth={0.5}>
-            <title>{`${c.name} · ${p.flag} ${p.country} · ${p.volume} mentions · ${fmtShare(p.share)} · sentiment ${p.sentiment ?? 'n/a'}`}</title>
+          <path key={c.id} d={c.d} fill="#38bdf8" fillOpacity={op} stroke="#38bdf8" strokeOpacity={0.45} strokeWidth={0.5}>
+            <title>{`${p.flag} ${p.country} — spoken in ${c.name}\n${p.volume} mentions · ${fmtShare(p.share)} of the conversation · avg sentiment ${sentLabel(p.sentiment)}`}</title>
           </path>
         );
       })}

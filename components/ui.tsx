@@ -116,12 +116,25 @@ export function fmtNum(n: number) {
 
 type Mention = typeof mentions.$inferSelect;
 
+/** Link to the author's profile on the source (or the post itself as a fallback). */
+function authorLink(m: Mention): string | null {
+  const h = (m.authorHandle ?? '').replace(/^@/, '').trim();
+  switch (m.source) {
+    case 'x': return h ? `https://x.com/${encodeURIComponent(h)}` : m.url;
+    case 'bluesky': return h ? `https://bsky.app/profile/${encodeURIComponent(h)}` : m.url;
+    case 'reddit': return h ? `https://www.reddit.com/user/${encodeURIComponent(h)}` : m.url;
+    case 'hackernews': return h ? `https://news.ycombinator.com/user?id=${encodeURIComponent(h)}` : m.url;
+    default: return m.url; // news outlets, telegram, mastodon, youtube → the original post/article
+  }
+}
+
 export function MentionCard({ m, translated }: {
   m: Mention;
   /** Text translated into the reading language chosen by the user */
   translated?: { title?: string; content: string };
 }) {
   const e = m.engagement;
+  const aLink = authorLink(m);
   const title = translated?.title ?? m.title;
   const content = translated?.content ?? m.content;
   return (
@@ -152,7 +165,11 @@ export function MentionCard({ m, translated }: {
         <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-slate-300">{content}</p>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-        {m.author && <span>{m.authorHandle ?? m.author}</span>}
+        {m.author && (aLink ? (
+          <a href={aLink} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-sky-300" title="Open the author on the source">
+            {m.authorHandle ?? m.author}
+          </a>
+        ) : <span>{m.authorHandle ?? m.author}</span>)}
         {e && (
           <span className="flex items-center gap-2.5">
             {e.likes != null && <span className="flex items-center gap-1"><Heart className="size-3" />{fmtNum(e.likes)}</span>}

@@ -22,6 +22,20 @@ export async function updateApiBudget(_prev: ActionResult, formData: FormData): 
   return { ok: true, msg: `Budget set to $${amount.toFixed(2)}.` };
 }
 
+/** Admin: choose the model that powers the Data Scientist. */
+export async function updateAnalystModel(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!isAdmin(user)) return { ok: false, msg: 'Admins only.' };
+  const model = String(formData.get('model') ?? '').trim();
+  if (!model) return { ok: false, msg: 'Enter a model id.' };
+  const { isAnalystGrade } = await import('@/lib/analyst');
+  if (!isAnalystGrade(model)) return { ok: false, msg: `“${model}” is not analyst-grade (needs Opus 4.8+/Fable 5+/top OpenAI/Grok).` };
+  await setMeta('ai_analyst_model', model);
+  revalidatePath('/impostazioni/budget');
+  revalidatePath('/data-scientist');
+  return { ok: true, msg: `Data Scientist model set to ${model}.` };
+}
+
 /** Admin: reset the spend counter (starts a new window). Requires the admin's own password. */
 export async function resetApiSpend(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await getCurrentUser();

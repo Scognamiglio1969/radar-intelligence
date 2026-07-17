@@ -5,6 +5,7 @@ import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { ConnectorKeys } from '@/components/connector-keys';
 import { CostControl } from '@/components/cost-control';
 import { claudeAvailable, costControl } from '@/lib/claude';
+import { analystModel } from '@/lib/analyst';
 import { PageHeader } from '@/components/ui';
 import { ExternalLink } from 'lucide-react';
 
@@ -22,8 +23,8 @@ const PAID_NOTE: Record<string, string> = {
 
 export default async function BudgetPage() {
   await hydrateConnectorCredentials();
-  const [cost, credStatuses, currentUser] = await Promise.all([
-    costControl(), getConnectorCredStatuses(), getCurrentUser(),
+  const [cost, credStatuses, currentUser, dsModel] = await Promise.all([
+    costControl(), getConnectorCredStatuses(), getCurrentUser(), analystModel(),
   ]);
   const isAdm = isAdmin(currentUser);
   const budget = cost.budget;
@@ -87,6 +88,7 @@ export default async function BudgetPage() {
                     lifetimeCost={cost.lifetime.cost}
                     lifetimeCalls={cost.lifetime.calls}
                     resetAt={cost.resetAt}
+                    analystModel={dsModel}
                   />
                 )}
               </>
