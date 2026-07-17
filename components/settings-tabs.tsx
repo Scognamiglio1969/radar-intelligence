@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { UserCog, Users, Database, Scale } from 'lucide-react';
+import { UserCog, Users, Database, Wallet, Scale } from 'lucide-react';
 
 const TABS = [
   { href: '/impostazioni/account', label: 'My account', icon: UserCog, adminOnly: false },
   { href: '/impostazioni/team', label: 'Team', icon: Users, adminOnly: true },
-  { href: '/impostazioni/fonti', label: 'Sources & budget', icon: Database, adminOnly: false },
+  { href: '/impostazioni/fonti', label: 'Sources', icon: Database, adminOnly: false },
+  { href: '/impostazioni/budget', label: 'Budget', icon: Wallet, adminOnly: false },
   { href: '/impostazioni/credits', label: 'Credits & Legal', icon: Scale, adminOnly: false },
 ] as const;
 

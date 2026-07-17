@@ -4,8 +4,6 @@ import { CONNECTORS } from '@/lib/connectors';
 import { getConnectorCredStatuses, hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { ConnectorKeys } from '@/components/connector-keys';
-import { CostControl } from '@/components/cost-control';
-import { claudeAvailable, costControl } from '@/lib/claude';
 import { PageHeader, fmtDate } from '@/components/ui';
 import type { SourceStatus } from '@/lib/ingest';
 
@@ -33,21 +31,19 @@ const SOURCE_INFO: Record<string, string> = {
 export default async function FontiPage() {
   // Hydrate saved keys before reading the "active" status of the connectors.
   await hydrateConnectorCredentials();
-  const [cost, sourceStatus, credStatuses, currentUser] = await Promise.all([
-    costControl(), getMeta<SourceStatus>('source_status'), getConnectorCredStatuses(), getCurrentUser(),
+  const [sourceStatus, credStatuses, currentUser] = await Promise.all([
+    getMeta<SourceStatus>('source_status'), getConnectorCredStatuses(), getCurrentUser(),
   ]);
   const canEditKeys = isAdmin(currentUser);
-  const budget = cost.budget;
-  const budgetPct = Math.min(100, (cost.current.cost / budget) * 100);
 
   return (
     <>
       <PageHeader
-        title="Sources & budget"
-        subtitle="Status of the listening sources and Claude API usage"
+        title="Sources"
+        subtitle="Status of the listening sources and their API keys. AI spend and budget are in the Budget tab."
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="max-w-3xl">
         <section className="panel px-5 py-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-300">Source status</h2>
 
@@ -78,6 +74,7 @@ export default async function FontiPage() {
           </p>
           <p className="mb-2 text-[11px] text-slate-600">
             Connectors are ready: enter your API keys here, without touching code. They turn on right away and apply to the whole account.
+            Their cost is billed by each provider — see the <span className="text-slate-400">Budget</span> tab.
           </p>
           <div className="flex flex-col gap-3">
             {CONNECTORS.filter((c) => c.tier === 'premium').map((c) => (
@@ -90,61 +87,6 @@ export default async function FontiPage() {
             ))}
           </div>
         </section>
-
-        <div className="flex flex-col gap-4">
-        {canEditKeys && credStatuses.anthropic && (
-          <section className="panel px-5 py-4">
-            <h2 className="mb-1 text-sm font-semibold text-slate-300">AI engine · Claude</h2>
-            <p className="mb-2 text-[11px] text-slate-600">
-              Enter your Anthropic API key to power sentiment, briefs, ratings and every AI feature. Stored encrypted; you can also set it as the <span className="text-slate-400">ANTHROPIC_API_KEY</span> environment variable instead.
-            </p>
-            <ConnectorKeys connectorId="anthropic" fields={credStatuses.anthropic.fields} />
-          </section>
-        )}
-        <section className="panel h-fit px-5 py-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-300">AI spend & budget</h2>
-          {await claudeAvailable() ? (
-            <>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold">${cost.current.cost.toFixed(2)}</p>
-                <p className="text-sm text-slate-500">of ${budget.toFixed(2)} — since last reset</p>
-              </div>
-              <div className="mt-2 h-2 rounded bg-white/5">
-                <div
-                  className={`h-2 rounded ${budgetPct > 85 ? 'bg-red-400' : budgetPct > 60 ? 'bg-amber-400' : 'bg-emerald-400'}`}
-                  style={{ width: `${budgetPct}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                {cost.current.calls.toLocaleString('en-US')} calls · {(cost.current.inTok / 1000).toFixed(0)}k input tokens · {(cost.current.outTok / 1000).toFixed(0)}k output.
-                Once the cap is reached, the app stops calling the AI (data collection keeps running).
-              </p>
-              {cost.byPurpose.length > 0 && (
-                <div className="mt-3 flex flex-col gap-1.5">
-                  {cost.byPurpose.map((p) => (
-                    <div key={p.purpose} className="flex justify-between text-xs">
-                      <span className="text-slate-400">{p.purpose.replace(/_/g, ' ')}</span>
-                      <span className="text-slate-500">${p.cost.toFixed(3)} · {p.calls} calls</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {canEditKeys && (
-                <CostControl
-                  budget={cost.budget}
-                  lifetimeCost={cost.lifetime.cost}
-                  lifetimeCalls={cost.lifetime.calls}
-                  resetAt={cost.resetAt}
-                />
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-amber-400/90">
-              No AI key yet: add one above (or set ANTHROPIC_API_KEY). Data collection works, but sentiment, briefs and ratings stay pending.
-            </p>
-          )}
-        </section>
-        </div>
       </div>
     </>
   );

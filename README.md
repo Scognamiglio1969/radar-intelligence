@@ -11,6 +11,22 @@ Self-hostable, bring-your-own-keys, runs locally with zero configuration.
 > The user interface and AI outputs are in English. Full internationalization (i18n) for
 > additional languages is on the roadmap and contributions are very welcome.
 
+## Screenshots
+
+The whole conversation as a real 3D solar system — sources are planets, sentiment split
+becomes moons, the sun is your Health Index:
+
+![Conversation Galaxy](docs/screenshots/galaxy.png)
+
+Source → Topic → Sentiment flow, with multi-select cross-filtering:
+
+![Conversation flow](docs/screenshots/flow.png)
+
+Real-world geographic map and the executive Health Index:
+
+![Geographic map](docs/screenshots/geo.png)
+![Health Index](docs/screenshots/health.png)
+
 ---
 
 ## Why Radar
@@ -35,6 +51,9 @@ just want to collect data).
   to a Share-of-Voice streamgraph, a Source→Topic→Sentiment Sankey and a real-world map.
 - **Content Studio**: turn a concept into a multi-format kit, explore alternative hooks,
   refine drafts conversationally in your brand voice.
+- **Cost control**: an admin-set spend cap on the AI, a password-protected reset, and an
+  all-time total across every user — the app stops calling the AI at the cap while data
+  collection keeps running.
 - **Exports**: branded PDF, PowerPoint, Word, Excel — every insight included. Read-only
   share links.
 
@@ -98,7 +117,7 @@ features turn on immediately.
 | Content Studio | Concept → multi-format kit, Hook Lab, conversational refinement |
 | Alerts / Brief | Auto-detected volume spikes & sentiment drops; daily executive brief |
 | War Room | Full-screen live view for a wall display |
-| Settings | Projects & keywords, team (mark one entity as *your brand*), sources status, API budget |
+| Settings | Tabbed: **My account**, **Team** (mark one entity as *your brand*), **Sources** (connector status & keys), **Budget** (AI key, spend cap, admin cost controls), **Credits & Legal** |
 
 ## Advanced insights
 
