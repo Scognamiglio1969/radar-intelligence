@@ -1,8 +1,9 @@
 # Radar
 
 **Open-source media intelligence & social listening** — an alternative to enterprise
-platforms like Talkwalker or Brandwatch, built on free data sources and Claude AI.
-Self-hostable, bring-your-own-keys, runs locally with zero configuration.
+platforms like Talkwalker or Brandwatch, built on free data sources and the **AI provider
+of your choice** (Claude, OpenAI or Grok). Self-hostable, bring-your-own-keys, runs locally
+with zero configuration.
 
 ![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)
 ![CI](https://img.shields.io/badge/CI-GitHub_Actions-informational)
@@ -27,6 +28,11 @@ Real-world geographic map and the executive Health Index:
 ![Geographic map](docs/screenshots/geo.png)
 ![Health Index](docs/screenshots/health.png)
 
+Pick your AI engine — Claude, OpenAI or Grok — enter its key and set the models, all from
+the app. No code, no redeploy:
+
+![Choose your AI engine](docs/screenshots/ai-engine.png)
+
 ---
 
 ## Why Radar
@@ -36,6 +42,10 @@ small team the same core workflow — **listen, analyze, decide, create** — us
 data sources and the Claude API, for the price of an API key (or nothing at all if you
 just want to collect data).
 
+- **Your AI, your choice**: run every AI feature on **Claude (Anthropic), OpenAI or Grok
+  (xAI)**. Pick the engine, paste its key, and even set which models power the fast (bulk
+  tagging) and smart (briefs, insights) tiers — all from *Settings → Budget*, no code and
+  no redeploy. Switch providers anytime; the spend cap works the same for all of them.
 - **9 free sources** out of the box: worldwide news via GDELT (100k+ outlets, 65+
   languages) and Google News, plus Bluesky, Mastodon, Hacker News, Telegram, RSS —
   and Reddit / YouTube with a free API key.
@@ -60,7 +70,8 @@ just want to collect data).
 ## Try it in 30 seconds (local, zero config)
 
 No database, no keys, no cloud account required. Uses an embedded database (PGlite) and
-runs entirely offline. AI features stay idle until you add an Anthropic key.
+runs entirely offline. AI features stay idle until you add a key for your chosen engine
+(Claude, OpenAI or Grok).
 
 ```bash
 git clone https://github.com/Scognamiglio1969/radar-intelligence.git
@@ -70,11 +81,13 @@ npm run dev
 # open http://localhost:3000  ·  first login: admin@example.com / changeme
 ```
 
-To enable AI, add your own key to `.env.local`:
+To enable AI, add your own key to `.env.local` (or paste it later from *Settings → Budget*):
 
 ```bash
 cp .env.example .env.local
-# set ANTHROPIC_API_KEY=...   (get one at https://console.anthropic.com)
+# Claude:  ANTHROPIC_API_KEY=...   (https://console.anthropic.com)
+# OpenAI:  OPENAI_API_KEY=...      (https://platform.openai.com)
+# Grok:    XAI_API_KEY=...         (https://console.x.ai)
 ```
 
 ## Deploy your own
@@ -93,10 +106,12 @@ for the full, commented list.
 Radar never ships with anyone's keys — you bring your own, and everything is stored
 **encrypted at rest**.
 
-- **Anthropic (Claude) key** — powers all AI features (sentiment, briefs, ratings, clustering,
-  Content Studio, "Ask the data"…). Enter it **from the UI** in *Settings → Sources & budget →
-  AI engine · Claude*, or set the `ANTHROPIC_API_KEY` environment variable. No key needed just
-  to collect data.
+- **AI engine key** — powers all AI features (sentiment, briefs, ratings, clustering,
+  Content Studio, "Ask the data"…). In *Settings → Budget → AI engine* choose your provider —
+  **Claude, OpenAI or Grok** — and paste its key, or set the matching environment variable
+  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY`). The default models per provider
+  are editable, so a newly released model just needs its id typed in — no code change. No key
+  needed just to collect data.
 - **Data-source keys** (X, Instagram, Facebook, TikTok, LinkedIn, NewsAPI, Reddit, YouTube) —
   configured **from the UI** in *Settings → Sources*, or via environment variables as a fallback.
 
@@ -117,7 +132,7 @@ features turn on immediately.
 | Content Studio | Concept → multi-format kit, Hook Lab, conversational refinement |
 | Alerts / Brief | Auto-detected volume spikes & sentiment drops; daily executive brief |
 | War Room | Full-screen live view for a wall display |
-| Settings | Tabbed: **My account**, **Team** (mark one entity as *your brand*), **Sources** (connector status & keys), **Budget** (AI key, spend cap, admin cost controls), **Credits & Legal** |
+| Settings | Tabbed: **My account**, **Team** (mark one entity as *your brand*), **Sources** (connector status & keys), **Budget** (choose the AI engine — Claude/OpenAI/Grok — its key & models, spend cap, admin cost controls), **Credits & Legal** |
 
 ## Advanced insights
 
@@ -144,7 +159,8 @@ PDF / PowerPoint / Word / Excel exports:
 - **Next.js 16** (App Router) — deploys on Vercel, dark theme
 - **Postgres**: Neon in production, embedded **PGlite** for local dev (zero setup)
 - **Drizzle ORM**, schema created & migrated automatically on boot
-- **Claude** (`@anthropic-ai/sdk`) with a hard monthly spend cap
+- **Pluggable AI engine** — Claude (`@anthropic-ai/sdk`), OpenAI or Grok (OpenAI-compatible
+  API), switchable from the UI, all behind one hard monthly spend cap
 - **Recharts** + hand-built SVG/Canvas charts, and **three.js** for the 3D galaxy
 - Pluggable **connectors** (`lib/connectors/`) — adding a source is one small file
 
