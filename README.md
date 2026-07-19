@@ -12,7 +12,17 @@ with zero configuration.
 > The user interface and AI outputs are in English. Full internationalization (i18n) for
 > additional languages is on the roadmap and contributions are very welcome.
 
+⭐ **If Radar is useful, consider giving it a star.**
+
 ## Screenshots
+
+
+Pick your AI engine — Claude, OpenAI or Grok — enter its key and set the models, all from
+the app. No code, no redeploy:
+
+![Choose your AI engine](docs/screenshots/ai-engine.png)
+
+
 
 The whole conversation as a real 3D solar system — sources are planets, sentiment split
 becomes moons, the sun is your Health Index:
@@ -28,10 +38,7 @@ Real-world geographic map and the executive Health Index:
 ![Geographic map](docs/screenshots/geo.png)
 ![Health Index](docs/screenshots/health.png)
 
-Pick your AI engine — Claude, OpenAI or Grok — enter its key and set the models, all from
-the app. No code, no redeploy:
 
-![Choose your AI engine](docs/screenshots/ai-engine.png)
 
 ---
 
