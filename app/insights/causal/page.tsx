@@ -17,6 +17,7 @@ export default async function CausalPage() {
     <>
       <PageHeader
         title="Cause-Effect chart"
+        info="The cause → effect chains the AI reconstructs for the period: which events produced measurable consequences (spikes, sentiment shifts, new narratives). Data: your mentions plus AI reasoning — shown as an AI reconstruction, not a measured fact. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="The AI's reconstruction of how events produced consequences: volume spikes, sentiment shifts, new narratives. An interpretive reading of the links, not statistical proof."
       />
       {!chains ? (

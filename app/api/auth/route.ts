@@ -21,7 +21,8 @@ export async function POST(req: Request) {
   await new Promise((r) => setTimeout(r, 400));
 
   const email = String(body.email ?? '').trim().toLowerCase();
-  const password = String(body.password ?? '');
+  // trim(): elimina spazi/newline accidentali da copia-incolla della password temporanea.
+  const password = String(body.password ?? '').trim();
   if (!email || !password) {
     return NextResponse.json({ error: 'missing credentials' }, { status: 400 });
   }

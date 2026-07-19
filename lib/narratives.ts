@@ -72,6 +72,7 @@ export async function detectNarratives(projectId: number): Promise<number> {
       stance: ['positiva', 'negativa', 'neutra', 'polarizzante'].includes(g.stance) ? g.stance : 'neutra',
       coordinated: g.coordinated ? 1 : 0,
       accounts: (g.accounts ?? []).slice(0, 6),
+      mentionIds: validIds,
       mentionCount: validIds.length,
     });
     created++;

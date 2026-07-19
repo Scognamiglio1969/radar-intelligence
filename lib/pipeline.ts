@@ -26,9 +26,12 @@ const LOCK_TTL_MS = 5 * 60_000;
 
 /**
  * Pipeline completa: ingestion → analisi Claude → alert.
- * Con full=true (cron giornaliero) aggiunge storie, content ratings e daily brief.
+ * - full=true: aggiunge storie, content ratings, narrazioni, timeline e daily brief
+ *   (usato sia dal cron sia dal "Refresh now" manuale, così l'aggiornamento è completo).
+ * - digest=true: invia il digest Telegram del mattino (solo cron; il refresh manuale NON
+ *   deve spammare notifiche a ogni click).
  */
-export async function runPipeline(opts: { full?: boolean } = {}) {
+export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {}) {
   const db = await getDb();
 
   const lock = await getMeta<string>(LOCK_KEY);
@@ -42,9 +45,17 @@ export async function runPipeline(opts: { full?: boolean } = {}) {
     const summary: Record<string, unknown>[] = [];
 
     for (const project of allProjects) {
-      console.log(`[pipeline] ingestion per "${project.name}"…`);
-      const ingest = await ingestProject(project);
-      console.log(`[pipeline] ingestion completata: ${ingest.inserted} nuove mention`);
+      // I progetti "upload" non fanno scraping: le mention arrivano dai file
+      // caricati dall'utente. La pipeline salta l'ingestion ma esegue comunque
+      // l'analisi AI sulle mention ancora da taggare.
+      const ingest = project.mode === 'upload'
+        ? { inserted: 0 }
+        : await (async () => {
+            console.log(`[pipeline] ingestion per "${project.name}"…`);
+            const r = await ingestProject(project);
+            console.log(`[pipeline] ingestion completata: ${r.inserted} nuove mention`);
+            return r;
+          })();
       // Se il proprietario è "dormiente" (membro senza AI), si raccolgono i dati
       // ma si saltano tutte le analisi Claude (nessun costo API).
       const aiOn = await ownerAiEnabled(db, project.ownerId);
@@ -88,8 +99,9 @@ export async function runPipeline(opts: { full?: boolean } = {}) {
         const briefData = await collectBriefData(project.id);
         row.brief = await generateDailyBrief(project.id, project.name, briefData);
 
-        // Digest silenzioso del mattino: una riga di numeri + link al brief
-        if (row.brief) {
+        // Digest silenzioso del mattino: una riga di numeri + link al brief.
+        // Solo dal cron (opts.digest): il refresh manuale non deve notificare a ogni click.
+        if (row.brief && opts.digest) {
           const h24 = new Date(Date.now() - 24 * 3600_000);
           const [agg] = await db.select({
             n: sql<number>`count(*)`,

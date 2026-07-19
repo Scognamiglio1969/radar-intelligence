@@ -21,6 +21,7 @@ export default async function ClustersPage() {
     <>
       <PageHeader
         title="Conversation clusters"
+        info="The families of discourse (the framings) your conversation splits into, sized by share. Data: an AI clustering of your topics and content, refreshed daily. Period: recent window. Source: your collected mentions across all active sources (AI-derived grouping)."
         subtitle="The families of discourse used to talk about the topic: not the subject (the topics), but the frame — price, scandal, irony, quality, politics, customer care… Size = weight in the conversation, color = tone."
       />
       {!clusters ? (

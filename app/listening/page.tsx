@@ -35,6 +35,8 @@ export default async function ListeningPage({ searchParams }: {
     semanticTerms,
     minRelevance: sp.rilevanza ? Number(sp.rilevanza) : undefined,
     author: sp.autore,
+    authors: sp.autori ? sp.autori.split('|').filter(Boolean) : undefined,
+    ids: sp.ids ? sp.ids.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0) : undefined,
     sortBy: (sp.ordina as 'data' | 'engagement' | 'rilevanza' | undefined) ?? 'data',
   };
   const data = await listeningData(project.id, filters);
@@ -47,7 +49,7 @@ export default async function ListeningPage({ searchParams }: {
 
   const current = {
     fonte: sp.fonte, sentiment: sp.sentiment, lingua: sp.lingua, q: sp.q, st: sp.st,
-    giorni: sp.giorni, rilevanza: sp.rilevanza, autore: sp.autore,
+    giorni: sp.giorni, rilevanza: sp.rilevanza, autore: sp.autore, autori: sp.autori, ids: sp.ids,
     ordina: sp.ordina,
   };
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
@@ -79,13 +81,30 @@ export default async function ListeningPage({ searchParams }: {
         <FilterGroup label="Sort" items={[
           { value: 'engagement', label: 'engagement' }, { value: 'rilevanza', label: 'relevance' },
         ]} param="ordina" current={current} />
+        {sp.fonte && SOURCE_META[sp.fonte] && (
+          <Link href={`/source/${sp.fonte}`}
+            className="flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 font-semibold text-sky-300 transition hover:bg-sky-500/25"
+            title={`Full channel analysis of ${SOURCE_META[sp.fonte].label}: volume, sentiment, topics and authors compared with the whole project`}>
+            🔬 Deep-dive {SOURCE_META[sp.fonte].label} →
+          </Link>
+        )}
         {sp.autore && (
           <span className="flex items-center gap-1 rounded-full bg-sky-500/15 px-2.5 py-1 text-sky-300">
             author: {sp.autore}
           </span>
         )}
+        {sp.ids && (
+          <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-amber-300">
+            a specific set of {filters.ids?.length ?? 0} posts (from a narrative)
+          </span>
+        )}
+        {sp.autori && (
+          <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-amber-300">
+            posts from {filters.authors?.length ?? 0} accounts (from a narrative)
+          </span>
+        )}
 
-        {(sp.fonte || sp.sentiment || sp.lingua || sp.q || sp.st || sp.giorni || sp.rilevanza || sp.autore || sp.ordina) && (
+        {(sp.fonte || sp.sentiment || sp.lingua || sp.q || sp.st || sp.giorni || sp.rilevanza || sp.autore || sp.autori || sp.ids || sp.ordina) && (
           <Link href="/listening"
             className="flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-3.5 py-1.5 font-semibold text-sky-300 transition hover:bg-sky-500/25">
             ↺ Show all

@@ -14,6 +14,7 @@ export default async function ConstellationInsightPage() {
     <>
       <PageHeader
         title="Semantic constellation"
+        info="Key terms as a star map — size = how often the term appears, colour = its sentiment, links = terms that co-occur. Data: your analyzed mentions. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="The language of the conversation as a map of stars: each term sized by frequency, colored by sentiment, and linked to the terms it co-occurs with (last 14 days). Clusters of connected stars reveal the recurring framings."
       />
       {nodes.length < 3 ? (

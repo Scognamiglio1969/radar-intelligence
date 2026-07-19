@@ -2,10 +2,10 @@ import { getConnectorCredStatuses, hydrateConnectorCredentials } from '@/lib/con
 import { CONNECTORS } from '@/lib/connectors';
 import { SOURCE_META } from '@/lib/connectors';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
-import { ConnectorKeys } from '@/components/connector-keys';
 import { CostControl } from '@/components/cost-control';
+import { AiEngine, type EngineOption } from '@/components/ai-engine';
 import { claudeAvailable, costControl } from '@/lib/claude';
-import { analystModel } from '@/lib/analyst';
+import { AI_PROVIDERS, AI_PROVIDER_IDS, aiProvider, aiModels } from '@/lib/ai-provider';
 import { PageHeader } from '@/components/ui';
 import { ExternalLink } from 'lucide-react';
 
@@ -23,10 +23,18 @@ const PAID_NOTE: Record<string, string> = {
 
 export default async function BudgetPage() {
   await hydrateConnectorCredentials();
-  const [cost, credStatuses, currentUser, dsModel] = await Promise.all([
-    costControl(), getConnectorCredStatuses(), getCurrentUser(), analystModel(),
+  const [cost, credStatuses, currentUser, activeProvider] = await Promise.all([
+    costControl(), getConnectorCredStatuses(), getCurrentUser(), aiProvider(),
   ]);
   const isAdm = isAdmin(currentUser);
+  const engineOptions: EngineOption[] = await Promise.all(AI_PROVIDER_IDS.map(async (id) => ({
+    id,
+    label: AI_PROVIDERS[id].label,
+    configured: credStatuses[id]?.configured ?? false,
+    fields: credStatuses[id]?.fields ?? [],
+    models: await aiModels(id),
+    defaults: AI_PROVIDERS[id].models,
+  })));
   const budget = cost.budget;
   const budgetPct = Math.min(100, (cost.current.cost / budget) * 100);
 
@@ -44,14 +52,8 @@ export default async function BudgetPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Colonna AI: chiave + spesa/budget */}
         <div className="flex flex-col gap-4">
-          {isAdm && credStatuses.anthropic && (
-            <section className="panel px-5 py-4">
-              <h2 className="mb-1 text-sm font-semibold text-slate-300">AI engine · Claude</h2>
-              <p className="mb-2 text-[11px] text-slate-600">
-                Enter your Anthropic API key to power sentiment, briefs, ratings and every AI feature. Stored encrypted; you can also set it as the <span className="text-slate-400">ANTHROPIC_API_KEY</span> environment variable instead.
-              </p>
-              <ConnectorKeys connectorId="anthropic" fields={credStatuses.anthropic.fields} />
-            </section>
+          {isAdm && (
+            <AiEngine options={engineOptions} active={activeProvider} />
           )}
 
           <section className="panel h-fit px-5 py-4">
@@ -88,13 +90,12 @@ export default async function BudgetPage() {
                     lifetimeCost={cost.lifetime.cost}
                     lifetimeCalls={cost.lifetime.calls}
                     resetAt={cost.resetAt}
-                    analystModel={dsModel}
                   />
                 )}
               </>
             ) : (
               <p className="text-sm text-amber-400/90">
-                No AI key yet: add one above (or set ANTHROPIC_API_KEY). Data collection works, but sentiment, briefs and ratings stay pending.
+                The active AI engine has no key yet: add one above. Data collection works, but sentiment, briefs and ratings stay pending.
               </p>
             )}
           </section>

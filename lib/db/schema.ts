@@ -27,6 +27,9 @@ export const users = pgTable('users', {
 export const projects = pgTable('projects', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
+  // 'listening' = raccolta automatica da fonti web; 'upload' = ingestion di file
+  // (Excel/CSV) caricati dall'utente, nessuno scraping.
+  mode: text('mode').notNull().default('listening'),
   // Proprietario del progetto (chi lo ha creato); null = legacy/condiviso a tutti
   ownerId: integer('owner_id'),
   // 'private' = solo il proprietario e l'admin; 'shared' = tutto il team lo vede
@@ -155,6 +158,8 @@ export const narratives = pgTable('narratives', {
   stance: text('stance'),
   coordinated: integer('coordinated').notNull().default(0),
   accounts: jsonb('accounts').$type<string[]>().notNull().default([]),
+  // Id delle mention che compongono la narrazione (per aprirne i post in Listening).
+  mentionIds: jsonb('mention_ids').$type<number[]>().notNull().default([]),
   mentionCount: integer('mention_count').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

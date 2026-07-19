@@ -7,7 +7,7 @@ import {
   Radar, LayoutDashboard, Ear, Newspaper, BarChart3, Users,
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
-  FlaskConical, UserCog, LogOut, UserCircle2, ScatterChart, Grid3x3, TrendingDown, Boxes, Workflow, Globe2, HeartPulse, Gauge, LayoutGrid, Sparkles, Activity, Waypoints, ShieldAlert, Orbit, Triangle,
+  UserCog, LogOut, UserCircle2, ScatterChart, Grid3x3, TrendingDown, Boxes, Workflow, Globe2, HeartPulse, Gauge, LayoutGrid, Sparkles, Activity, Waypoints, ShieldAlert, Orbit, Triangle,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
@@ -45,7 +45,6 @@ const NAV: ({ href: string; label: string; icon: typeof Radar } | { section: str
   { href: '/insights/clusters', label: 'Conversation clusters', icon: Boxes },
   { href: '/insights/causal', label: 'Cause-Effect', icon: Workflow },
   { section: 'AI Studio' },
-  { href: '/data-scientist', label: 'Data Scientist', icon: FlaskConical },
   { href: '/ask', label: 'Ask the data', icon: MessageSquareText },
   { href: '/studio', label: 'Content Studio', icon: PenLine },
   { section: '' },

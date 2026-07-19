@@ -4,31 +4,22 @@ import { getDb } from '@/lib/db';
 import { apiUsage, mentions, stories, briefs, type Quality } from '@/lib/db/schema';
 import { NEWS_SOURCES } from '@/lib/connectors';
 
+import { aiProvider, aiModels, providerKey, priceFor, callOpenAICompat } from '@/lib/ai-provider';
+
 const HAIKU = 'claude-haiku-4-5';
 const SONNET = 'claude-sonnet-4-6';
 
-// USD per million tokens
-const PRICES: Record<string, { input: number; output: number }> = {
-  [HAIKU]: { input: 1, output: 5 },
-  [SONNET]: { input: 3, output: 15 },
-};
-
 /** Effective Anthropic key: entered from the UI (encrypted store) or, as a fallback, the ANTHROPIC_API_KEY env var. */
 export async function anthropicKey(): Promise<string | undefined> {
-  const { getStoredKey } = await import('@/lib/connector-credentials');
-  const stored = await getStoredKey('ANTHROPIC_API_KEY');
-  const key = (stored || process.env.ANTHROPIC_API_KEY || '').trim();
-  return key || undefined;
+  return providerKey('anthropic');
 }
 
-async function getClient(): Promise<Anthropic | null> {
-  const key = await anthropicKey();
-  return key ? new Anthropic({ apiKey: key }) : null;
-}
-
-/** Is the AI configured? True if a Claude key is set (from the UI or env). */
+/**
+ * Is the AI configured? True if the ACTIVE engine (Claude, OpenAI or Grok —
+ * chosen in Settings → Budget) has its key set, from the UI or env.
+ */
 export async function claudeAvailable(): Promise<boolean> {
-  return Boolean(await anthropicKey());
+  return Boolean(await providerKey(await aiProvider()));
 }
 
 /** API spend cap in USD. Admin-configurable (meta), else env API_BUDGET_USD, else 6. */
@@ -104,36 +95,65 @@ function sanitize(s: string): string {
     .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
 }
 
+/**
+ * One AI call, provider-agnostic. Call sites pass MODELS.haiku / MODELS.sonnet
+ * as TIER tokens (fast / smart): when the active engine is OpenAI or Grok they
+ * are mapped to that provider's equivalent models. The historical name is kept
+ * so ~25 call sites don't change.
+ */
 export async function callClaude(model: string, purpose: string, system: string, user: string, maxTokens: number): Promise<string | null> {
   // Public demo: never spend on the API, regardless of any configured key.
   if (process.env.DEMO_MODE === '1') return null;
-  const client = await getClient();
-  if (!client) return null;
+  const provider = await aiProvider();
+  const key = await providerKey(provider);
+  if (!key) return null;
   system = sanitize(system);
   user = sanitize(user);
   // Emergency brake: never exceed the spend cap (since last reset).
   const [spend, budget] = await Promise.all([currentSpendUsd(), budgetUsd()]);
   if (spend >= budget) {
-    console.warn(`[claude] spend cap reached ($${spend.toFixed(2)}/$${budget}): "${purpose}" call skipped`);
+    console.warn(`[ai] spend cap reached ($${spend.toFixed(2)}/$${budget}): "${purpose}" call skipped`);
     return null;
   }
-  const msg = await client.messages.create({
-    model,
-    max_tokens: maxTokens,
-    system,
-    messages: [{ role: 'user', content: user }],
-  });
-  const price = PRICES[model] ?? { input: 3, output: 15 };
-  const cost = (msg.usage.input_tokens * price.input + msg.usage.output_tokens * price.output) / 1_000_000;
+
+  // Map the tier token to the provider's actual model.
+  let actualModel = model;
+  if (provider !== 'anthropic') {
+    const m = await aiModels(provider);
+    actualModel = model === HAIKU ? m.fast : model === SONNET ? m.smart : model;
+  }
+
+  let text: string | null;
+  let inputTokens: number;
+  let outputTokens: number;
+  if (provider === 'anthropic') {
+    const client = new Anthropic({ apiKey: key });
+    const msg = await client.messages.create({
+      model: actualModel,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const block = msg.content.find((b) => b.type === 'text');
+    text = block?.type === 'text' ? block.text : null;
+    inputTokens = msg.usage.input_tokens;
+    outputTokens = msg.usage.output_tokens;
+  } else {
+    const r = await callOpenAICompat(provider, key, actualModel, system, user, maxTokens);
+    text = r.text;
+    inputTokens = r.inputTokens;
+    outputTokens = r.outputTokens;
+  }
+
+  const price = priceFor(provider, actualModel);
+  const cost = (inputTokens * price.input + outputTokens * price.output) / 1_000_000;
   const db = await getDb();
   await db.insert(apiUsage).values({
-    model, purpose,
-    inputTokens: msg.usage.input_tokens,
-    outputTokens: msg.usage.output_tokens,
+    model: actualModel, purpose,
+    inputTokens, outputTokens,
     costUsd: cost,
   });
-  const block = msg.content.find((b) => b.type === 'text');
-  return block?.type === 'text' ? block.text : null;
+  return text;
 }
 
 /** Extracts the first valid JSON from a response that may have text around it. */
@@ -352,6 +372,15 @@ Max 500 words. Professional, direct tone. Base it ONLY on the provided data; if 
 
 export async function generateDailyBrief(projectId: number, projectName: string, briefData: unknown): Promise<boolean> {
   const db = await getDb();
+  // Data del brief in ora locale (Europe/Rome), non UTC: vicino a mezzanotte
+  // l'UTC può essere "ieri" e datare male il brief. en-CA → formato YYYY-MM-DD.
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
+  // Il brief di oggi c'è già? Non rigenerarlo (nessun costo AI): un "Refresh now"
+  // ripetuto nella stessa giornata non rispende il brief.
+  const [existing] = await db.select({ id: briefs.id }).from(briefs)
+    .where(and(eq(briefs.projectId, projectId), eq(briefs.briefDate, today)));
+  if (existing) return true;
+
   if (!(await claudeAvailable())) return false;
   const text = await callClaude(
     SONNET, 'daily_brief', BRIEF_SYSTEM,
@@ -359,7 +388,6 @@ export async function generateDailyBrief(projectId: number, projectName: string,
     1300,
   );
   if (!text) return false;
-  const today = new Date().toISOString().slice(0, 10);
   await db.insert(briefs).values({ projectId, briefDate: today, content: text })
     .onConflictDoUpdate({
       target: [briefs.projectId, briefs.briefDate],

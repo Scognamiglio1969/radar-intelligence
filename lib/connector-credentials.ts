@@ -16,7 +16,13 @@ export type CredField = { env: string; label: string; hint?: string; secret: boo
  */
 export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   anthropic: [
-    { env: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', hint: 'from console.anthropic.com — powers all AI features', secret: true },
+    { env: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', hint: 'from console.anthropic.com', secret: true },
+  ],
+  openai: [
+    { env: 'OPENAI_API_KEY', label: 'OpenAI API key', hint: 'from platform.openai.com', secret: true },
+  ],
+  grok: [
+    { env: 'XAI_API_KEY', label: 'xAI (Grok) API key', hint: 'from console.x.ai', secret: true },
   ],
   reddit: [
     { env: 'REDDIT_CLIENT_ID', label: 'Client ID', hint: 'Reddit app of type "script", the string under the name', secret: true },
@@ -43,6 +49,9 @@ export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   linkedin: [
     { env: 'LINKEDIN_ACCESS_TOKEN', label: 'Access Token', hint: 'Community Management API', secret: true },
     { env: 'LINKEDIN_ORG_ID', label: 'Organization ID', secret: false },
+  ],
+  linkedin_web: [
+    { env: 'TAVILY_API_KEY', label: 'Tavily API Key', hint: 'free key from app.tavily.com (1,000 searches/month)', secret: true },
   ],
   newsapi: [
     { env: 'NEWSAPI_KEY', label: 'API Key', hint: 'newsapi.org', secret: true },

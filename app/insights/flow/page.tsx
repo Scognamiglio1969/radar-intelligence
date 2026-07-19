@@ -19,6 +19,7 @@ export default async function FlowInsightPage() {
     <>
       <PageHeader
         title="Conversation flow"
+        info="How the conversation flows from Source → Topic → Sentiment; band width = number of mentions. Data: your analyzed mentions. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="How the conversation flows from source to topic to sentiment (last 14 days). Read the ribbons to see, at a glance, which sources drive which topics and where the negativity concentrates."
       />
       {nodes.length < 3 || links.length === 0 ? (

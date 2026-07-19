@@ -15,6 +15,7 @@ export default async function CrisisInsightPage() {
     <>
       <PageHeader
         title="Crisis radar & peak anatomy"
+        info="A risk gauge plus the anatomy of the biggest volume/sentiment spike in the window — what drove it and the content that weighed most. Data: your analyzed mentions. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="One risk number, plus the autopsy of the biggest spike (last 14 days): what drove the risk up, and — on the peak day — which topics and content weighed most. Your early-warning, single-glance crisis view."
       />
       {!peak ? (

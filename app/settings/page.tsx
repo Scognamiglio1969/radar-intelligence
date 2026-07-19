@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, Trash2, Link2, Star } from 'lucide-react';
+import { Plus, Trash2, Link2, Star, Radar, UploadCloud } from 'lucide-react';
 import { and, eq, gte } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { shareLinks } from '@/lib/db/schema';
@@ -9,8 +9,8 @@ import { getBenchmarkEntities, getCurrentProject, getProjects } from '@/lib/data
 import { PageHeader, EmptyState } from '@/components/ui';
 import type { projects as projectsTable } from '@/lib/db/schema';
 import {
-  addEntity, createProject, createShareLink, deleteEntity, deleteProject,
-  revokeShareLink, saveAndExpandProject, setOwnBrand, updateProject,
+  addEntity, createProject, createImportProject, createShareLink, deleteEntity, deleteProject,
+  revokeShareLink, saveAndExpandProject, setOwnBrand, updateProject, updateImportProject,
 } from './actions';
 
 type Project = typeof projectsTable.$inferSelect;
@@ -40,6 +40,7 @@ export default async function SettingsPage({ searchParams }: {
   if (allProjects.length === 0) return <EmptyState message="No project." />;
 
   const isNew = sp.p === 'new';
+  const newType = sp.type; // 'listening' | 'import' | undefined (chooser)
   const selected = isNew
     ? null
     : allProjects.find((p) => p.id === Number(sp.p)) ?? current ?? allProjects[0];
@@ -90,28 +91,94 @@ export default async function SettingsPage({ searchParams }: {
 
       <div className="mx-auto max-w-3xl">
         <div>
-          <section className="panel rounded-t-none border-t-0 px-5 py-5">
+          {/* key legata al progetto: forza il remount dei campi (defaultValue) quando
+              si cambia scheda, altrimenti gli input non controllati restano coi valori vecchi. */}
+          <section key={isNew ? `new-${newType ?? 'choose'}` : selected?.id ?? 'none'} className="panel rounded-t-none border-t-0 px-5 py-5">
             {isNew ? (
-              <form action={createProject} className="flex flex-col gap-4">
-                <h2 className="text-sm font-semibold text-slate-300">New listening project</h2>
-                <ProjectFields project={null} />
-                <div className="mt-2 border-t border-[var(--border)] pt-4">
-                  <SubmitButton className={btnCls} pendingLabel="Creating project…">Create project</SubmitButton>
+              !newType ? (
+                /* Passo 0: che tipo di progetto? */
+                <div>
+                  <h2 className="mb-3 text-sm font-semibold text-slate-300">What kind of project?</h2>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Link href="/settings?p=new&type=listening"
+                      className="group flex flex-col gap-1.5 rounded-xl border border-[var(--border)] bg-white/[0.02] px-4 py-4 transition hover:border-sky-500/50 hover:bg-sky-500/[0.05]">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-slate-100"><Radar className="size-4 text-sky-400" /> Listening</span>
+                      <span className="text-xs leading-snug text-slate-400">Radar collects mentions automatically from the web — news, social, RSS. You set the keywords and sources.</span>
+                    </Link>
+                    <Link href="/settings?p=new&type=import"
+                      className="group flex flex-col gap-1.5 rounded-xl border border-[var(--border)] bg-white/[0.02] px-4 py-4 transition hover:border-sky-500/50 hover:bg-sky-500/[0.05]">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-slate-100"><UploadCloud className="size-4 text-sky-400" /> Import file</span>
+                      <span className="text-xs leading-snug text-slate-400">Bring your own data from an Excel or CSV file — surveys, exports. Radar analyzes it the same way. No scraping.</span>
+                    </Link>
+                  </div>
                 </div>
-              </form>
-            ) : selected && (
-              <>
-                <form action={updateProject} className="flex flex-col gap-4">
-                  <input type="hidden" name="id" value={selected.id} />
-                  <ProjectFields project={selected} />
-                  <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-4">
-                    <SubmitButton className={btnCls} pendingLabel="Saving…">Save changes</SubmitButton>
-                    <SubmitButton formAction={saveAndExpandProject} pendingLabel="Generating terms…"
-                      className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 transition hover:bg-violet-500/20">
-                      ✨ Save and generate terms from the topic description
-                    </SubmitButton>
+              ) : newType === 'import' ? (
+                <form action={createImportProject} className="flex flex-col gap-4">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300"><UploadCloud className="size-4 text-sky-400" /> New import project</h2>
+                  <label className="text-xs text-slate-400">
+                    Project name
+                    <input name="name" className={`${inputCls} mt-1`} placeholder="e.g. Q2 survey exports" required />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-300">
+                    <input type="checkbox" name="shared" className="accent-sky-500" />
+                    Share this project with the whole team (read-only for others)
+                  </label>
+                  <p className="text-xs text-slate-500">Next you’ll upload an Excel/CSV file and map its columns to Radar’s fields.</p>
+                  <div className="mt-2 flex items-center gap-3 border-t border-[var(--border)] pt-4">
+                    <SubmitButton className={btnCls} pendingLabel="Creating…">Create &amp; upload file</SubmitButton>
+                    <Link href="/settings?p=new" className="text-xs text-slate-500 hover:text-slate-300">← back</Link>
                   </div>
                 </form>
+              ) : (
+                <form action={createProject} className="flex flex-col gap-4">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300"><Radar className="size-4 text-sky-400" /> New listening project</h2>
+                  <ProjectFields project={null} />
+                  <div className="mt-2 flex items-center gap-3 border-t border-[var(--border)] pt-4">
+                    <SubmitButton className={btnCls} pendingLabel="Creating project…">Create project</SubmitButton>
+                    <Link href="/settings?p=new" className="text-xs text-slate-500 hover:text-slate-300">← back</Link>
+                  </div>
+                </form>
+              )
+            ) : selected && (
+              <>
+                {selected.mode === 'upload' ? (
+                  <>
+                    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-sky-500/25 bg-sky-500/[0.05] px-4 py-3">
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-sky-200"><UploadCloud className="size-4" /> Import project</span>
+                      <span className="text-xs text-slate-400">— data comes from files you upload, not scraping.</span>
+                      <Link href={`/import?project=${selected.id}`}
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-sky-400">
+                        <UploadCloud className="size-3.5" /> Import a file
+                      </Link>
+                    </div>
+                    <form action={updateImportProject} className="flex flex-col gap-4">
+                      <input type="hidden" name="id" value={selected.id} />
+                      <label className="text-xs text-slate-400">
+                        Project name
+                        <input name="name" defaultValue={selected.name} className={`${inputCls} mt-1`} required />
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <input type="checkbox" name="shared" defaultChecked={selected.visibility === 'shared'} className="accent-sky-500" />
+                        Share this project with the whole team (read-only for others)
+                      </label>
+                      <div className="mt-2 border-t border-[var(--border)] pt-4">
+                        <SubmitButton className={btnCls} pendingLabel="Saving…">Save changes</SubmitButton>
+                      </div>
+                    </form>
+                  </>
+                ) : (
+                  <form action={updateProject} className="flex flex-col gap-4">
+                    <input type="hidden" name="id" value={selected.id} />
+                    <ProjectFields project={selected} />
+                    <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-4">
+                      <SubmitButton className={btnCls} pendingLabel="Saving…">Save changes</SubmitButton>
+                      <SubmitButton formAction={saveAndExpandProject} pendingLabel="Generating terms…"
+                        className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 transition hover:bg-violet-500/20">
+                        ✨ Save and generate terms from the topic description
+                      </SubmitButton>
+                    </div>
+                  </form>
+                )}
 
                 <hr className="my-5 border-[var(--border)]" />
 

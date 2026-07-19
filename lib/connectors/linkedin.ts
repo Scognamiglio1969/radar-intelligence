@@ -12,7 +12,7 @@ type LiPost = {
 
 export const linkedin: Connector = {
   id: 'linkedin',
-  label: 'LinkedIn',
+  label: 'LinkedIn (page)',
   tier: 'premium',
   enabled: () => Boolean(cfg('LINKEDIN_ACCESS_TOKEN') && cfg('LINKEDIN_ORG_ID')),
   disabledReason: 'Requires LinkedIn Access Token and Organization ID (Community Management API): enter them here',

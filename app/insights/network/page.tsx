@@ -14,6 +14,7 @@ export default async function NetworkInsightPage() {
     <>
       <PageHeader
         title="Influencer network"
+        info="The most active authors as a graph, grouped by community and sized by engagement; links connect authors in the same community. Data: the authors of your mentions. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="The people driving the conversation, grouped by community (last 14 days). Each dot is an author, sized by engagement and colored by the community they post in; links connect people active in the same community — the clusters are your audience tribes."
       />
       {nodes.length < 3 ? (

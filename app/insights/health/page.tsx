@@ -14,7 +14,8 @@ export default async function HealthInsightPage() {
   if (theme.total === 0) {
     return (
       <>
-        <PageHeader title="Health Index" subtitle="How the conversation is doing, as one 0–100 score." />
+        <PageHeader title="Health Index" subtitle="How the conversation is doing, as one 0–100 score."
+          info="One 0–100 composite of the conversation's health, blending sentiment, positive share, momentum and resonance. Data: your analyzed mentions. Period: last 14 days. Source: your collected mentions across all active sources." />
         <EmptyState message="Not enough mentions in the last 14 days to compute the index." />
       </>
     );

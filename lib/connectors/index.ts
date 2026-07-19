@@ -13,18 +13,19 @@ import { instagram } from './instagram';
 import { facebook } from './facebook';
 import { tiktok } from './tiktok';
 import { linkedin } from './linkedin';
+import { linkedinWeb } from './linkedin-web';
 import { newsapi } from './newsapi';
 
 export const CONNECTORS: Connector[] = [
   // Gratuite
-  googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss,
+  googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss, linkedinWeb,
   // Premium (si attivano con le chiavi API)
   xTwitter, instagram, facebook, tiktok, linkedin, newsapi,
 ];
 
 export const NEWS_SOURCES = ['googlenews', 'gdelt'];
 
-export const SOURCE_META: Record<string, { label: string; color: string }> = {
+export const SOURCE_META: Record<string, { label: string; color: string; note?: string }> = {
   googlenews: { label: 'Google News', color: '#f59e0b' },
   gdelt: { label: 'GDELT', color: '#a78bfa' },
   reddit: { label: 'Reddit', color: '#ff4500' },
@@ -38,6 +39,17 @@ export const SOURCE_META: Record<string, { label: string; color: string }> = {
   instagram: { label: 'Instagram', color: '#e1306c' },
   facebook: { label: 'Facebook', color: '#1877f2' },
   tiktok: { label: 'TikTok', color: '#fe2c55' },
-  linkedin: { label: 'LinkedIn', color: '#0a66c2' },
+  linkedin: {
+    label: 'LinkedIn (page)', color: '#0a66c2',
+    note: 'Posts from your own company page via the official LinkedIn API: full text and real metrics, but only your page.',
+  },
+  linkedin_web: {
+    label: 'LinkedIn (web)', color: '#4c9ce8',
+    note: 'Public LinkedIn posts and articles by anyone, found through the Tavily search index (official API): partial excerpts, no engagement metrics. A different acquisition model from "LinkedIn (page)".',
+  },
   newsapi: { label: 'NewsAPI', color: '#14b8a6' },
+  upload: {
+    label: 'Imported file', color: '#94a3b8',
+    note: 'Rows imported from your Excel/CSV files: content, authors and dates are exactly what the file contains — nothing is collected from the web.',
+  },
 };

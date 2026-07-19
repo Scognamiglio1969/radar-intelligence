@@ -3,9 +3,9 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import {
   ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip,
-  ReferenceLine, Cell, Treemap,
+  ReferenceLine, Cell, Treemap, CartesianGrid,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  AreaChart, Area, Legend,
+  AreaChart, Area, Legend, ComposedChart, Bar, Line,
 } from 'recharts';
 
 import { WORLD, WORLD_VIEWBOX } from '@/lib/world-geo';
@@ -95,36 +95,38 @@ export function Heatmap({ grid }: { grid: number[][] }) {
 type WFStep = { day: string; delta: number; cumulative: number; base: number; up: boolean };
 
 export function SentimentWaterfall({ steps }: { steps: WFStep[] }) {
-  const vals = steps.flatMap((s) => [s.base, s.base + Math.abs(s.delta), s.cumulative]);
-  const min = Math.min(0, ...vals);
-  const max = Math.max(0, ...vals);
-  const range = Math.max(1, max - min);
-  const H = 300;
-  const y = (v: number) => H - ((v - min) / range) * H;
-  const bw = 100 / steps.length;
   return (
-    <svg viewBox={`0 0 1000 ${H + 30}`} className="w-full" preserveAspectRatio="none" style={{ maxHeight: 340 }}>
-      {/* linea zero */}
-      <line x1="0" y1={y(0)} x2="1000" y2={y(0)} stroke="#334155" strokeDasharray="4 4" />
-      {steps.map((s, i) => {
-        const x = (i * bw + bw * 0.15) * 10;
-        const w = bw * 0.7 * 10;
-        const top = y(s.base + Math.abs(s.delta));
-        const h = Math.max(2, ((Math.abs(s.delta)) / range) * H);
-        return (
-          <g key={s.day}>
-            <rect x={x} y={top} width={w} height={h} rx={2} fill={s.up ? '#34d399' : '#f87171'} fillOpacity={0.85} />
-            {i % Math.ceil(steps.length / 10) === 0 && (
-              <text x={x + w / 2} y={H + 16} textAnchor="middle" fontSize="9" fill="#64748b">{s.day.slice(5)}</text>
-            )}
-          </g>
-        );
-      })}
-      {/* linea del cumulato */}
-      <polyline
-        points={steps.map((s, i) => `${(i * bw + bw / 2) * 10},${y(s.cumulative)}`).join(' ')}
-        fill="none" stroke="#38bdf8" strokeWidth="2" />
-    </svg>
+    <ResponsiveContainer width="100%" height={320}>
+      <ComposedChart data={steps} margin={{ top: 10, right: 12, bottom: 22, left: 0 }}>
+        <CartesianGrid stroke="#1e2a4a" vertical={false} />
+        <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(5)} minTickGap={24}
+          tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false} />
+        {/* asse dx: contributo netto del giorno (barre) */}
+        <YAxis yAxisId="delta" orientation="right" width={44} tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
+          label={{ value: 'daily net (pos − neg)', angle: 90, position: 'insideRight', fill: '#64748b', fontSize: 10 }} />
+        {/* asse sx: saldo cumulato (linea) */}
+        <YAxis yAxisId="cum" orientation="left" width={44} tick={{ fill: '#38bdf8', fontSize: 11 }} tickLine={false}
+          label={{ value: 'cumulative balance', angle: -90, position: 'insideLeft', fill: '#38bdf8', fontSize: 10 }} />
+        <ReferenceLine yAxisId="delta" y={0} stroke="#475569" />
+        <Tooltip contentStyle={TOOLTIP} cursor={{ fill: '#ffffff08' }}
+          content={({ payload, label }) => {
+            const p = payload?.find((x) => x.dataKey === 'delta')?.payload as WFStep | undefined;
+            if (!p) return null;
+            const d = p.delta > 0 ? `+${p.delta}` : `${p.delta}`;
+            return (
+              <div style={TOOLTIP} className="px-3 py-2">
+                <p className="font-semibold text-slate-100">{new Date(String(label)).toLocaleDateString('en-US')}</p>
+                <p style={{ color: p.up ? '#34d399' : '#f87171' }}>{d} net that day — {p.up ? 'more positive' : 'more negative'} posts</p>
+                <p className="text-sky-300">running balance {p.cumulative > 0 ? '+' : ''}{p.cumulative}</p>
+              </div>
+            );
+          }} />
+        <Bar yAxisId="delta" dataKey="delta" isAnimationActive={false} radius={[2, 2, 0, 0]}>
+          {steps.map((s) => <Cell key={s.day} fill={s.up ? '#34d399' : '#f87171'} fillOpacity={0.75} />)}
+        </Bar>
+        <Line yAxisId="cum" type="monotone" dataKey="cumulative" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} />
+      </ComposedChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -419,24 +421,55 @@ export function ShareOfVoiceStream({ entities, days }: { entities: string[]; day
   const totals = new Map(entities.map((e) => [e, days.reduce((s, d) => s + Number(d[e] ?? 0), 0)]));
   const ordered = [...entities].sort((a, b) => (totals.get(b) ?? 0) - (totals.get(a) ?? 0));
   const colOf = (e: string) => SERIES_COLORS[entities.indexOf(e) % SERIES_COLORS.length];
+
+  // Giorni con pochissime menzioni, normalizzati al 100%, producono picchi
+  // fuorvianti (1 menzione = 100%). Due interventi rendono il grafico leggibile:
+  //  1) taglio i giorni a volume zero in testa e in coda;
+  //  2) medio la QUOTA giornaliera su una finestra mobile (trend, non rumore).
+  const rawTotals = days.map((d) => entities.reduce((s, e) => s + Number(d[e] ?? 0), 0));
+  let a = rawTotals.findIndex((t) => t > 0);
+  let b = rawTotals.length - 1;
+  if (a < 0) a = 0;
+  while (b > a && rawTotals[b] === 0) b--;
+  const win = days.slice(a, b + 1);
+  const WIN = Math.min(7, Math.max(1, Math.floor(win.length / 3))); // finestra 1-7 gg
+
+  const smoothed = win.map((d, i) => {
+    const row: SovRow = { day: String(d.day) };
+    const lo = Math.max(0, i - WIN + 1);
+    for (const e of entities) {
+      let sum = 0, cnt = 0;
+      for (let j = lo; j <= i; j++) {
+        const t = entities.reduce((s, x) => s + Number(win[j][x] ?? 0), 0);
+        if (t > 0) { sum += Number(win[j][e] ?? 0) / t; cnt++; }
+      }
+      row[e] = cnt ? sum / cnt : 0;              // quota media (0..1)
+      row[`${e}__raw`] = Number(d[e] ?? 0);      // conteggio grezzo del giorno (tooltip)
+    }
+    return row;
+  });
+
+  if (smoothed.length === 0) return null;
+
   return (
     <ResponsiveContainer width="100%" height={440}>
-      <AreaChart data={days} stackOffset="expand" margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+      <AreaChart data={smoothed} stackOffset="expand" margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
         <XAxis dataKey="day" tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
           tickFormatter={(d: string) => d.slice(5)} minTickGap={28} />
-        <YAxis tickFormatter={(v: number) => `${Math.round(v * 100)}%`} tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false} width={40} />
+        <YAxis tickFormatter={(v: number) => `${Math.round(v * 100)}%`} tick={{ fill: '#7c8cab', fontSize: 11 }}
+          tickLine={false} width={40} ticks={[0, 0.25, 0.5, 0.75, 1]} />
         <Tooltip contentStyle={TOOLTIP} labelStyle={{ color: '#e2e8f0' }}
           formatter={(v, name, item) => {
             const row = item?.payload as SovRow | undefined;
-            const dayTotal = row ? entities.reduce((s, e) => s + Number(row[e] ?? 0), 0) : 0;
-            const n = Number(v);
-            const pct = dayTotal ? Math.round((n / dayTotal) * 100) : 0;
-            return [`${pct}%  ·  ${n} mentions`, String(name)];
+            const share = Math.round(Number(v) * 100);
+            const raw = row ? Number(row[`${name}__raw`] ?? 0) : 0;
+            return [`${share}%  ·  ${raw} mentions that day`, String(name)];
           }} />
         <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
         {ordered.map((e) => (
+          // Sottile bordo colore-pannello fra le bande = confini netti e leggibili.
           <Area key={e} type="monotone" dataKey={e} stackId="1" name={e}
-            stroke={colOf(e)} fill={colOf(e)} fillOpacity={0.8} strokeWidth={0} />
+            stroke="#0c1226" strokeWidth={0.75} fill={colOf(e)} fillOpacity={0.85} />
         ))}
       </AreaChart>
     </ResponsiveContainer>
@@ -447,9 +480,18 @@ export function ShareOfVoiceStream({ entities, days }: { entities: string[]; day
 type CNode = { term: string; freq: number; sentiment: number };
 type CEdge = { a: string; b: string; weight: number };
 
+const CONSTELLATION_SENTS = [
+  { key: 'positive', label: 'Positive', color: '#34d399' },
+  { key: 'neutral', label: 'Neutral', color: '#94a3b8' },
+  { key: 'negative', label: 'Negative', color: '#f87171' },
+] as const;
+
 export function SemanticConstellation({ nodes, edges }: { nodes: CNode[]; edges: CEdge[] }) {
+  const [sel, setSel] = useState<Set<string>>(() => new Set(['positive', 'neutral', 'negative']));
+  const [hover, setHover] = useState<number | null>(null);
   const W = 1000, H = 620, cx = W / 2, cy = H / 2;
   const maxFreq = Math.max(1, ...nodes.map((n) => n.freq));
+  const bucket = (s: number) => s > 0.15 ? 'positive' : s < -0.15 ? 'negative' : 'neutral';
   const col = (s: number) => s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
   const nr = (f: number) => 8 + Math.sqrt(f / maxFreq) * 34;
   // Layout deterministico: spirale ad angolo aureo, i termini più forti al centro.
@@ -463,30 +505,67 @@ export function SemanticConstellation({ nodes, edges }: { nodes: CNode[]; edges:
     pos.set(n.term, { x: cx + rad * Math.cos(ang), y: cy + rad * Math.sin(ang) });
   });
   const maxW = Math.max(1, ...edges.map((e) => e.weight));
+  const sentOf = new Map(nodes.map((n) => [n.term, bucket(n.sentiment)]));
+  const visible = (term: string) => { const b = sentOf.get(term); return b ? sel.has(b) : false; };
+  // Toggle multi-selezione (sempre almeno un sentiment attivo).
+  const toggle = (k: string) => setSel((prev) => {
+    const n = new Set(prev);
+    if (n.has(k)) { if (n.size > 1) n.delete(k); } else n.add(k);
+    return n;
+  });
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 620 }}>
-      <rect x="0" y="0" width={W} height={H} rx="14" fill="#0a0f1f" />
-      {/* archi di co-occorrenza */}
-      {edges.map((e, i) => {
-        const a = pos.get(e.a), b = pos.get(e.b);
-        if (!a || !b) return null;
-        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-          stroke="#38bdf8" strokeOpacity={0.1 + (e.weight / maxW) * 0.35} strokeWidth={0.5 + (e.weight / maxW) * 3} />;
-      })}
-      {/* stelle */}
-      {nodes.map((n) => {
-        const p = pos.get(n.term)!; const r = nr(n.freq); const c = col(n.sentiment);
-        return (
-          <g key={n.term}>
-            <title>{`${n.term} · ${n.freq} mentions · sentiment ${n.sentiment}`}</title>
-            <circle cx={p.x} cy={p.y} r={r} fill={c} fillOpacity={0.2} stroke={c} strokeWidth={1.5} />
-            <text x={p.x} y={p.y + r + 12} textAnchor="middle" fontSize={Math.max(10, Math.min(15, r * 0.6))}
-              fill="#e2e8f0" fontWeight={n.freq > maxFreq * 0.5 ? 700 : 400}>{n.term}</text>
-          </g>
-        );
-      })}
-    </svg>
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] uppercase tracking-wide text-slate-600">Sentiment:</span>
+        {CONSTELLATION_SENTS.map((s) => {
+          const on = sel.has(s.key);
+          return (
+            <button key={s.key} onClick={() => toggle(s.key)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition ${on ? 'text-slate-100' : 'border-[var(--border)] text-slate-500 hover:text-slate-300'}`}
+              style={on ? { borderColor: s.color, backgroundColor: `${s.color}22` } : undefined}>
+              <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} />{s.label}
+            </button>
+          );
+        })}
+        <span className="text-[11px] text-slate-500">— line thickness = how often two terms appear together; hover a line for details</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 620 }}>
+        <rect x="0" y="0" width={W} height={H} rx="14" fill="#0a0f1f" />
+        {/* archi di co-occorrenza — spessore = quante volte i due termini appaiono insieme */}
+        {edges.map((e, i) => {
+          const a = pos.get(e.a), b = pos.get(e.b);
+          if (!a || !b) return null;
+          const vis = visible(e.a) && visible(e.b);
+          const isH = hover === i;
+          const w = 1.5 + (e.weight / maxW) * 7;
+          return (
+            <g key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ cursor: 'pointer' }}>
+              <title>{`${e.a}  ↔  ${e.b}\nappear together in ${e.weight} mention${e.weight === 1 ? '' : 's'}\n(thicker line = they co-occur more often)`}</title>
+              {/* fascia invisibile larga: aggancia il mouse anche sulle linee sottili */}
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={Math.max(14, w)} />
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} strokeLinecap="round"
+                stroke={isH ? '#bae6fd' : '#38bdf8'}
+                strokeOpacity={vis ? (isH ? 0.95 : 0.2 + (e.weight / maxW) * 0.5) : 0.04}
+                strokeWidth={isH ? w + 2 : w} />
+            </g>
+          );
+        })}
+        {/* stelle */}
+        {nodes.map((n) => {
+          const p = pos.get(n.term)!; const r = nr(n.freq); const c = col(n.sentiment);
+          const vis = sel.has(bucket(n.sentiment));
+          return (
+            <g key={n.term} opacity={vis ? 1 : 0.1}>
+              <title>{`${n.term} · ${n.freq} mentions · sentiment ${n.sentiment} (${bucket(n.sentiment)})`}</title>
+              <circle cx={p.x} cy={p.y} r={r} fill={c} fillOpacity={0.2} stroke={c} strokeWidth={1.5} />
+              <text x={p.x} y={p.y + r + 12} textAnchor="middle" fontSize={Math.max(10, Math.min(15, r * 0.6))}
+                fill="#e2e8f0" fontWeight={n.freq > maxFreq * 0.5 ? 700 : 400}>{n.term}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
@@ -533,48 +612,51 @@ const QUAD_COLOR: Record<string, string> = {
   'Rising stars': '#34d399', 'Emerging': '#38bdf8', 'Steady': '#a78bfa', 'Declining': '#f87171',
 };
 
+const QUAD_LABEL: Record<string, string> = {
+  'Rising stars': 'big and still growing',
+  'Emerging': 'small but surging',
+  'Steady': 'big but flat',
+  'Declining': 'fading',
+};
+
 export function MomentumQuadrant({ points }: { points: QuadrantPoint[] }) {
-  const W = 1000, H = 560, m = { t: 30, r: 30, b: 40, l: 50 };
-  const iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const maxVol = Math.max(1, ...points.map((p) => p.volume));
   const vols = points.map((p) => p.volume).sort((a, b) => a - b);
   const medianVol = vols[Math.floor(vols.length / 2)] ?? 0;
-  const aMin = -100, aMax = Math.max(100, ...points.map((p) => p.acceleration));
-  const px = (v: number) => m.l + (v / maxVol) * iw;
-  const py = (a: number) => m.t + (1 - (a - aMin) / (aMax - aMin)) * ih;
-  const r = (v: number) => 6 + Math.sqrt(v / maxVol) * 22;
-  const xMid = px(medianVol), yZero = py(0);
-
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 560 }}>
-      {/* sfondi quadranti */}
-      <rect x={xMid} y={m.t} width={m.l + iw - xMid} height={yZero - m.t} fill="#34d39908" />
-      <rect x={m.l} y={m.t} width={xMid - m.l} height={yZero - m.t} fill="#38bdf808" />
-      <rect x={xMid} y={yZero} width={m.l + iw - xMid} height={m.t + ih - yZero} fill="#a78bfa08" />
-      <rect x={m.l} y={yZero} width={xMid - m.l} height={m.t + ih - yZero} fill="#f8717108" />
-      {/* linee divisorie */}
-      <line x1={m.l} y1={yZero} x2={m.l + iw} y2={yZero} stroke="#334155" strokeDasharray="5 5" />
-      <line x1={xMid} y1={m.t} x2={xMid} y2={m.t + ih} stroke="#334155" strokeDasharray="5 5" />
-      {/* etichette quadranti agli angoli */}
-      <text x={m.l + iw - 8} y={m.t + 20} textAnchor="end" fontSize="15" fontWeight={800} fill="#34d39970">RISING STARS</text>
-      <text x={m.l + 8} y={m.t + 20} textAnchor="start" fontSize="15" fontWeight={800} fill="#38bdf870">EMERGING</text>
-      <text x={m.l + iw - 8} y={m.t + ih - 10} textAnchor="end" fontSize="15" fontWeight={800} fill="#a78bfa70">STEADY</text>
-      <text x={m.l + 8} y={m.t + ih - 10} textAnchor="start" fontSize="15" fontWeight={800} fill="#f8717170">DECLINING</text>
-      {/* assi */}
-      <text x={m.l + iw / 2} y={H - 8} textAnchor="middle" fontSize="11" fill="#64748b">Volume →</text>
-      <text x={14} y={m.t + ih / 2} textAnchor="middle" fontSize="11" fill="#64748b" transform={`rotate(-90 14 ${m.t + ih / 2})`}>← declining   Acceleration   accelerating →</text>
-      {/* punti */}
-      {points.map((p) => {
-        const cx = px(p.volume), cy = py(p.acceleration), c = QUAD_COLOR[p.quadrant] ?? '#94a3b8';
-        return (
-          <g key={p.topic}>
-            <title>{`${p.topic} · ${p.volume} mentions · accel ${p.acceleration}% · ${p.quadrant}`}</title>
-            <circle cx={cx} cy={cy} r={r(p.volume)} fill={c} fillOpacity={0.22} stroke={c} strokeWidth={1.5} />
-            <text x={cx} y={cy - r(p.volume) - 4} textAnchor="middle" fontSize="11" fill="#cbd5e1">{p.topic}</text>
-          </g>
-        );
-      })}
-    </svg>
+    <ResponsiveContainer width="100%" height={480}>
+      <ScatterChart margin={{ top: 20, right: 30, bottom: 30, left: 10 }}>
+        <XAxis type="number" dataKey="volume" name="Volume" domain={[0, 'dataMax']}
+          tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
+          label={{ value: '← smaller    Volume (mentions, 14d)    bigger →', position: 'bottom', fill: '#64748b', fontSize: 11 }} />
+        <YAxis type="number" dataKey="acceleration" name="Acceleration" unit="%"
+          domain={['dataMin', 'dataMax']}
+          tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
+          label={{ value: '← declining    Acceleration    accelerating →', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 11 }} />
+        <ZAxis type="number" dataKey="volume" range={[120, 2000]} name="Volume" />
+        <ReferenceLine x={medianVol} stroke="#334155" strokeDasharray="4 4" />
+        <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 4" />
+        <Tooltip contentStyle={TOOLTIP} cursor={{ strokeDasharray: '3 3' }}
+          content={({ payload }) => {
+            const p = payload?.[0]?.payload as QuadrantPoint | undefined;
+            if (!p) return null;
+            const accel = p.acceleration > 0 ? `+${p.acceleration}%` : `${p.acceleration}%`;
+            const c = QUAD_COLOR[p.quadrant] ?? '#94a3b8';
+            return (
+              <div style={TOOLTIP} className="px-3 py-2">
+                <p className="font-semibold text-slate-100">{p.topic}</p>
+                <p className="text-slate-300">{p.volume} mentions · momentum {accel}</p>
+                <p className="mt-0.5 text-[11px]"><span style={{ color: c }}>{p.quadrant}</span> <span className="text-slate-500">· {QUAD_LABEL[p.quadrant]}</span></p>
+              </div>
+            );
+          }} />
+        <Scatter data={points} shape="circle">
+          {points.map((p) => {
+            const c = QUAD_COLOR[p.quadrant] ?? '#94a3b8';
+            return <Cell key={p.topic} fill={c} fillOpacity={0.5} stroke={c} />;
+          })}
+        </Scatter>
+      </ScatterChart>
+    </ResponsiveContainer>
   );
 }
 

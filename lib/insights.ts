@@ -252,7 +252,8 @@ export async function currentProjectForInsights() {
 export type AuthorTier = {
   key: string; label: string; authors: number; reach: number; sharePct: number; examples: string[];
 };
-export type AuthorPyramid = { tiers: AuthorTier[]; totalAuthors: number; topConcentration: number };
+export type TopAuthor = { id: string; posts: number; reach: number; tier: string };
+export type AuthorPyramid = { tiers: AuthorTier[]; totalAuthors: number; topConcentration: number; topAuthors: TopAuthor[] };
 
 export async function authorPyramid(projectId: number, days = 14): Promise<AuthorPyramid> {
   const db = await getDb();
@@ -267,9 +268,9 @@ export async function authorPyramid(projectId: number, days = 14): Promise<Autho
     ORDER BY sum(engagement_score) DESC NULLS LAST
   `)).rows as { id: string; posts: number; reach: number }[];
 
-  const authors = rows.map((r) => ({ id: r.id, reach: Math.max(0, Number(r.reach ?? 0)) }));
+  const authors = rows.map((r) => ({ id: r.id, reach: Math.max(0, Number(r.reach ?? 0)), posts: Number(r.posts ?? 0) }));
   const n = authors.length;
-  if (n === 0) return { tiers: [], totalAuthors: 0, topConcentration: 0 };
+  if (n === 0) return { tiers: [], totalAuthors: 0, topConcentration: 0, topAuthors: [] };
 
   const totalReach = authors.reduce((s, a) => s + a.reach, 0) || 1;
   // Confini per rango: top 5% / 20% / 50% / resto.
@@ -295,7 +296,11 @@ export async function authorPyramid(projectId: number, days = 14): Promise<Autho
     .filter((t) => t.authors > 0);
 
   const topConcentration = tiers[0]?.sharePct ?? 0; // % di reach in mano ai "mega"
-  return { tiers, totalAuthors: n, topConcentration };
+  // Top autori (cliccabili nella pagina → i loro post in Listening), etichettati col tier.
+  const tierOf = (i: number) => (i < b1 ? 'mega' : i < b2 ? 'macro' : i < b3 ? 'micro' : 'longtail');
+  const topAuthors: TopAuthor[] = authors.slice(0, 24)
+    .map((a, i) => ({ id: a.id, posts: a.posts, reach: Math.round(a.reach), tier: tierOf(i) }));
+  return { tiers, totalAuthors: n, topConcentration, topAuthors };
 }
 
 // ---------------------------------------------------------------------------

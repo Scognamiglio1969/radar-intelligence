@@ -12,17 +12,7 @@ with zero configuration.
 > The user interface and AI outputs are in English. Full internationalization (i18n) for
 > additional languages is on the roadmap and contributions are very welcome.
 
-⭐ **If Radar is useful, consider giving it a star.**
-
 ## Screenshots
-
-
-Pick your AI engine — Claude, OpenAI or Grok — enter its key and set the models, all from
-the app. No code, no redeploy:
-
-![Choose your AI engine](docs/screenshots/ai-engine.png)
-
-
 
 The whole conversation as a real 3D solar system — sources are planets, sentiment split
 becomes moons, the sun is your Health Index:
@@ -38,7 +28,16 @@ Real-world geographic map and the executive Health Index:
 ![Geographic map](docs/screenshots/geo.png)
 ![Health Index](docs/screenshots/health.png)
 
+Pick your AI engine — Claude, OpenAI or Grok — enter its key and set the models, all from
+the app. No code, no redeploy:
 
+![Choose your AI engine](docs/screenshots/ai-engine.png)
+
+Zoom into any single channel with a **source deep-dive** — how that channel's volume,
+sentiment, topics and authors compare with the whole project, each figure a verifiable
+subset of the totals:
+
+![Source deep-dive](docs/screenshots/source-deepdive.png)
 
 ---
 
@@ -55,9 +54,21 @@ just want to collect data).
   no redeploy. Switch providers anytime; the spend cap works the same for all of them.
 - **9 free sources** out of the box: worldwide news via GDELT (100k+ outlets, 65+
   languages) and Google News, plus Bluesky, Mastodon, Hacker News, Telegram, RSS —
-  and Reddit / YouTube with a free API key.
-- **6 premium connectors ready** (X, Instagram, Facebook, TikTok, LinkedIn, NewsAPI) —
-  drop in a key and the source turns on.
+  and Reddit / YouTube / **public LinkedIn posts** with a free API key.
+- **Public LinkedIn listening, legally**: LinkedIn offers no public post search, so Radar
+  finds public LinkedIn posts and articles by *anyone* through the [Tavily](https://tavily.com)
+  search index (free tier, 1,000 searches/month) — labelled **LinkedIn (web)** and kept
+  distinct from **LinkedIn (page)** (your own company page via the official API), so the two
+  acquisition models never get mixed.
+- **5 premium connectors ready** (X, Instagram, Facebook, TikTok, NewsAPI) plus
+  LinkedIn (page) — drop in a key and the source turns on.
+- **Import your own data**: create an *Import* project and drop in an Excel/CSV export
+  (from any platform or vendor). Radar runs the whole analysis engine — sentiment, topics,
+  narratives, insights — over rows it never scraped, so external data lives alongside live
+  listening.
+- **Per-source deep-dive**: focus on one channel and compare its volume, sentiment, topics
+  and authors against the whole project — every number a verifiable subset of the totals,
+  with a banner spelling out how that source's data is collected.
 - **AI analysis with Claude**: sentiment, **emotion** (joy/trust/fear/anger/sadness/
   surprise), relevance scoring, story clustering, daily executive briefs, conversation
   clusters, cause-effect chains, quality scores.
@@ -119,8 +130,9 @@ Radar never ships with anyone's keys — you bring your own, and everything is s
   (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY`). The default models per provider
   are editable, so a newly released model just needs its id typed in — no code change. No key
   needed just to collect data.
-- **Data-source keys** (X, Instagram, Facebook, TikTok, LinkedIn, NewsAPI, Reddit, YouTube) —
-  configured **from the UI** in *Settings → Sources*, or via environment variables as a fallback.
+- **Data-source keys** (X, Instagram, Facebook, TikTok, LinkedIn, NewsAPI, Reddit, YouTube,
+  and Tavily for LinkedIn-web) — configured **from the UI** in *Settings → Sources*, or via
+  environment variables as a fallback.
 
 Nothing requires editing code or redeploying: an admin adds the keys from the app and the
 features turn on immediately.
@@ -130,7 +142,9 @@ features turn on immediately.
 | Page | What it does |
 |---|---|
 | Dashboard | KPIs, volume per source, sentiment, emerging topics, latest brief |
-| Listening | Stream of every mention with filters (source, sentiment, language, period, text) |
+| Listening | Stream of every mention with filters (source, sentiment, language, period, text) — filter by a source to open its **deep-dive**, or land on a curated set of posts from a narrative |
+| Source deep-dive | One channel vs the whole project: volume, sentiment, topics and top authors, each a verifiable subset of the totals |
+| Import | Create a project that ingests an Excel/CSV file instead of scraping — the full analysis engine runs over your own rows |
 | Media | News grouped into stories (AI clustering) + most active outlets |
 | Benchmark | Share of voice, trends and comparative sentiment across configurable entities |
 | Audience | Most active communities, languages, influential authors, topics by community |

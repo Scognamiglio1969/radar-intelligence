@@ -14,6 +14,7 @@ export default async function MomentumInsightPage() {
     <>
       <PageHeader
         title="Momentum quadrant"
+        info="Shows each topic by how big it is (volume) and how fast it's moving (acceleration). Data: the topic tags and publish dates of your mentions; the last 14 days are split into two halves to measure acceleration. Source: your collected mentions across all active sources."
         subtitle="A strategic 2×2 of topics by volume (how big) and acceleration (how fast it is moving), last 14 days. Rising stars are big and still growing; Emerging are small but surging; Steady are big but flat; Declining are fading."
       />
       {points.length < 3 ? (
@@ -26,7 +27,7 @@ export default async function MomentumInsightPage() {
             <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-sky-400/70" /> Emerging</span>
             <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-violet-400/70" /> Steady</span>
             <span className="flex items-center gap-1"><span className="size-2.5 rounded-full bg-red-400/70" /> Declining</span>
-            <span className="ml-auto">Bubble size = volume · vertical split at 0% acceleration · vertical line at median volume.</span>
+            <span className="ml-auto">Bubble size = volume · hover to read a label · use the Zoom buttons when a corner is crowded.</span>
           </div>
         </section>
       )}

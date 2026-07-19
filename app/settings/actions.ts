@@ -22,18 +22,30 @@ export async function updateApiBudget(_prev: ActionResult, formData: FormData): 
   return { ok: true, msg: `Budget set to $${amount.toFixed(2)}.` };
 }
 
-/** Admin: choose the model that powers the Data Scientist. */
-export async function updateAnalystModel(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+/** Admin: choose the AI engine (Anthropic / OpenAI / Grok) that powers every AI feature. */
+export async function updateAiProvider(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!isAdmin(user)) return { ok: false, msg: 'Admins only.' };
-  const model = String(formData.get('model') ?? '').trim();
-  if (!model) return { ok: false, msg: 'Enter a model id.' };
-  const { isAnalystGrade } = await import('@/lib/analyst');
-  if (!isAnalystGrade(model)) return { ok: false, msg: `“${model}” is not analyst-grade (needs Opus 4.8+/Fable 5+/top OpenAI/Grok).` };
-  await setMeta('ai_analyst_model', model);
+  const provider = String(formData.get('provider') ?? '').trim();
+  const { AI_PROVIDERS } = await import('@/lib/ai-provider');
+  if (!(provider in AI_PROVIDERS)) return { ok: false, msg: 'Unknown provider.' };
+  await setMeta('ai_provider', provider);
   revalidatePath('/impostazioni/budget');
-  revalidatePath('/data-scientist');
-  return { ok: true, msg: `Data Scientist model set to ${model}.` };
+  return { ok: true, msg: `AI engine set to ${AI_PROVIDERS[provider as keyof typeof AI_PROVIDERS].label}.` };
+}
+
+/** Admin: override the fast/smart model ids for one provider (blank = default). */
+export async function updateAiModels(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!isAdmin(user)) return { ok: false, msg: 'Admins only.' };
+  const provider = String(formData.get('provider') ?? '').trim();
+  const { AI_PROVIDERS } = await import('@/lib/ai-provider');
+  if (!(provider in AI_PROVIDERS)) return { ok: false, msg: 'Unknown provider.' };
+  const fast = String(formData.get('fast') ?? '').trim();
+  const smart = String(formData.get('smart') ?? '').trim();
+  await setMeta(`ai_models_${provider}`, { fast, smart });
+  revalidatePath('/impostazioni/budget');
+  return { ok: true, msg: 'Models saved.' };
 }
 
 /** Admin: reset the spend counter (starts a new window). Requires the admin's own password. */
@@ -144,6 +156,35 @@ export async function createProject(formData: FormData) {
     .returning();
   revalidatePath('/', 'layout');
   redirect(`/settings?p=${created.id}`);
+}
+
+/** Crea un progetto in modalità "upload" (nessuno scraping) e va al caricamento file. */
+export async function createImportProject(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) return;
+  const name = String(formData.get('name') ?? '').trim().slice(0, 80);
+  if (!name) return;
+  const db = await getDb();
+  const [created] = await db.insert(projects).values({
+    name, mode: 'upload', ownerId: user.id,
+    visibility: formData.get('shared') ? 'shared' : 'private',
+    keywords: [], languages: ['en'],
+  }).returning({ id: projects.id });
+  revalidatePath('/', 'layout');
+  redirect(`/import?project=${created.id}`);
+}
+
+/** Modifica di un progetto upload: solo nome e visibilità (niente query/fonti). */
+export async function updateImportProject(formData: FormData) {
+  const db = await getDb();
+  const id = Number(formData.get('id'));
+  if (!id || !(await assertCanEdit(id))) return;
+  const name = String(formData.get('name') ?? '').trim().slice(0, 80);
+  if (!name) return;
+  await db.update(projects).set({
+    name, visibility: formData.get('shared') ? 'shared' : 'private',
+  }).where(eq(projects.id, id));
+  revalidatePath('/', 'layout');
 }
 
 export async function deleteProject(formData: FormData) {

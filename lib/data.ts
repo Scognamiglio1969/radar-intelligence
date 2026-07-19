@@ -8,7 +8,7 @@ import { NEWS_SOURCES } from '@/lib/connectors';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 
 /** Normalizza un valore sentiment (incl. legacy IT) a una delle 3 etichette EN. */
-function normSentimentValue(s: string | null): 'positive' | 'neutral' | 'negative' {
+export function normSentimentValue(s: string | null): 'positive' | 'neutral' | 'negative' {
   switch ((s ?? '').toLowerCase()) {
     case 'positive': case 'positivo': return 'positive';
     case 'negative': case 'negativo': return 'negative';
@@ -114,6 +114,10 @@ export type ListeningFilters = {
   minRelevance?: number;
   /** Filtra per autore (handle o nome) */
   author?: string;
+  /** Filtra per un insieme di autori (handle o nome), in OR */
+  authors?: string[];
+  /** Mostra solo un insieme preciso di mention (es. i post di una narrazione) */
+  ids?: number[];
   sortBy?: 'data' | 'engagement' | 'rilevanza';
 };
 
@@ -140,6 +144,13 @@ export async function listeningData(projectId: number, f: ListeningFilters) {
     const c = or(ilike(mentions.author, f.author), ilike(mentions.authorHandle, f.author));
     if (c) conds.push(c);
   }
+  if (f.authors?.length) {
+    const c = or(...f.authors.flatMap((a) => [
+      ilike(mentions.author, a), ilike(mentions.authorHandle, a),
+    ]));
+    if (c) conds.push(c);
+  }
+  if (f.ids?.length) conds.push(inArray(mentions.id, f.ids));
   const where = and(...conds);
 
   const orderBy = f.sortBy === 'engagement'

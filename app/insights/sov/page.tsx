@@ -25,7 +25,8 @@ export default async function SovInsightPage() {
     <>
       <PageHeader
         title="Share of Voice over time"
-        subtitle="What share of the conversation each entity owns, day by day (last 30 days). Each band is that entity's percentage of the day's total — so the chart always fills 100%: it shows share, not raw volume. Hover for the exact % and mention count."
+        info="Shows each entity's share of the conversation over time (the chart always fills 100%). Data: mentions matching your benchmark entities, smoothed over a rolling window. Period: last 30 days. Source: your collected mentions across all active sources."
+        subtitle="What share of the conversation each entity owns over the last 30 days. The bars up top are the 30-day totals; the chart below shows how that split moved over time — each band is the entity's share, smoothed over a rolling window so you read the trend, not the daily noise. It always fills 100% (share, not raw volume). Hover for the exact %."
       />
       {entities.length === 0 ? (
         <EmptyState message="Add benchmark entities (brands/competitors) in Settings to see share of voice." />
@@ -53,7 +54,7 @@ export default async function SovInsightPage() {
           </div>
           <ShareOfVoiceStream entities={entities} days={days} />
           <p className="mt-3 text-xs text-slate-500">
-            The chart is a 100% stacked area (share over time); the bars above are the 30-day totals. Manage entities in{' '}
+            Read it as: at any date, how the 100% splits between entities — a widening band means that entity is gaining share. Smoothed over a rolling window; empty days at the start/end are trimmed. Manage entities in{' '}
             <Link href="/settings" className="text-sky-400 hover:underline">Settings</Link>.
           </p>
         </section>

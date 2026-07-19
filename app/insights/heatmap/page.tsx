@@ -15,6 +15,7 @@ export default async function HeatmapPage() {
     <>
       <PageHeader
         title="Hourly & daily heatmap"
+        info="When the conversation happens, by weekday × hour of day (local time); brighter = more mentions. Data: the publish time of each mention. Period: last 30 days. Source: your collected mentions across all active sources."
         subtitle="When conversations explode: intensity by day of week and hour (last 30 days). Useful to know when to monitor and when to publish."
       />
       {total === 0 ? (

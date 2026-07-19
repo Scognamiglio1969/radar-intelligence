@@ -14,6 +14,7 @@ export default async function GeoInsightPage() {
     <>
       <PageHeader
         title="Languages of the conversation"
+        info="Which languages people use when they talk about your topic, shaded over the regions where each language is primarily spoken. Data: the language tag of each mention — NOT geolocation. Period: last 30 days. Source: your collected mentions across all active sources."
         subtitle="What language people use when they talk about your topic (last 30 days). The map shades each language over the regions where it is primarily spoken — intensity = share of the conversation, not a claim about location. A language can be used anywhere. Sentiment is shown per language below, never painted onto a country."
       />
       {points.length < 1 ? (

@@ -13,10 +13,16 @@ async function requireAdmin() {
   return isAdmin(user) ? user : null;
 }
 
+// Alfabeto SENZA caratteri ambigui (0/O/o, 1/l/I): evita errori di digitazione
+// quando la password temporanea viene dettata/riscritta a mano.
+const PW_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+
 function tempPassword(): string {
-  // Password temporanea leggibile: 3 blocchi (es. "k7mq-2xvp-9htr")
-  return randomBytes(9).toString('base64url').replace(/[_-]/g, '').slice(0, 12)
-    .replace(/(.{4})(.{4})(.{4})/, '$1-$2-$3');
+  // Password temporanea leggibile: 3 blocchi (es. "Kh7m-Rp2q-Wn5x")
+  const bytes = randomBytes(12);
+  let s = '';
+  for (let i = 0; i < 12; i++) s += PW_ALPHABET[bytes[i] % PW_ALPHABET.length];
+  return s.replace(/(.{4})(.{4})(.{4})/, '$1-$2-$3');
 }
 
 export type TeamActionState = { ok?: boolean; error?: string; tempPassword?: string; email?: string };

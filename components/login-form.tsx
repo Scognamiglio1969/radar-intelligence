@@ -53,6 +53,9 @@ export function LoginForm() {
         onChange={(e) => setPassword(e.target.value)}
         placeholder="Password"
         autoComplete="current-password"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
         className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2.5 text-sm outline-none placeholder:text-slate-600 focus:border-sky-500/60"
       />
       {error && <p className="text-center text-xs text-red-400">Incorrect email or password.</p>}

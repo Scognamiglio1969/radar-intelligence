@@ -10,7 +10,7 @@ export async function changePassword(_prev: unknown, formData: FormData): Promis
   const user = await getCurrentUser();
   if (!user) return { error: 'session expired' };
 
-  const current = String(formData.get('current') ?? '');
+  const current = String(formData.get('current') ?? '').trim();
   const next = String(formData.get('next') ?? '');
   const confirm = String(formData.get('confirm') ?? '');
 

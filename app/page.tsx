@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { marked } from 'marked';
-import { Flame } from 'lucide-react';
+import { Flame, UploadCloud } from 'lucide-react';
 import { dashboardData, getCurrentProject } from '@/lib/data';
 import { getTrends } from '@/lib/trends';
 import { PageHeader, KpiCard, MentionCard, EmptyState, fmtCompact, fmtNum } from '@/components/ui';
@@ -19,8 +19,21 @@ export default async function DashboardPage() {
     <>
       <PageHeader
         title={project.name}
-        subtitle={`Monitoring: ${project.keywords.join(', ')}`}
+        subtitle={project.mode === 'upload'
+          ? 'Imported data — analyzed with the full Radar engine'
+          : `Monitoring: ${project.keywords.join(', ')}`}
       />
+
+      {project.mode === 'upload' && (
+        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-sky-500/25 bg-sky-500/[0.05] px-4 py-3">
+          <span className="flex items-center gap-1.5 text-sm font-medium text-sky-200"><UploadCloud className="size-4" /> Import project</span>
+          <span className="text-xs text-slate-400">— add more rows anytime from an Excel/CSV file.</span>
+          <Link href={`/import?project=${project.id}`}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-sky-400">
+            <UploadCloud className="size-3.5" /> Import a file
+          </Link>
+        </div>
+      )}
 
       {trends.length > 0 && (
         <section className="panel mb-5 border-orange-500/30 px-5 py-4">
