@@ -1,6 +1,7 @@
 import { ExternalLink, Heart, Info, MessageCircle, Repeat2, Star } from 'lucide-react';
 import { SOURCE_META } from '@/lib/connectors';
 import type { mentions } from '@/lib/db/schema';
+import { MentionBody } from '@/components/mention-translate';
 
 /** Piccola "i" con balloon esplicativo al passaggio del mouse. */
 export function InfoTip({ title, children }: { title?: string; children: React.ReactNode }) {
@@ -159,18 +160,8 @@ export function MentionCard({ m, translated }: {
         <span>{fmtDate(m.publishedAt)}</span>
         {m.community && <span className="text-slate-400">{m.community}</span>}
       </div>
-      {title && (
-        <h3 className="mt-1.5 text-sm font-semibold leading-snug">
-          {m.url ? (
-            <a href={m.url} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-sky-300">
-              {title}
-            </a>
-          ) : title}
-        </h3>
-      )}
-      {content && content !== title && (
-        <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-slate-300">{content}</p>
-      )}
+      <MentionBody id={m.id} lang={m.language} url={m.url} title={title ?? null} content={content ?? null}
+        allowTranslate={!translated} />
       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
         {m.author && (aLink ? (
           <a href={aLink} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-sky-300" title="Open the author on the source">
