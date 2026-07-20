@@ -74,12 +74,20 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 6000);
-    camera.position.set(0, 130, 380);
+    camera.position.set(0, 110, 315);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.06;
-    controls.enablePan = false;
-    controls.minDistance = 55; controls.maxDistance = 1200;
+    // Pan abilitato: senza, lo zoom punta solo al centro e le orbite esterne
+    // (topics/trend) restano irraggiungibili. Con il pan si sposta il bersaglio
+    // e ci si può avvicinare a qualsiasi orbita. Right-drag o due dita = pan.
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.panSpeed = 0.9;
+    // Lo zoom segue il cursore invece di puntare sempre al centro: così, mirando
+    // una cintura esterna (topics/trend) e scrollando, ci si avvicina a QUELLA.
+    controls.zoomToCursor = true;
+    controls.minDistance = 25; controls.maxDistance = 1400;
     controls.autoRotate = !reduce; controls.autoRotateSpeed = 0.35;
 
     const loader = new THREE.TextureLoader();
@@ -240,7 +248,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       scene.add(group);
       return {
         group, planet, moons, idx: i,
-        dist: 68 + (N === 1 ? 40 : (i / (N - 1)) * 165),
+        dist: 62 + (N === 1 ? 34 : (i / (N - 1)) * 132),
         theta: rand(i * 13.7) * Math.PI * 2,
         spd: (0.028 * (1 + (N - i) * 0.18)) * (reduce ? 0 : 1),
       };
@@ -262,7 +270,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
     // ── Cintura dei TEMI (contenuto): asteroidi esterni, uno per topic ──
     // Ring esterno oltre l'ultimo pianeta: i temi che circondano la conversazione.
     const topicGroup = new THREE.Group();
-    const topicBeltR = 262;
+    const topicBeltR = 220;
     const maxTopicN = Math.max(1, ...topics.map((t) => t.n));
     const rockGeo = new THREE.IcosahedronGeometry(1, 0);
     disposables.push(rockGeo);
@@ -284,7 +292,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
     // ── TREND (temi emergenti): comete dorate pulsanti su un anello inclinato ──
     const trendGroup = new THREE.Group();
     trendGroup.rotation.x = 0.34;
-    const trendR = 298;
+    const trendR = 248;
     const trendMeshes: { mesh: THREE.Mesh; base: number; phase: number }[] = [];
     const maxScore = Math.max(1, ...trends.map((t) => t.score));
     trends.forEach((tr, i) => {
@@ -453,7 +461,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
           </div>
         </div>
         <p className="pointer-events-none absolute bottom-3 left-4 max-w-[70%] text-[11px] text-slate-600">
-drag to orbit · scroll to fly closer · planets = sources (size = volume) · 3 moons each, sized 1–10 by sentiment · outer belt = topics · golden comets = emerging trends
+drag to orbit · scroll to zoom toward the cursor (point at an outer belt to fly to it) · right-drag or two fingers to pan · planets = sources · moons = sentiment · outer belt = topics · golden comets = trends
         </p>
         <p className="pointer-events-none absolute bottom-3 right-4 text-[10px] text-slate-700">
           Textures © Solar System Scope · CC BY 4.0
