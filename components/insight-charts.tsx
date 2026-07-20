@@ -417,62 +417,100 @@ export function SankeyFlow({ nodes, links, sourceColors }: {
 type SovRow = { day: string;[k: string]: number | string };
 
 export function ShareOfVoiceStream({ entities, days }: { entities: string[]; days: SovRow[] }) {
+  // Volume = area impilata a valori assoluti (mostra i picchi di conversazione);
+  // Share = stessa area normalizzata al 100% (mostra chi guadagna quota).
+  const [mode, setMode] = useState<'volume' | 'share'>('volume');
+
   // Ordino le entità per volume totale (la più grande in basso, base stabile).
   const totals = new Map(entities.map((e) => [e, days.reduce((s, d) => s + Number(d[e] ?? 0), 0)]));
   const ordered = [...entities].sort((a, b) => (totals.get(b) ?? 0) - (totals.get(a) ?? 0));
   const colOf = (e: string) => SERIES_COLORS[entities.indexOf(e) % SERIES_COLORS.length];
 
-  // Giorni con pochissime menzioni, normalizzati al 100%, producono picchi
-  // fuorvianti (1 menzione = 100%). Due interventi rendono il grafico leggibile:
-  //  1) taglio i giorni a volume zero in testa e in coda;
-  //  2) medio la QUOTA giornaliera su una finestra mobile (trend, non rumore).
+  // Taglio i giorni a volume zero in testa e in coda: il grafico parte dove
+  // partono i dati. In modalità volume uso i conteggi grezzi (come nell'export).
   const rawTotals = days.map((d) => entities.reduce((s, e) => s + Number(d[e] ?? 0), 0));
   let a = rawTotals.findIndex((t) => t > 0);
   let b = rawTotals.length - 1;
   if (a < 0) a = 0;
   while (b > a && rawTotals[b] === 0) b--;
-  const win = days.slice(a, b + 1);
-  const WIN = Math.min(7, Math.max(1, Math.floor(win.length / 3))); // finestra 1-7 gg
 
-  const smoothed = win.map((d, i) => {
+  const raw = days.slice(a, b + 1).map((d) => {
     const row: SovRow = { day: String(d.day) };
+    let tot = 0;
+    for (const e of entities) { const n = Number(d[e] ?? 0); row[e] = n; tot += n; }
+    row.__total = tot;
+    return row;
+  });
+  if (raw.length === 0) return null;
+
+  // In modalità Share (100%) un giorno con 1 sola menzione varrebbe il 100% e
+  // creerebbe picchi fuorvianti: medio i conteggi su una finestra mobile prima
+  // di normalizzare, così si legge il trend. In Volume uso i dati grezzi (picchi
+  // reali, come nell'export). Il tooltip mostra sempre le menzioni grezze del giorno.
+  const WIN = Math.min(5, Math.max(1, Math.floor(raw.length / 6)));
+  const smoothed = raw.map((d, i) => {
     const lo = Math.max(0, i - WIN + 1);
+    const row: SovRow = { day: String(d.day), __total: Number(d.__total ?? 0) };
     for (const e of entities) {
-      let sum = 0, cnt = 0;
-      for (let j = lo; j <= i; j++) {
-        const t = entities.reduce((s, x) => s + Number(win[j][x] ?? 0), 0);
-        if (t > 0) { sum += Number(win[j][e] ?? 0) / t; cnt++; }
-      }
-      row[e] = cnt ? sum / cnt : 0;              // quota media (0..1)
-      row[`${e}__raw`] = Number(d[e] ?? 0);      // conteggio grezzo del giorno (tooltip)
+      let s = 0;
+      for (let j = lo; j <= i; j++) s += Number(raw[j][e] ?? 0);
+      row[e] = s / (i - lo + 1);
+      row[`${e}__raw`] = Number(d[e] ?? 0);
     }
     return row;
   });
-
-  if (smoothed.length === 0) return null;
+  const rows = mode === 'share' ? smoothed : raw;
 
   return (
-    <ResponsiveContainer width="100%" height={440}>
-      <AreaChart data={smoothed} stackOffset="expand" margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-        <XAxis dataKey="day" tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
-          tickFormatter={(d: string) => d.slice(5)} minTickGap={28} />
-        <YAxis tickFormatter={(v: number) => `${Math.round(v * 100)}%`} tick={{ fill: '#7c8cab', fontSize: 11 }}
-          tickLine={false} width={40} ticks={[0, 0.25, 0.5, 0.75, 1]} />
-        <Tooltip contentStyle={TOOLTIP} labelStyle={{ color: '#e2e8f0' }}
-          formatter={(v, name, item) => {
-            const row = item?.payload as SovRow | undefined;
-            const share = Math.round(Number(v) * 100);
-            const raw = row ? Number(row[`${name}__raw`] ?? 0) : 0;
-            return [`${share}%  ·  ${raw} mentions that day`, String(name)];
-          }} />
-        <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-        {ordered.map((e) => (
-          // Sottile bordo colore-pannello fra le bande = confini netti e leggibili.
-          <Area key={e} type="monotone" dataKey={e} stackId="1" name={e}
-            stroke="#0c1226" strokeWidth={0.75} fill={colOf(e)} fillOpacity={0.85} />
+    <div>
+      <div className="mb-2 flex items-center gap-1.5">
+        {([['volume', 'Volume'], ['share', 'Share (100%)']] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setMode(k)}
+            className={`rounded-full border px-3 py-1 text-xs transition ${
+              mode === k ? 'border-sky-500 bg-sky-500/15 text-sky-200' : 'border-[var(--border)] text-slate-500 hover:text-slate-300'
+            }`}
+            title={k === 'volume'
+              ? 'Absolute mentions per day, stacked — shows the real peaks and dips in conversation volume'
+              : 'Each day normalized to 100% — shows how the share splits between entities, ignoring total volume'}>
+            {label}
+          </button>
         ))}
-      </AreaChart>
-    </ResponsiveContainer>
+      </div>
+      <ResponsiveContainer width="100%" height={440}>
+        <AreaChart data={rows} stackOffset={mode === 'share' ? 'expand' : 'none'}
+          margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+          <XAxis dataKey="day" tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
+            tickFormatter={(d: string) => d.slice(5)} minTickGap={28} />
+          <YAxis
+            tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false}
+            width={mode === 'share' ? 40 : 44} allowDecimals={false}
+            {...(mode === 'share'
+              ? { tickFormatter: (v: number) => `${Math.round(v * 100)}%`, ticks: [0, 0.25, 0.5, 0.75, 1] }
+              : {})} />
+          <Tooltip contentStyle={TOOLTIP} labelStyle={{ color: '#e2e8f0' }}
+            formatter={(v, name, item) => {
+              const row = item?.payload as SovRow | undefined;
+              const tot = row ? Number(row.__total ?? 0) : 0;
+              // Tooltip sempre sulle menzioni GREZZE del giorno (in Share il valore
+              // disegnato è mediato, ma il numero mostrato è quello reale).
+              const n = mode === 'share'
+                ? (row ? Number(row[`${name}__raw`] ?? 0) : 0)
+                : Number(v);
+              const share = tot ? Math.round((n / tot) * 100) : 0;
+              return [
+                mode === 'share' ? `${share}%  ·  ${n} mentions` : `${n} mentions  ·  ${share}% of the day`,
+                String(name),
+              ];
+            }} />
+          <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
+          {ordered.map((e) => (
+            // Sottile bordo colore-pannello fra le bande = confini netti e leggibili.
+            <Area key={e} type="monotone" dataKey={e} stackId="1" name={e}
+              stroke="#0c1226" strokeWidth={0.75} fill={colOf(e)} fillOpacity={0.85} />
+          ))}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 

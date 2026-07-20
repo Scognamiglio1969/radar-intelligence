@@ -25,8 +25,8 @@ export default async function SovInsightPage() {
     <>
       <PageHeader
         title="Share of Voice over time"
-        info="Shows each entity's share of the conversation over time (the chart always fills 100%). Data: mentions matching your benchmark entities, smoothed over a rolling window. Period: last 30 days. Source: your collected mentions across all active sources."
-        subtitle="What share of the conversation each entity owns over the last 30 days. The bars up top are the 30-day totals; the chart below shows how that split moved over time — each band is the entity's share, smoothed over a rolling window so you read the trend, not the daily noise. It always fills 100% (share, not raw volume). Hover for the exact %."
+        info="How each entity's presence in the conversation moves over time. Volume mode: absolute mentions per day, stacked — you see the real peaks. Share mode: each day normalized to 100% — you see who gains ground. Data: mentions matching your benchmark entities, last 30 days, across all active sources."
+        subtitle="How much of the conversation each entity owns over the last 30 days. The bars up top are the 30-day totals; the chart below shows the movement day by day — switch between Volume (absolute mentions, the real peaks and dips) and Share (each day as 100%, who's gaining ground). Hover any band for that day's mentions and percentage."
       />
       {entities.length === 0 ? (
         <EmptyState message="Add benchmark entities (brands/competitors) in Settings to see share of voice." />
@@ -54,7 +54,7 @@ export default async function SovInsightPage() {
           </div>
           <ShareOfVoiceStream entities={entities} days={days} />
           <p className="mt-3 text-xs text-slate-500">
-            Read it as: at any date, how the 100% splits between entities — a widening band means that entity is gaining share. Smoothed over a rolling window; empty days at the start/end are trimmed. Manage entities in{' '}
+            Read it as: a taller stack (Volume) means more total conversation that day; a widening band (Share) means that entity is gaining ground. Empty days at the start/end are trimmed. Manage entities in{' '}
             <Link href="/settings" className="text-sky-400 hover:underline">Settings</Link>.
           </p>
         </section>
