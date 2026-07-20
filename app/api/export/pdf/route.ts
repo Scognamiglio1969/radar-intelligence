@@ -209,7 +209,7 @@ export async function GET(req: Request) {
 
   // ---- Trend ----
   if (has('trends') && data.trends.length) {
-    heading('Emerging trends (ultime 24 ore)');
+    heading('Emerging trends (last 24 hours)');
     for (const t of data.trends.slice(0, 6)) {
       para(`x${t.score.toFixed(0)}  ${t.topic}  —  ${t.n24} mentions/24h`, { bold: true, size: 10, gap: 0.1 });
       if (t.explanation) para(t.explanation, { size: 9, color: MUTED, gap: 0.4 });
@@ -334,7 +334,7 @@ export async function GET(req: Request) {
 
   // ---- Audience ----
   if (has('audience') && data.audience.communities.length) {
-    heading('Audience — dove si discute');
+    heading('Audience — where the conversation happens');
     hbars(data.audience.communities.slice(0, 10).map((c) => ({
       label: `${c.community ?? '—'} (${sourceLabel(c.source)})`, value: c.n,
     })), '#7c3aed');
@@ -348,7 +348,7 @@ export async function GET(req: Request) {
   if (has('content') && data.ratings.length) {
     heading('Top content by engagement');
     table(
-      ['Contenuto', 'Source', 'Engagement', 'AI', 'Risk'],
+      ['Content', 'Source', 'Engagement', 'AI', 'Risk'],
       data.ratings.slice(0, 15).map((r) => [
         (r.title || r.content).slice(0, 110), sourceLabel(r.source),
         String(Math.round(r.engagementScore)), r.quality ? String(r.quality.score) : '—', r.quality?.risk ?? '—',
@@ -370,7 +370,7 @@ export async function GET(req: Request) {
   if (has('timeline') && data.timeline.length) {
     heading('Sector timeline');
     for (const e of data.timeline.slice(0, 25)) {
-      para(`${new Date(e.eventDate).toLocaleDateString('en-US')} — ${e.title}${e.importance === 3 ? '  (svolta)' : ''}`, { bold: true, size: 9.5, gap: 0.1 });
+      para(`${new Date(e.eventDate).toLocaleDateString('en-US')} — ${e.title}${e.importance === 3 ? '  (turning point)' : ''}`, { bold: true, size: 9.5, gap: 0.1 });
       if (e.description) para(e.description, { size: 9, color: MUTED, gap: 0.4 });
     }
   }
@@ -386,7 +386,7 @@ export async function GET(req: Request) {
   }
 
   if (has('alerts') && data.alerts.length) {
-    heading('Alert recenti');
+    heading('Recent alerts');
     for (const a of data.alerts.slice(0, 12)) {
       para(`[${new Date(a.createdAt).toLocaleDateString('en-US')}] ${a.message}`, { size: 9.5, bold: true, gap: 0.1 });
       const ex = (a.data as { explanation?: string } | null)?.explanation;
@@ -413,7 +413,7 @@ export async function GET(req: Request) {
         const txt = sanitize(m.title ?? m.content);
         return [
           new Date(m.publishedAt).toLocaleDateString('en-US'), sourceLabel(m.source),
-          txt || '[contenuto in lingua non latina — vedi originale]', m.sentiment ?? '—',
+          txt || '[non-Latin content — see original]', m.sentiment ?? '—',
         ];
       }),
       [0.13, 0.15, 0.58, 0.14], ['left', 'left', 'left', 'left'],
@@ -436,7 +436,7 @@ export async function GET(req: Request) {
   doc.end();
   const buffer = await done;
 
-  const parts = [...sections].join('') === '' ? 'completo' : (sections.size >= 13 ? 'completo' : 'selezione');
+  const parts = [...sections].join('') === '' ? 'complete' : (sections.size >= 20 ? 'complete' : 'selection');
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',

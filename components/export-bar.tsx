@@ -5,24 +5,9 @@ import {
   Download, FileText, FileSpreadsheet, FileType2, Presentation,
   Loader2, X, Check, CheckCircle2,
 } from 'lucide-react';
+import { EXPORT_SECTIONS, ALL_SECTION_IDS, SECTION_GROUPS } from '@/lib/export-sections';
 
-// Sezioni esportabili (allineate a lib/export-data EXPORT_SECTIONS)
-const SECTIONS: [string, string][] = [
-  ['kpi', 'Summary (KPIs)'],
-  ['trends', 'Emerging trends'],
-  ['volume', 'Volume by source'],
-  ['sentiment', 'Sentiment'],
-  ['topics', 'Top topics'],
-  ['benchmark', 'Benchmark'],
-  ['audience', 'Audience'],
-  ['content', 'Top content'],
-  ['narratives', 'Narratives'],
-  ['timeline', 'Event timeline'],
-  ['alerts', 'Alerts'],
-  ['brief', 'Daily brief'],
-  ['mentions', 'Mentions list'],
-];
-const ALL_IDS = SECTIONS.map(([id]) => id);
+const ALL_IDS = ALL_SECTION_IDS as string[];
 
 const FORMATS = [
   { id: 'pdf', label: 'PDF', icon: FileText, color: 'text-red-400', hint: 'Formatted report' },
@@ -144,6 +129,11 @@ export function ExportBar() {
                   </button>
                 ))}
               </div>
+              <p className="mt-1.5 text-[11px] text-slate-600">
+                {scope === 'complete'
+                  ? `Everything the report can hold — all ${ALL_IDS.length} sections. Each format renders the ones that suit it (e.g. the raw mentions list goes to PDF/Word/Excel, not the slides).`
+                  : 'Pick exactly what to include. Sections that a format cannot show are skipped automatically.'}
+              </p>
 
               {/* Checklist sezioni (solo in personalizza) */}
               {scope === 'custom' && (
@@ -155,19 +145,26 @@ export function ExportBar() {
                       <button onClick={() => { setSelected(new Set()); persist({ selected: [] }); }} className="text-slate-500 hover:text-slate-300">none</button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                    {SECTIONS.map(([id, label]) => {
-                      const on = selected.has(id);
-                      return (
-                        <button key={id} onClick={() => toggle(id)}
-                          className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition ${on ? 'text-slate-200' : 'text-slate-500'} hover:bg-white/5`}>
-                          <span className={`flex size-4 shrink-0 items-center justify-center rounded border ${on ? 'border-sky-500 bg-sky-500 text-slate-950' : 'border-[var(--border)]'}`}>
-                            {on && <Check className="size-3" />}
-                          </span>
-                          {label}
-                        </button>
-                      );
-                    })}
+                  <div className="flex flex-col gap-2">
+                    {SECTION_GROUPS.map((group) => (
+                      <div key={group}>
+                        <p className="px-1 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600">{group}</p>
+                        <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
+                          {EXPORT_SECTIONS.filter((s) => s.group === group).map((s) => {
+                            const on = selected.has(s.id);
+                            return (
+                              <button key={s.id} onClick={() => toggle(s.id)}
+                                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition ${on ? 'text-slate-200' : 'text-slate-500'} hover:bg-white/5`}>
+                                <span className={`flex size-4 shrink-0 items-center justify-center rounded border ${on ? 'border-sky-500 bg-sky-500 text-slate-950' : 'border-[var(--border)]'}`}>
+                                  {on && <Check className="size-3" />}
+                                </span>
+                                {s.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

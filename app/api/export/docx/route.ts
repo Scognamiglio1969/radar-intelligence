@@ -59,7 +59,7 @@ export async function GET(req: Request) {
   const today = new Date().toLocaleDateString('en-US', { dateStyle: 'full' });
 
   const kpi = data.dashboard.kpi;
-  const sentimentLabel = kpi.avgSentiment === null ? 'in attesa di analisi'
+  const sentimentLabel = kpi.avgSentiment === null ? 'awaiting analysis'
     : kpi.avgSentiment > 0.15 ? 'positive' : kpi.avgSentiment < -0.15 ? 'negative' : 'neutral';
   const totalBench = data.benchmark.reduce((s, r) => s + r.total, 0);
 
@@ -76,8 +76,8 @@ export async function GET(req: Request) {
     children.push(
       h1('At a glance'),
       bullet(`${kpi.total7.toLocaleString('en-US')}  mentions in the last 7 days from ${kpi.sources} active sources`),
-      bullet(`Sentiment complessivo: ${sentimentLabel}${kpi.avgSentiment !== null ? ` (score ${kpi.avgSentiment.toFixed(2)})` : ''}`),
-      bullet(`${data.dashboard.topTopics.length} temi rilevati, ${data.alerts.length} alert recenti`),
+      bullet(`Overall sentiment: ${sentimentLabel}${kpi.avgSentiment !== null ? ` (score ${kpi.avgSentiment.toFixed(2)})` : ''}`),
+      bullet(` topics detected,  recent alerts`),
     );
   }
 
@@ -107,7 +107,7 @@ export async function GET(req: Request) {
 
   // Emerging trends
   if (has('trends') && data.trends.length) {
-    children.push(h1('Emerging trends (ultime 24 ore)'));
+    children.push(h1('Emerging trends (last 24 hours)'));
     for (const t of data.trends.slice(0, 6)) {
       children.push(bullet(`×${t.score.toFixed(0)} ${t.topic} — ${t.n24} mentions/24h${t.explanation ? `: ${t.explanation}` : ''}`));
     }
@@ -126,7 +126,7 @@ export async function GET(req: Request) {
   // Temi
   if (has('topics') && data.dashboard.topTopics.length) {
     children.push(h1('Top topics (7 days)'));
-    children.push(table(['Tema', 'Mentions'], data.dashboard.topTopics.map((t) => [t.topic, String(t.n)])));
+    children.push(table(['Topic', 'Mentions'], data.dashboard.topTopics.map((t) => [t.topic, String(t.n)])));
   }
 
   // Semantic constellation
@@ -232,12 +232,12 @@ export async function GET(req: Request) {
 
   // Audience
   if (has('audience') && data.audience.communities.length) {
-    children.push(h1('Audience — dove si discute'));
+    children.push(h1('Audience — where the conversation happens'));
     children.push(table(
       ['Community', 'Source', 'Mentions'],
       data.audience.communities.slice(0, 10).map((c) => [c.community ?? '—', sourceLabel(c.source), String(c.n)]),
     ));
-    children.push(h2('Lingue delle conversazioni'));
+    children.push(h2('Conversation languages'));
     const langs = data.audience.languages.map((l) => `${l.language.toUpperCase()} (${l.n})`).join(' · ');
     children.push(p(langs || '—'));
   }
@@ -246,7 +246,7 @@ export async function GET(req: Request) {
   if (has('content') && data.ratings.length) {
     children.push(h1('Top content by engagement (7 days)'));
     children.push(table(
-      ['Contenuto', 'Source', 'Engagement', 'AI score', 'Risk'],
+      ['Content', 'Source', 'Engagement', 'AI score', 'Risk'],
       data.ratings.slice(0, 12).map((r) => [
         (r.title || r.content).slice(0, 90), sourceLabel(r.source),
         String(Math.round(r.engagementScore)),
@@ -273,7 +273,7 @@ export async function GET(req: Request) {
 
   // Alert
   if (has('alerts') && data.alerts.length) {
-    children.push(h1('Alert recenti'));
+    children.push(h1('Recent alerts'));
     for (const a of data.alerts.slice(0, 8)) {
       const ex = (a.data as { explanation?: string } | null)?.explanation;
       children.push(bullet(`[${new Date(a.createdAt).toLocaleDateString('en-US')}] ${a.message}${ex ? ` — ${ex}` : ''}`));

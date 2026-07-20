@@ -367,7 +367,7 @@ export async function GET(req: Request) {
   // ── 6. Audience
   if (has('audience') && data.audience.communities.length) {
     const s6 = pptx.addSlide({ masterName: 'DARK' });
-    s6.addText('Audience — dove si discute', titleOpts);
+    s6.addText('Audience — where the conversation happens', titleOpts);
     s6.addChart('bar', [{
       name: 'Mentions',
       labels: data.audience.communities.slice(0, 8).map((c) => c.community ?? '—'),
@@ -377,7 +377,7 @@ export async function GET(req: Request) {
       chartColors: [ACCENT], catAxisLabelColor: MUTED, valAxisLabelColor: MUTED,
       showLegend: false, valGridLine: { color: '1E2A4A' }, catGridLine: { style: 'none' },
     });
-    s6.addText('Lingue', { x: 7.3, y: 1.4, w: 5.5, h: 0.4, fontSize: 14, bold: true, color: MUTED });
+    s6.addText('Languages', { x: 7.3, y: 1.4, w: 5.5, h: 0.4, fontSize: 14, bold: true, color: MUTED });
     s6.addText(
       data.audience.languages.map((l) => `${l.language.toUpperCase()} (${l.n})`).join('  ·  ') || '—',
       { x: 7.3, y: 1.85, w: 5.5, h: 1.2, fontSize: 13, color: TEXT },
@@ -394,7 +394,7 @@ export async function GET(req: Request) {
     const s7 = pptx.addSlide({ masterName: 'DARK' });
     s7.addText('Top content by engagement', titleOpts);
     s7.addTable([
-      ['Contenuto', 'Source', 'Engagement', 'AI score', 'Risk'].map((t) => ({
+      ['Content', 'Source', 'Engagement', 'AI score', 'Risk'].map((t) => ({
         text: t, options: { bold: true, color: TEXT, fill: { color: PANEL }, fontSize: 12 },
       })),
       ...data.ratings.slice(0, 9).map((r) => [
@@ -429,6 +429,22 @@ export async function GET(req: Request) {
         text: `${new Date(e.eventDate).toLocaleDateString('en-US')} — ${e.title}`,
         options: { fontSize: 13, color: TEXT, bullet: { code: '2022' }, breakLine: true },
       })),
+      { x: 0.5, y: 1.3, w: 12.3, h: 5.6, lineSpacing: 20, valign: 'top' },
+    );
+  }
+
+  // ── Alerts
+  if (has('alerts') && data.alerts.length) {
+    const sa = pptx.addSlide({ masterName: 'DARK' });
+    sa.addText('Recent alerts', titleOpts);
+    sa.addText(
+      data.alerts.slice(0, 8).map((a) => {
+        const ex = (a.data as { explanation?: string } | null)?.explanation;
+        return {
+          text: `[${new Date(a.createdAt).toLocaleDateString('en-US')}] ${a.message}${ex ? ` — ${ex}` : ''}`,
+          options: { fontSize: 13, color: TEXT, bullet: { code: '2022' }, breakLine: true },
+        };
+      }),
       { x: 0.5, y: 1.3, w: 12.3, h: 5.6, lineSpacing: 20, valign: 'top' },
     );
   }

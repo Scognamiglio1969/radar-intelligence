@@ -14,35 +14,10 @@ import type { projects } from '@/lib/db/schema';
 
 export type Project = typeof projects.$inferSelect;
 
-// Sezioni esportabili: id stabile + etichetta mostrata nel configuratore.
-export const EXPORT_SECTIONS = [
-  ['kpi', 'Summary (KPIs)'],
-  ['health', 'Brand Health Index'],
-  ['trends', 'Emerging trends'],
-  ['volume', 'Volume by source'],
-  ['sentiment', 'Sentiment'],
-  ['emotions', 'Emotion radar'],
-  ['topics', 'Top topics'],
-  ['momentum', 'Momentum quadrant'],
-  ['flow', 'Conversation flow'],
-  ['constellation', 'Semantic constellation'],
-  ['geo', 'Geographic map'],
-  ['benchmark', 'Benchmark'],
-  ['sov', 'Share of Voice over time'],
-  ['audience', 'Audience'],
-  ['network', 'Influencer network'],
-  ['pyramid', 'Author pyramid'],
-  ['content', 'Top content'],
-  ['narratives', 'Narratives'],
-  ['timeline', 'Event timeline'],
-  ['alerts', 'Alerts'],
-  ['crisis', 'Crisis radar & peak'],
-  ['brief', 'Daily brief'],
-  ['mentions', 'Mentions list'],
-] as const;
-
-export type SectionId = (typeof EXPORT_SECTIONS)[number][0];
-export const ALL_SECTION_IDS = EXPORT_SECTIONS.map(([id]) => id) as SectionId[];
+// Le sezioni esportabili vivono in un modulo condiviso senza dipendenze server
+// (lib/export-sections), così client e server usano la stessa lista.
+export { EXPORT_SECTIONS, ALL_SECTION_IDS, type SectionId } from '@/lib/export-sections';
+import { ALL_SECTION_IDS, type SectionId } from '@/lib/export-sections';
 
 /** Legge ?sections=a,b,c (default: tutte) e ?days=N (default 30, cap 90). */
 export function parseExportOptions(url: URL): { sections: Set<SectionId>; days: number } {
