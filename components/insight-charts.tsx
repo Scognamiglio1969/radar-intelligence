@@ -176,8 +176,8 @@ export function InfluencerNetwork({ nodes, edges, communities }: {
     for (let i = 0; i < arr.length; i++) {
       for (let j = i + 1; j < arr.length; j++) {
         const a = arr[i], b = arr[j];
-        let dx = b.x - a.x, dy = b.y - a.y;
-        let d2 = dx * dx + dy * dy || 0.01;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d2 = dx * dx + dy * dy || 0.01;
         const f = 5200 / d2;
         const d = Math.sqrt(d2), ux = dx / d, uy = dy / d;
         a.vx -= ux * f; a.vy -= uy * f; b.vx += ux * f; b.vy += uy * f;

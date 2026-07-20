@@ -45,7 +45,7 @@ export default function CreditsPage() {
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300"><Heart className="size-4 text-pink-400" /> Made by</h2>
           <div className="flex flex-col gap-2 text-sm text-slate-300">
             <p><span className="text-slate-500">Creator & product:</span> <span className="font-medium text-slate-100">Massimo Scognamiglio</span> — idea, design, direction and every decision behind Radar.</p>
-            <p><span className="text-slate-500">Built in pair with:</span> <span className="font-medium text-slate-100">Claude</span> by <Ext href="https://www.anthropic.com">Anthropic</Ext> — the AI collaborator that wrote and shaped the code side by side with the author, and that also powers Radar's in-app AI features (sentiment, emotion, briefs, clustering, Content Studio…).</p>
+            <p><span className="text-slate-500">Built in pair with:</span> <span className="font-medium text-slate-100">Claude</span> by <Ext href="https://www.anthropic.com">Anthropic</Ext> — the AI collaborator that wrote and shaped the code side by side with the author, and that also powers Radar’s in-app AI features (sentiment, emotion, briefs, clustering, Content Studio…).</p>
             <p className="text-xs text-slate-500">A one-person team plus an AI partner — enterprise-grade media intelligence at a thousandth of the price. And yes, we had a lot of fun together. 🐣</p>
           </div>
         </section>
@@ -67,7 +67,7 @@ export default function CreditsPage() {
         {/* Open source */}
         <section className="panel px-5 py-4">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300"><Package className="size-4 text-violet-400" /> Built with open source</h2>
-          <p className="mb-3 text-xs text-slate-500">Radar stands on the shoulders of these projects. Each package's authoritative license text ships in its own folder under <code className="text-slate-400">node_modules/</code>.</p>
+          <p className="mb-3 text-xs text-slate-500">Radar stands on the shoulders of these projects. Each package’s authoritative license text ships in its own folder under <code className="text-slate-400">node_modules/</code>.</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
             {DEPS.map((d) => (
               <div key={d.name} className="flex flex-col text-xs">

@@ -34,7 +34,7 @@ export function TimelineView({ events, canGenerate }: { events: Ev[]; canGenerat
     return (
       <div className="panel flex flex-col items-center gap-3 px-6 py-14 text-center">
         <p className="text-sm text-slate-400">
-          The timeline builds itself: every morning the AI extracts the salient events from the day's news.
+          The timeline builds itself: every morning the AI extracts the salient events from the day’s news.
         </p>
         {canGenerate && (
           <button onClick={generate} disabled={busy}
