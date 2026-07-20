@@ -7,6 +7,8 @@ import { normSentimentValue } from '@/lib/data';
 // solo filtrate per canale e confrontate col totale). Ogni numero del deep-dive
 // è un sottoinsieme verificabile dei numeri complessivi del progetto.
 
+const TZ = 'Europe/Rome';
+
 export type SentDist = { positive: number; neutral: number; negative: number };
 
 function foldSentiment(rows: { sentiment: string | null; n: number }[]): SentDist {
@@ -89,6 +91,90 @@ export async function sourceDeepDive(projectId: number, source: string) {
     GROUP BY 1 ORDER BY n DESC, engagement DESC LIMIT 12
   `);
 
+  // --- Trend emergenti del canale: topic ultimi 7g vs 14g precedenti -------
+  const emerging = await db.execute(sql`
+    WITH recent AS (
+      SELECT t AS topic, count(*) AS n_now
+      FROM mentions, jsonb_array_elements_text(topics) AS t
+      WHERE project_id = ${projectId} AND source = ${source}
+        AND published_at >= ${d7.toISOString()}::timestamptz
+      GROUP BY t
+    ),
+    previous AS (
+      SELECT t AS topic, count(*) AS n_prev
+      FROM mentions, jsonb_array_elements_text(topics) AS t
+      WHERE project_id = ${projectId} AND source = ${source}
+        AND published_at >= ${new Date(Date.now() - 21 * 86400_000).toISOString()}::timestamptz
+        AND published_at < ${d7.toISOString()}::timestamptz
+      GROUP BY t
+    )
+    SELECT r.topic, r.n_now, coalesce(p.n_prev, 0) AS n_prev,
+           r.n_now::float / greatest(coalesce(p.n_prev, 0) / 2.0, 0.5) AS growth
+    FROM recent r LEFT JOIN previous p USING (topic)
+    WHERE r.n_now >= 2
+    ORDER BY growth DESC, r.n_now DESC LIMIT 8
+  `);
+
+  // --- Identikit del canale --------------------------------------------------
+  const [peak] = (await db.execute(sql`
+    SELECT EXTRACT(DOW FROM (published_at AT TIME ZONE ${TZ}))::int AS dow,
+           EXTRACT(HOUR FROM (published_at AT TIME ZONE ${TZ}))::int AS hour,
+           count(*) AS n
+    FROM mentions
+    WHERE project_id = ${projectId} AND source = ${source}
+      AND published_at >= ${d30.toISOString()}::timestamptz
+    GROUP BY 1, 2 ORDER BY n DESC LIMIT 1
+  `)).rows as { dow: number; hour: number; n: number }[];
+
+  const languages = await db.execute(sql`
+    SELECT language, count(*) AS n
+    FROM mentions
+    WHERE project_id = ${projectId} AND source = ${source}
+      AND published_at >= ${d30.toISOString()}::timestamptz AND language IS NOT NULL
+    GROUP BY 1 ORDER BY n DESC LIMIT 3
+  `);
+
+  const [conc] = (await db.execute(sql`
+    WITH per_author AS (
+      SELECT coalesce(author_handle, author) AS a, count(*) AS n
+      FROM mentions
+      WHERE project_id = ${projectId} AND source = ${source}
+        AND published_at >= ${d30.toISOString()}::timestamptz
+        AND coalesce(author_handle, author) IS NOT NULL
+      GROUP BY 1
+    )
+    SELECT sum(n) AS total,
+           (SELECT sum(n) FROM (SELECT n FROM per_author ORDER BY n DESC LIMIT 3) top3) AS top3
+    FROM per_author
+  `)).rows as { total: number | null; top3: number | null }[];
+
+  const [rel] = (await db.execute(sql`
+    SELECT avg(relevance) FILTER (WHERE source = ${source}) AS rel_src,
+           avg(relevance) AS rel_all
+    FROM mentions
+    WHERE project_id = ${projectId}
+      AND published_at >= ${d30.toISOString()}::timestamptz AND relevance IS NOT NULL
+  `)).rows as { rel_src: number | null; rel_all: number | null }[];
+
+  // --- Dove il canale dissente: sentiment per topic, canale vs resto --------
+  const disagreements = await db.execute(sql`
+    WITH per_topic AS (
+      SELECT t AS topic,
+             avg(sentiment_score) FILTER (WHERE source = ${source}) AS s_src,
+             count(*) FILTER (WHERE source = ${source}) AS n_src,
+             avg(sentiment_score) FILTER (WHERE source <> ${source}) AS s_rest,
+             count(*) FILTER (WHERE source <> ${source}) AS n_rest
+      FROM mentions, jsonb_array_elements_text(topics) AS t
+      WHERE project_id = ${projectId} AND sentiment_score IS NOT NULL
+        AND published_at >= ${d30.toISOString()}::timestamptz
+      GROUP BY t
+    )
+    SELECT topic, s_src, n_src, s_rest, n_rest, abs(s_src - s_rest) AS gap
+    FROM per_topic
+    WHERE n_src >= 3 AND n_rest >= 3 AND s_src IS NOT NULL AND s_rest IS NOT NULL
+    ORDER BY gap DESC LIMIT 6
+  `);
+
   // --- Ultime mention del canale -------------------------------------------
   const latest = await db.select().from(mentions)
     .where(and(inProject, inSource))
@@ -115,6 +201,25 @@ export async function sourceDeepDive(projectId: number, source: string) {
         avgSent: r.avg_sent === null ? null : Number(r.avg_sent),
         engagement: Number(r.engagement ?? 0),
       })),
+    emerging: (emerging.rows as { topic: string; n_now: number; n_prev: number; growth: number }[])
+      .map((r) => ({
+        topic: r.topic, nNow: Number(r.n_now), nPrev: Number(r.n_prev), growth: Number(r.growth),
+      })),
+    character: {
+      peak: peak ? { dow: Number(peak.dow), hour: Number(peak.hour), n: Number(peak.n) } : null,
+      languages: (languages.rows as { language: string; n: number }[])
+        .map((r) => ({ language: r.language, n: Number(r.n) })),
+      authorsTotal: Number(conc?.total ?? 0),
+      top3Share: conc?.total ? Number(conc.top3 ?? 0) / Number(conc.total) : null,
+      relevanceSrc: rel?.rel_src === null || rel?.rel_src === undefined ? null : Number(rel.rel_src),
+      relevanceAll: rel?.rel_all === null || rel?.rel_all === undefined ? null : Number(rel.rel_all),
+    },
+    disagreements: (disagreements.rows as {
+      topic: string; s_src: number; n_src: number; s_rest: number; n_rest: number; gap: number;
+    }[]).map((r) => ({
+      topic: r.topic, sSrc: Number(r.s_src), nSrc: Number(r.n_src),
+      sRest: Number(r.s_rest), nRest: Number(r.n_rest), gap: Number(r.gap),
+    })),
     latest,
   };
 }
