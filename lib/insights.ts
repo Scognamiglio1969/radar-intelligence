@@ -308,9 +308,12 @@ export async function authorPyramid(projectId: number, days = 14): Promise<Autho
 // ---------------------------------------------------------------------------
 export type GalaxyStar = { si: number; s: number; e: number; age: number };
 export type GalaxySource = { id: string; label: string; color: string; count: number };
+export type GalaxyTopic = { topic: string; n: number };
+export type GalaxyTrend = { topic: string; score: number };
 export type GalaxyData = {
   title: string; core: number; grade: string; total: number; avgSentiment: number;
   sources: GalaxySource[]; stars: GalaxyStar[];
+  topics: GalaxyTopic[]; trends: GalaxyTrend[];
 };
 
 export async function conversationGalaxy(projectId: number, days = 14): Promise<GalaxyData> {
@@ -345,6 +348,17 @@ export async function conversationGalaxy(projectId: number, days = 14): Promise<
     age: Math.max(0, Math.min(1, Number(r.age_h) / maxAgeH)), // 0 = ora, 1 = più vecchio
   }));
 
+  // Contenuto: i temi dominanti (cintura di asteroidi). Trend: i temi emergenti.
+  const topicRows = (await db.execute(sql`
+    SELECT t AS topic, count(*) AS n
+    FROM mentions, jsonb_array_elements_text(topics) AS t
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+    GROUP BY t ORDER BY n DESC LIMIT 12
+  `)).rows as { topic: string; n: number }[];
+  const topics: GalaxyTopic[] = topicRows.map((r) => ({ topic: r.topic, n: Number(r.n) }));
+  const trendRows = await getTrends(projectId);
+  const trends: GalaxyTrend[] = trendRows.slice(0, 6).map((t) => ({ topic: t.topic, score: t.score }));
+
   const total = rows.length;
   const avgSentiment = total ? rows.reduce((a, r) => a + (r.s === null ? 0 : Number(r.s)), 0) / total : 0;
   const health = await healthFor(projectId, days);
@@ -354,7 +368,7 @@ export async function conversationGalaxy(projectId: number, days = 14): Promise<
     title: project?.name ?? 'Radar',
     core: health.score, grade: health.grade,
     total, avgSentiment: Math.round(avgSentiment * 100) / 100,
-    sources, stars,
+    sources, stars, topics, trends,
   };
 }
 
@@ -452,36 +466,64 @@ export async function crisisAnatomy(projectId: number, days = 14): Promise<Crisi
 // ---------------------------------------------------------------------------
 // 4. Rete degli influencer (autori collegati dalla community condivisa)
 // ---------------------------------------------------------------------------
-export type NetNode = { id: string; label: string; community: string; source: string; posts: number; engagement: number };
+export type NetTier = 'mega' | 'macro' | 'micro';
+export type NetNode = {
+  id: string; label: string; community: string; source: string;
+  posts: number; engagement: number; sentiment: number | null; tier: NetTier;
+};
 export type NetEdge = { a: string; b: string };
 export type InfluencerNet = { nodes: NetNode[]; edges: NetEdge[]; communities: string[] };
 
-export async function influencerNetwork(projectId: number, days = 14, limit = 34): Promise<InfluencerNet> {
+export async function influencerNetwork(projectId: number, days = 14, limit = 40): Promise<InfluencerNet> {
   const db = await getDb();
   const since = new Date(Date.now() - days * 86400_000).toISOString();
-  // Un nodo per autore: community e fonte dominanti (mode) per evitare id duplicati.
+
+  // Un nodo per autore, con statistiche ricche: post, engagement, sentiment medio,
+  // fonte dominante. Niente più filtro sulla community (includeva solo i social):
+  // così compaiono tutti i top autori, non un sottoinsieme.
   const rows = (await db.execute(sql`
-    SELECT id, id AS label, community, source, posts, engagement FROM (
-      SELECT coalesce(author_handle, author) AS id,
-        mode() WITHIN GROUP (ORDER BY community) AS community,
-        mode() WITHIN GROUP (ORDER BY source) AS source,
-        count(*) AS posts, sum(engagement_score) AS engagement
-      FROM mentions
-      WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
-        AND community IS NOT NULL AND community <> ''
-        AND coalesce(author_handle, author) IS NOT NULL
-      GROUP BY coalesce(author_handle, author)
-    ) q
-    ORDER BY engagement DESC NULLS LAST
+    SELECT coalesce(author_handle, author) AS id,
+      mode() WITHIN GROUP (ORDER BY source) AS source,
+      count(*) AS posts,
+      sum(engagement_score) AS engagement,
+      avg(sentiment_score) AS sentiment
+    FROM mentions
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+      AND coalesce(author_handle, author) IS NOT NULL
+    GROUP BY coalesce(author_handle, author)
+    ORDER BY engagement DESC NULLS LAST, posts DESC
     LIMIT ${limit}
-  `)).rows as { id: string; label: string; community: string; source: string; posts: number; engagement: number }[];
+  `)).rows as { id: string; source: string; posts: number; engagement: number; sentiment: number | null }[];
 
-  const nodes: NetNode[] = rows.map((r) => ({
-    id: r.id, label: r.label, community: r.community, source: r.source,
-    posts: Number(r.posts), engagement: Math.round(Number(r.engagement ?? 0)),
-  }));
+  // Topic dominante di ogni autore = il "tribù/tema" attorno a cui gravita.
+  // Raggruppo per soggetto: molto più informativo della community di piattaforma.
+  const topicRows = (await db.execute(sql`
+    SELECT coalesce(author_handle, author) AS id, t AS topic, count(*) AS n
+    FROM mentions, jsonb_array_elements_text(topics) AS t
+    WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
+      AND coalesce(author_handle, author) IS NOT NULL
+    GROUP BY 1, 2
+  `)).rows as { id: string; topic: string; n: number }[];
+  const topByAuthor = new Map<string, { topic: string; n: number }>();
+  for (const r of topicRows) {
+    const cur = topByAuthor.get(r.id);
+    if (!cur || Number(r.n) > cur.n) topByAuthor.set(r.id, { topic: r.topic, n: Number(r.n) });
+  }
 
-  // Archi: collego gli autori della stessa community (cluster visibili).
+  const maxEng = Math.max(1, ...rows.map((r) => Number(r.engagement ?? 0)));
+  const nodes: NetNode[] = rows.map((r) => {
+    const eng = Number(r.engagement ?? 0);
+    return {
+      id: r.id, label: r.id,
+      community: topByAuthor.get(r.id)?.topic ?? 'general',
+      source: r.source,
+      posts: Number(r.posts), engagement: Math.round(eng),
+      sentiment: r.sentiment === null ? null : Math.round(Number(r.sentiment) * 100) / 100,
+      tier: eng >= maxEng * 0.5 ? 'mega' : eng >= maxEng * 0.15 ? 'macro' : 'micro',
+    };
+  });
+
+  // Archi: collego gli autori con lo stesso topic dominante (le tribù per tema).
   const byComm = new Map<string, NetNode[]>();
   for (const n of nodes) {
     if (!byComm.has(n.community)) byComm.set(n.community, []);
@@ -494,7 +536,8 @@ export async function influencerNetwork(projectId: number, days = 14, limit = 34
       for (let j = i + 1; j < g.length; j++) edges.push({ a: g[i].id, b: g[j].id });
     }
   }
-  const communities = [...byComm.keys()];
+  // Community ordinate per dimensione del cluster (le più popolose prime).
+  const communities = [...byComm.entries()].sort((a, b) => b[1].length - a[1].length).map(([k]) => k);
   return { nodes, edges, communities };
 }
 

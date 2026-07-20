@@ -145,8 +145,14 @@ export function ClusterTreemap({ clusters }: { clusters: Cluster[] }) {
 }
 
 // ── 4. Rete degli influencer (force-directed) ─────────────────────────────
-type NetNode = { id: string; label: string; community: string; source: string; posts: number; engagement: number };
+type NetNode = { id: string; label: string; community: string; source: string; posts: number; engagement: number; sentiment: number | null; tier: 'mega' | 'macro' | 'micro' };
 type NetEdge = { a: string; b: string };
+
+const netSentColor = (s: number | null) =>
+  s === null ? '#64748b' : s > 0.15 ? '#34d399' : s < -0.15 ? '#f87171' : '#94a3b8';
+const netSentWord = (s: number | null) =>
+  s === null ? 'n/a' : s > 0.15 ? 'positive' : s < -0.15 ? 'negative' : 'neutral';
+const TIER_LABEL: Record<string, string> = { mega: 'Mega', macro: 'Macro', micro: 'Micro' };
 
 export function InfluencerNetwork({ nodes, edges, communities }: {
   nodes: NetNode[]; edges: NetEdge[]; communities: string[];
@@ -155,6 +161,7 @@ export function InfluencerNetwork({ nodes, edges, communities }: {
   const commColor = (c: string) => SERIES_COLORS[communities.indexOf(c) % SERIES_COLORS.length];
   const maxEng = Math.max(1, ...nodes.map((n) => n.engagement));
   const nr = (e: number) => 7 + Math.sqrt(e / maxEng) * 26;
+  const href = (h: string) => `/listening?autore=${encodeURIComponent(h)}`;
 
   // Layout force-directed deterministico (init su cerchio, poi rilassamento).
   type P = { id: string; x: number; y: number; vx: number; vy: number };
@@ -188,32 +195,65 @@ export function InfluencerNetwork({ nodes, edges, communities }: {
       p.x += p.vx * 0.5; p.y += p.vy * 0.5; p.vx *= 0.82; p.vy *= 0.82;
     }
   }
-  // clamp in cornice
+  // clamp in cornice + arrotondo (evita mismatch di idratazione SSR: i float
+  // del layout differiscono all'ultima cifra fra server e browser).
   for (const n of nodes) {
     const p = pts.get(n.id)!; const r = nr(n.engagement);
-    p.x = Math.max(r + 8, Math.min(W - r - 8, p.x));
-    p.y = Math.max(r + 8, Math.min(H - r - 20, p.y));
+    p.x = Math.round(Math.max(r + 8, Math.min(W - r - 8, p.x)) * 100) / 100;
+    p.y = Math.round(Math.max(r + 8, Math.min(H - r - 20, p.y)) * 100) / 100;
   }
+  const R = (v: number) => Math.round(v * 100) / 100;
 
   const sorted = [...nodes].sort((a, b) => b.engagement - a.engagement);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 620 }}>
-      <rect x="0" y="0" width={W} height={H} rx="14" fill="#0a0f1f" />
-      {edges.map((e, i) => {
-        const a = pts.get(e.a), b = pts.get(e.b); if (!a || !b) return null;
-        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#334155" strokeOpacity={0.4} strokeWidth={1} />;
-      })}
-      {sorted.map((n) => {
-        const p = pts.get(n.id)!; const r = nr(n.engagement); const c = commColor(n.community);
-        return (
-          <g key={n.id}>
-            <title>{`${n.label} · ${n.community} · ${n.posts} posts · engagement ${n.engagement.toLocaleString('en-US')}`}</title>
-            <circle cx={p.x} cy={p.y} r={r} fill={c} fillOpacity={0.28} stroke={c} strokeWidth={1.5} />
-            {r > 13 && <text x={p.x} y={p.y + r + 12} textAnchor="middle" fontSize="10" fill="#cbd5e1">{n.label}</text>}
-          </g>
-        );
-      })}
-    </svg>
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 620 }}>
+        <rect x="0" y="0" width={W} height={H} rx="14" fill="#0a0f1f" />
+        {edges.map((e, i) => {
+          const a = pts.get(e.a), b = pts.get(e.b); if (!a || !b) return null;
+          return <line key={i} x1={R(a.x)} y1={R(a.y)} x2={R(b.x)} y2={R(b.y)} stroke="#334155" strokeOpacity={0.4} strokeWidth={1} />;
+        })}
+        {sorted.map((n) => {
+          const p = pts.get(n.id)!; const r = R(nr(n.engagement)); const c = commColor(n.community);
+          const sc = netSentColor(n.sentiment);
+          return (
+            // Nodo cliccabile → i post di quell'autore in Listening.
+            <a key={n.id} href={href(n.id)} style={{ cursor: 'pointer' }}>
+              <title>{`${n.label}
+Focus: ${n.community}  ·  ${TIER_LABEL[n.tier]} voice
+${n.posts} posts  ·  engagement ${n.engagement.toLocaleString('en-US')}  ·  sentiment ${netSentWord(n.sentiment)}${n.sentiment === null ? '' : ` (${n.sentiment > 0 ? '+' : ''}${n.sentiment})`}
+Click to see their posts`}</title>
+              {/* Anello esterno = sentiment medio dell'autore; riempimento = tema. */}
+              <circle cx={p.x} cy={p.y} r={R(r + 2.5)} fill="none" stroke={sc} strokeWidth={2.5} strokeOpacity={0.9} />
+              <circle cx={p.x} cy={p.y} r={r} fill={c} fillOpacity={0.3} stroke={c} strokeWidth={1.5} />
+              {r > 12 && <text x={p.x} y={R(p.y + r + 13)} textAnchor="middle" fontSize="10" fill="#cbd5e1">{n.label}</text>}
+            </a>
+          );
+        })}
+      </svg>
+
+      {/* Lista classificata: informazione garantita anche se il grafo è sparso. */}
+      <div className="mt-4">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Top voices — click to read their posts</p>
+        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+          {sorted.slice(0, 10).map((n, i) => (
+            <a key={n.id} href={href(n.id)}
+              className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-white/[0.02] px-2.5 py-1.5 text-xs transition hover:bg-sky-500/10"
+              title={`See ${n.label}'s posts`}>
+              <span className="w-4 shrink-0 text-right text-slate-600">{i + 1}</span>
+              <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: commColor(n.community) }} />
+              <span className="min-w-0 flex-1 truncate font-medium text-slate-200">{n.label}</span>
+              <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px]"
+                style={{ color: netSentColor(n.sentiment), backgroundColor: `${netSentColor(n.sentiment)}1f` }}>
+                {netSentWord(n.sentiment)}
+              </span>
+              <span className="shrink-0 tabular-nums text-slate-500">{n.posts}p</span>
+              <span className="w-14 shrink-0 text-right tabular-nums text-slate-400">{n.engagement.toLocaleString('en-US')}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -14,8 +14,8 @@ export default async function GalaxyInsightPage() {
     <>
       <PageHeader
         title="Conversation Galaxy"
-        info="The whole conversation as a solar system: the sun is your Health Index, planets are sources (size = volume), each planet's three moons are sized by its positive/neutral/negative split. Data: your analyzed mentions. Period: last 14 days. Source: your collected mentions across all active sources."
-        subtitle="Your conversation as a real solar system (last 14 days). Each planet is a source — sized by volume — orbiting the sun, whose glow reflects your Health Index. Every planet has three moons sized 1–10 by its sentiment split: positive, neutral, negative. Drag to orbit, scroll to fly closer."
+        info="The whole conversation as a solar system: the sun is your Health Index, planets are sources (size = volume), each planet's three moons are sized by its positive/neutral/negative split. An outer belt shows the dominant topics, and golden pulsing comets mark emerging trends — both toggleable. Data: your analyzed mentions, last 14 days, across all active sources."
+        subtitle="Your conversation as a real solar system (last 14 days). Each planet is a source — sized by volume — orbiting the sun, whose glow reflects your Health Index. Every planet has three moons sized 1–10 by its sentiment split. Around it all, an outer belt of topics (what's discussed) and golden comets for emerging trends — switch any layer on or off. Drag to orbit, scroll to fly closer."
       />
       {g.stars.length < 5 ? (
         <EmptyState message="Not enough mentions yet to render the galaxy." />

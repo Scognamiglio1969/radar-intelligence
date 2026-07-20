@@ -157,7 +157,7 @@ export async function GET(req: Request) {
   if (has('network') && data.network.nodes.length) {
     children.push(h1('Influencer network — top voices by community'));
     children.push(table(
-      ['Author', 'Community', 'Posts', 'Engagement'],
+      ['Author', 'Focus topic', 'Posts', 'Engagement'],
       [...data.network.nodes].sort((a, b) => b.engagement - a.engagement).slice(0, 25)
         .map((n) => [n.label, n.community, String(n.posts), n.engagement.toLocaleString('en-US')]),
     ));

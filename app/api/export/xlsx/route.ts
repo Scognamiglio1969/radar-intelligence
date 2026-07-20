@@ -145,7 +145,7 @@ export async function GET(req: Request) {
   if (has('network') && data.network.nodes.length) {
   const wsNet = sheet(wb, 'Influencer network', [
     { header: 'Author', key: 'a', width: 24 },
-    { header: 'Community', key: 'c', width: 22 },
+    { header: 'Focus topic', key: 'c', width: 22 },
     { header: 'Source', key: 'f', width: 14 },
     { header: 'Posts', key: 'p', width: 8 },
     { header: 'Engagement', key: 'e', width: 12 },

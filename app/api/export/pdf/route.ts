@@ -260,7 +260,7 @@ export async function GET(req: Request) {
   if (has('network') && data.network.nodes.length) {
     heading('Influencer network — top voices by community');
     table(
-      ['Author', 'Community', 'Posts', 'Engagement'],
+      ['Author', 'Focus topic', 'Posts', 'Engagement'],
       [...data.network.nodes].sort((a, b) => b.engagement - a.engagement).slice(0, 20)
         .map((n) => [n.label, n.community, String(n.posts), n.engagement.toLocaleString('en-US')]),
       [0.36, 0.34, 0.14, 0.16], ['left', 'left', 'right', 'right'],

@@ -6,9 +6,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 type Star = { si: number; s: number; e: number; age: number };
 type Source = { id: string; label: string; color: string; count: number };
+type Topic = { topic: string; n: number };
+type Trend = { topic: string; score: number };
 type Props = {
   title: string; core: number; grade: string; total: number; avgSentiment: number;
-  sources: Source[]; stars: Star[];
+  sources: Source[]; stars: Star[]; topics: Topic[]; trends: Trend[];
 };
 
 function rand(n: number): number {
@@ -27,12 +29,16 @@ const MOON_TINT: Record<string, number> = {
   positive: 0x7fe0b0, neutral: 0x9fb6dd, negative: 0xe08878,
 };
 
-export function ConversationGalaxy({ title, core, grade, total, avgSentiment, sources, stars }: Props) {
+export function ConversationGalaxy({ title, core, grade, total, avgSentiment, sources, stars, topics, trends }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [selSrc, setSelSrc] = useState<Set<number>>(new Set());
   const [selSent, setSelSent] = useState<Set<string>>(new Set());
+  const [showTopics, setShowTopics] = useState(true);
+  const [showTrends, setShowTrends] = useState(true);
   const selSrcRef = useRef(selSrc); selSrcRef.current = selSrc;
   const selSentRef = useRef(selSent); selSentRef.current = selSent;
+  const showTopicsRef = useRef(showTopics); showTopicsRef.current = showTopics;
+  const showTrendsRef = useRef(showTrends); showTrendsRef.current = showTrends;
   const [hatch, setHatch] = useState(false);
   const hatchRef = useRef(() => {}); hatchRef.current = () => setHatch(true);
   const toggle = <T,>(set: React.Dispatch<React.SetStateAction<Set<T>>>, k: T) =>
@@ -68,7 +74,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 6000);
-    camera.position.set(0, 95, 275);
+    camera.position.set(0, 130, 380);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.06;
@@ -139,7 +145,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
 
     // ── Etichette sprite ──
     // Nome fonte: testo grande su pillola scura semi-trasparente (leggibile ovunque).
-    const makeLabel = (text: string) => {
+    const makeLabel = (text: string, w = 34, border = 'rgba(148,163,184,0.35)', fg = 'rgba(238,243,252,0.98)') => {
       const c = document.createElement('canvas');
       c.width = 640; c.height = 160;
       const cctx = c.getContext('2d')!;
@@ -150,14 +156,14 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       cctx.beginPath();
       cctx.roundRect(x0, 28, tw, 104, 52);
       cctx.fill();
-      cctx.strokeStyle = 'rgba(148,163,184,0.35)'; cctx.lineWidth = 3; cctx.stroke();
+      cctx.strokeStyle = border; cctx.lineWidth = 3; cctx.stroke();
       cctx.textAlign = 'center'; cctx.textBaseline = 'middle';
-      cctx.fillStyle = 'rgba(238,243,252,0.98)';
+      cctx.fillStyle = fg;
       cctx.fillText(text, 320, 82);
       const t = new THREE.CanvasTexture(c);
       const m = new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false });
       const s = new THREE.Sprite(m);
-      s.scale.set(34, 8.5, 1);
+      s.scale.set(w, w / 4, 1);
       disposables.push(t, m);
       return s;
     };
@@ -253,6 +259,55 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       disposables.push(g, m);
     }
 
+    // ── Cintura dei TEMI (contenuto): asteroidi esterni, uno per topic ──
+    // Ring esterno oltre l'ultimo pianeta: i temi che circondano la conversazione.
+    const topicGroup = new THREE.Group();
+    const topicBeltR = 262;
+    const maxTopicN = Math.max(1, ...topics.map((t) => t.n));
+    const rockGeo = new THREE.IcosahedronGeometry(1, 0);
+    disposables.push(rockGeo);
+    topics.forEach((tp, i) => {
+      const ang = (i / Math.max(1, topics.length)) * Math.PI * 2;
+      const rr = 2 + Math.sqrt(tp.n / maxTopicN) * 4.5;
+      const mMat = new THREE.MeshStandardMaterial({ color: 0x9fb6dd, roughness: 0.75, metalness: 0.1 });
+      const mesh = new THREE.Mesh(rockGeo, mMat);
+      mesh.scale.setScalar(rr);
+      const y = (rand(i * 4.4) - 0.5) * 16;
+      mesh.position.set(Math.cos(ang) * topicBeltR, y, Math.sin(ang) * topicBeltR);
+      topicGroup.add(mesh); disposables.push(mMat);
+      const lab = makeLabel(tp.topic, 26, 'rgba(159,182,221,0.45)', 'rgba(219,229,247,0.98)');
+      lab.position.set(mesh.position.x, y + rr + 6, mesh.position.z);
+      topicGroup.add(lab);
+    });
+    scene.add(topicGroup);
+
+    // ── TREND (temi emergenti): comete dorate pulsanti su un anello inclinato ──
+    const trendGroup = new THREE.Group();
+    trendGroup.rotation.x = 0.34;
+    const trendR = 298;
+    const trendMeshes: { mesh: THREE.Mesh; base: number; phase: number }[] = [];
+    const maxScore = Math.max(1, ...trends.map((t) => t.score));
+    trends.forEach((tr, i) => {
+      const ang = (i / Math.max(1, trends.length)) * Math.PI * 2 + 0.4;
+      const rr = 3 + Math.sqrt(tr.score / maxScore) * 4;
+      const mMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 0.6, roughness: 0.5, metalness: 0.2 });
+      const mesh = new THREE.Mesh(rockGeo, mMat);
+      mesh.scale.setScalar(rr);
+      mesh.position.set(Math.cos(ang) * trendR, 0, Math.sin(ang) * trendR);
+      trendGroup.add(mesh); disposables.push(mMat);
+      // aura additiva (coda cometa stilizzata)
+      const auraMat = new THREE.SpriteMaterial({ map: glowTex, color: 0xffcf6a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7 });
+      const aura = new THREE.Sprite(auraMat);
+      aura.scale.setScalar(rr * 7);
+      aura.position.copy(mesh.position);
+      trendGroup.add(aura); disposables.push(auraMat);
+      const lab = makeLabel(`${tr.topic}  ×${tr.score.toFixed(0)}`, 30, 'rgba(251,191,36,0.55)', 'rgba(255,236,190,0.99)');
+      lab.position.set(mesh.position.x, rr + 8, mesh.position.z);
+      trendGroup.add(lab);
+      trendMeshes.push({ mesh, base: rr, phase: rand(i * 9.1) * Math.PI * 2 });
+    });
+    scene.add(trendGroup);
+
     // ── Easter egg: click sulla Terra ──
     const raycaster = new THREE.Raycaster();
     const ndc = new THREE.Vector2();
@@ -300,6 +355,18 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
           m.num.visible = vis;
         }
       }
+      // Layer contenuto/trend: rotazione lenta, pulsazione, on/off dai toggle.
+      topicGroup.visible = showTopicsRef.current;
+      trendGroup.visible = showTrendsRef.current;
+      if (!reduce) {
+        topicGroup.rotation.y = t * 0.012;
+        trendGroup.rotation.y = -t * 0.018;
+      }
+      for (const tm of trendMeshes) {
+        const pulse = 1 + 0.18 * Math.sin(t * 2 + tm.phase);
+        tm.mesh.scale.setScalar(tm.base * pulse);
+      }
+
       fillLight.position.copy(camera.position);
       controls.update();
       renderer.render(scene, camera);
@@ -324,7 +391,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
       renderer.dispose();
       mount.removeChild(renderer.domElement);
     };
-  }, [stars, sources, core]);
+  }, [stars, sources, core, topics, trends]);
 
   const sentiments: { key: string; label: string; color: string }[] = [
     { key: 'positive', label: 'positive', color: '#7fe0b0' },
@@ -360,6 +427,18 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
           <button onClick={() => { setSelSrc(new Set()); setSelSent(new Set()); }}
             className="ml-1 rounded-full px-2.5 py-1 text-xs text-sky-400 hover:text-sky-300">clear ✕</button>
         )}
+
+        <span className="ml-2 mr-1 text-[11px] uppercase tracking-wide text-slate-600">Layers:</span>
+        <button onClick={() => setShowTopics((v) => !v)}
+          title="Show/hide the outer belt of dominant topics (what the conversation is about)"
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${showTopics ? 'border-sky-400 bg-sky-500/15 text-slate-100' : 'border-[var(--border)] text-slate-400 hover:text-slate-200'}`}>
+          <span className="size-2.5 rounded-full" style={{ backgroundColor: '#9fb6dd' }} />Topics
+        </button>
+        <button onClick={() => setShowTrends((v) => !v)}
+          title="Show/hide the emerging trends as pulsing golden comets"
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${showTrends ? 'border-sky-400 bg-sky-500/15 text-slate-100' : 'border-[var(--border)] text-slate-400 hover:text-slate-200'}`}>
+          <span className="size-2.5 rounded-full" style={{ backgroundColor: '#fbbf24' }} />Trends
+        </button>
       </div>
 
       <div className="relative w-full overflow-hidden rounded-xl border border-[var(--border)] bg-black" style={{ height: 600 }}>
@@ -374,7 +453,7 @@ export function ConversationGalaxy({ title, core, grade, total, avgSentiment, so
           </div>
         </div>
         <p className="pointer-events-none absolute bottom-3 left-4 max-w-[70%] text-[11px] text-slate-600">
-Click the Earth for a surprise · drag to orbit · scroll to fly closer · planets = sources (size = volume) · 3 moons each, sized 1–10 by sentiment split
+drag to orbit · scroll to fly closer · planets = sources (size = volume) · 3 moons each, sized 1–10 by sentiment · outer belt = topics · golden comets = emerging trends
         </p>
         <p className="pointer-events-none absolute bottom-3 right-4 text-[10px] text-slate-700">
           Textures © Solar System Scope · CC BY 4.0

@@ -235,7 +235,7 @@ export async function GET(req: Request) {
     sn.addText('Influencer network — top voices by community', titleOpts);
     const top = [...data.network.nodes].sort((a, b) => b.engagement - a.engagement).slice(0, 16);
     sn.addTable([
-      ['Author', 'Community', 'Posts', 'Engagement'].map((t) => ({ text: t, options: { bold: true, color: TEXT, fill: { color: PANEL }, fontSize: 13 } })),
+      ['Author', 'Focus topic', 'Posts', 'Engagement'].map((t) => ({ text: t, options: { bold: true, color: TEXT, fill: { color: PANEL }, fontSize: 13 } })),
       ...top.map((n) => [
         { text: n.label, options: { color: TEXT, fontSize: 12 } },
         { text: n.community, options: { color: MUTED, fontSize: 12 } },
