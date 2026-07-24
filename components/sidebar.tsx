@@ -7,49 +7,38 @@ import {
   Radar, LayoutDashboard, Ear, Newspaper, BarChart3, Users,
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
-  UserCog, LogOut, UserCircle2, ScatterChart, Grid3x3, TrendingDown, Boxes, Workflow, Globe2, HeartPulse, Gauge, LayoutGrid, Sparkles, Activity, Waypoints, ShieldAlert, Orbit, Triangle, Lightbulb,
+  UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
 
+// Menu organizzato per INTENZIONE (cosa stai facendo), non per tecnologia:
+// monitorare → analizzare → interpretare → produrre → configurare.
+// I 16 insight non stanno più in elenco: vivono nell'hub /insights, raggruppati
+// per tema. Così il menu resta leggibile e ogni grafico è spiegato dove sta.
 const NAV: ({ href: string; label: string; icon: typeof Radar } | { section: string })[] = [
-  { section: 'Analytics' },
+  { section: 'Monitor' },
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/listening', label: 'Listening', icon: Ear },
   { href: '/media', label: 'Media', icon: Newspaper },
-  { href: '/benchmark', label: 'Benchmark', icon: BarChart3 },
+  { href: '/alerts', label: 'Alerts', icon: Bell },
+  { href: '/changes', label: 'What changed', icon: Diff },
+  { section: 'Analyze' },
   { href: '/audience', label: 'Audience', icon: Users },
-  { href: '/content', label: 'Content', icon: Star },
-  { section: 'Intelligence' },
+  { href: '/benchmark', label: 'Benchmark', icon: BarChart3 },
+  { href: '/content', label: 'Top content', icon: Star },
+  { href: '/insights', label: 'Explore insights', icon: LayoutGrid },
+  { section: 'Interpret' },
   { href: '/pov', label: 'Point of View', icon: Lightbulb },
   { href: '/narratives', label: 'Narratives', icon: GitBranch },
-  { href: '/stakeholders', label: 'Stakeholder map', icon: Network },
   { href: '/timeline', label: 'Timeline', icon: History },
-  { href: '/changes', label: 'What changed', icon: Diff },
-  { href: '/alerts', label: 'Alerts', icon: Bell },
-  { href: '/brief', label: 'Brief', icon: FileText },
-  { section: 'Advanced insights' },
-  { href: '/insights/galaxy', label: 'Conversation Galaxy', icon: Orbit },
-  { href: '/insights/health', label: 'Health Index', icon: Gauge },
-  { href: '/insights/sov', label: 'Share of Voice', icon: Activity },
-  { href: '/insights/geo', label: 'Languages', icon: Globe2 },
-  { href: '/insights/topics', label: 'Topics × Sentiment', icon: ScatterChart },
-  { href: '/insights/flow', label: 'Conversation flow', icon: Waypoints },
-  { href: '/insights/momentum', label: 'Momentum quadrant', icon: LayoutGrid },
-  { href: '/insights/emotions', label: 'Emotion radar', icon: HeartPulse },
-  { href: '/insights/heatmap', label: 'Hourly heatmap', icon: Grid3x3 },
-  { href: '/insights/waterfall', label: 'Sentiment waterfall', icon: TrendingDown },
-  { href: '/insights/crisis', label: 'Crisis radar', icon: ShieldAlert },
-  { href: '/insights/network', label: 'Influencer network', icon: Network },
-  { href: '/insights/pyramid', label: 'Author pyramid', icon: Triangle },
-  { href: '/insights/constellation', label: 'Semantic constellation', icon: Sparkles },
-  { href: '/insights/clusters', label: 'Conversation clusters', icon: Boxes },
-  { href: '/insights/causal', label: 'Cause-Effect', icon: Workflow },
-  { section: 'AI Studio' },
+  { href: '/stakeholders', label: 'Stakeholder map', icon: Network },
   { href: '/ask', label: 'Ask the data', icon: MessageSquareText },
+  { section: 'Create' },
   { href: '/studio', label: 'Content Studio', icon: PenLine },
-  { section: '' },
+  { href: '/brief', label: 'Daily brief', icon: FileText },
   { href: '/tv', label: 'War Room', icon: MonitorPlay },
+  { section: 'Setup' },
   { href: '/settings', label: 'Projects', icon: Settings },
 ];
 
@@ -179,7 +168,10 @@ function NavLinks({ pathname, alertCount = 0, onNavigate }: {
             : <hr key={i} className="my-2 border-[var(--border)]" />;
         }
         const { href, label, icon: Icon } = item;
-        const active = pathname === href;
+        // L'hub resta evidenziato anche quando sei dentro un singolo insight.
+        const active = href === '/insights'
+          ? pathname.startsWith('/insights')
+          : pathname === href;
         return (
           <Link
             key={href}
