@@ -7,7 +7,7 @@ import {
   Radar, LayoutDashboard, Ear, Newspaper, BarChart3, Users,
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
-  UserCog, LogOut, UserCircle2, ScatterChart, Grid3x3, TrendingDown, Boxes, Workflow, Globe2, HeartPulse, Gauge, LayoutGrid, Sparkles, Activity, Waypoints, ShieldAlert, Orbit, Triangle,
+  UserCog, LogOut, UserCircle2, ScatterChart, Grid3x3, TrendingDown, Boxes, Workflow, Globe2, HeartPulse, Gauge, LayoutGrid, Sparkles, Activity, Waypoints, ShieldAlert, Orbit, Triangle, Lightbulb,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
@@ -21,6 +21,7 @@ const NAV: ({ href: string; label: string; icon: typeof Radar } | { section: str
   { href: '/audience', label: 'Audience', icon: Users },
   { href: '/content', label: 'Content', icon: Star },
   { section: 'Intelligence' },
+  { href: '/pov', label: 'Point of View', icon: Lightbulb },
   { href: '/narratives', label: 'Narratives', icon: GitBranch },
   { href: '/stakeholders', label: 'Stakeholder map', icon: Network },
   { href: '/timeline', label: 'Timeline', icon: History },
