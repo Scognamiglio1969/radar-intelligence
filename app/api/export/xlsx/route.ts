@@ -278,6 +278,25 @@ export async function GET(req: Request) {
     ]);
     for (const t of data.trends) ws.addRow({ t: t.topic, s: Number(t.score.toFixed(1)), n: t.n24, e: t.explanation ?? '' });
   }
+  if (has('pov') && data.pov.pov) {
+    const pv = data.pov.pov;
+    const ws = sheet(wb, 'Point of View', [
+      { header: 'Block', key: 'i', width: 7 }, { header: 'Kind', key: 'k', width: 13 },
+      { header: 'Title', key: 't', width: 45 }, { header: 'Confidence', key: 'c', width: 12 },
+      { header: 'Figures', key: 'f', width: 45 }, { header: 'Narrative', key: 'b', width: 90 },
+    ]);
+    ws.addRow({ i: '', k: 'THESIS', t: pv.headline, c: '', f: '', b: '' });
+    for (const [i, b] of pv.blocks.entries()) {
+      ws.addRow({
+        i: i + 1, k: b.kind, t: b.title, c: b.confidence,
+        f: b.stats.map((s) => `${s.value} — ${s.label}`).join(' · '), b: b.body,
+      });
+    }
+    for (const c of pv.counterSignals) ws.addRow({ k: 'counter-signal', b: c.point });
+    for (const t of pv.implications) ws.addRow({ k: 'implication', b: t });
+    for (const t of pv.watch) ws.addRow({ k: 'watch', b: t });
+  }
+
   if (has('narratives') && data.narratives.length) {
     const ws = sheet(wb, 'Narratives', [
       { header: 'Title', key: 't', width: 40 }, { header: 'Stance', key: 's', width: 14 },

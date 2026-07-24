@@ -255,6 +255,33 @@ export async function GET(req: Request) {
     ));
   }
 
+  // Point of View
+  if (has('pov') && data.pov.pov) {
+    const pv = data.pov.pov;
+    children.push(h1('Point of View'));
+    children.push(p(pv.headline, { bold: true, size: 26 }));
+    for (const [i, b] of pv.blocks.entries()) {
+      children.push(h2(`${i + 1}. ${b.title}`));
+      children.push(p(`${b.kind} · ${b.confidence} confidence`, { muted: true, size: 18 }));
+      if (b.stats.length) {
+        children.push(table(['Figure', 'What it measures'], b.stats.map((s) => [s.value, s.label])));
+      }
+      children.push(p(b.body));
+    }
+    if (pv.counterSignals.length) {
+      children.push(h2('Counter-signals'));
+      for (const c of pv.counterSignals) children.push(bullet(c.point));
+    }
+    if (pv.implications.length) {
+      children.push(h2('So what'));
+      for (const t of pv.implications) children.push(bullet(t));
+    }
+    if (pv.watch.length) {
+      children.push(h2('What to watch'));
+      for (const t of pv.watch) children.push(bullet(t));
+    }
+  }
+
   // Narrazioni
   if (has('narratives') && data.narratives.length) {
     children.push(h1('Narratives'));

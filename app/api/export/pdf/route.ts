@@ -357,6 +357,32 @@ export async function GET(req: Request) {
     );
   }
 
+  // ---- Point of View ----
+  if (has('pov') && data.pov.pov) {
+    const p = data.pov.pov;
+    heading('Point of View');
+    para(p.headline, { bold: true, size: 12, gap: 0.5 });
+    for (const [i, b] of p.blocks.entries()) {
+      para(`${i + 1}. ${b.title}  [${b.kind} · ${b.confidence} confidence]`, { bold: true, size: 10.5, gap: 0.2 });
+      if (b.stats.length) {
+        para(b.stats.map((s) => `${s.value} — ${s.label}`).join('   ·   '), { size: 9, color: ACCENT, gap: 0.2 });
+      }
+      para(b.body, { size: 9.5, gap: 0.45 });
+    }
+    if (p.counterSignals.length) {
+      para('Counter-signals', { bold: true, size: 10.5, gap: 0.2 });
+      for (const c of p.counterSignals) para(`•  ${c.point}`, { size: 9.5, color: MUTED, gap: 0.2 });
+    }
+    if (p.implications.length) {
+      para('So what', { bold: true, size: 10.5, gap: 0.2 });
+      for (const t of p.implications) para(`→  ${t}`, { size: 9.5, gap: 0.2 });
+    }
+    if (p.watch.length) {
+      para('What to watch', { bold: true, size: 10.5, gap: 0.2 });
+      for (const t of p.watch) para(`◦  ${t}`, { size: 9.5, gap: 0.2 });
+    }
+  }
+
   // ---- Narrazioni ----
   if (has('narratives') && data.narratives.length) {
     heading('Narratives');

@@ -18,6 +18,13 @@ const STATUS_STYLE: Record<string, string> = {
   emerging: 'text-violet-300', rising: 'text-emerald-400',
   declining: 'text-red-400', stable: 'text-slate-500',
 };
+const KIND_STYLE: Record<string, string> = {
+  trend: 'bg-sky-500/15 text-sky-300',
+  innovation: 'bg-violet-500/15 text-violet-300',
+  concept: 'bg-teal-500/15 text-teal-300',
+  risk: 'bg-red-500/15 text-red-300',
+  opportunity: 'bg-emerald-500/15 text-emerald-300',
+};
 
 const pct = (v: number | null) => (v === null ? '—' : `${v > 0 ? '+' : ''}${v}%`);
 const sent = (v: number | null) => (v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(2)}`);
@@ -111,29 +118,43 @@ export default async function PovPage() {
             <h2 className="text-lg font-semibold leading-snug text-slate-100">{pov.headline}</h2>
           </section>
 
-          {/* Spostamenti */}
+          {/* Blocchi pronti per slide: titolo + testo + numeri */}
           <section>
             <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-300">
-              <TrendingUp className="size-4 text-emerald-400" /> What is shifting
+              <TrendingUp className="size-4 text-emerald-400" /> The story in {pov.blocks.length} blocks
+              <span className="text-[11px] font-normal text-slate-600">— each one is a slide: title, narrative, numbers</span>
             </h2>
             <div className="flex flex-col gap-3">
-              {pov.shifts.map((s, i) => (
+              {pov.blocks.map((b, i) => (
                 <article key={i} className="panel px-5 py-4">
-                  <div className="flex flex-wrap items-start gap-2">
-                    <h3 className="flex-1 text-sm font-semibold leading-snug text-slate-100">
-                      {s.claim}<Cites ids={s.citations} byId={byId} />
-                    </h3>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${CONF_STYLE[s.confidence]}`}
-                      title="How much the data supports this claim: high = solid volume and a consistent trend; low = thin sample">
-                      {s.confidence} confidence
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-semibold tabular-nums text-slate-600">{String(i + 1).padStart(2, '0')}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${KIND_STYLE[b.kind]}`}
+                      title={`This block is framed as a ${b.kind}`}>
+                      {b.kind}
+                    </span>
+                    <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium ${CONF_STYLE[b.confidence]}`}
+                      title="How much the data supports this block: high = solid volume and a consistent trend; low = thin sample">
+                      {b.confidence} confidence
                     </span>
                   </div>
-                  {s.magnitude && (
-                    <p className="mt-1.5 font-mono text-xs text-sky-300" title="The verified figures behind this claim, computed from your data">
-                      {s.magnitude}
-                    </p>
+
+                  <h3 className="mt-1.5 text-base font-semibold leading-snug text-slate-100">
+                    {b.title}<Cites ids={b.citations} byId={byId} />
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-300">{b.body}</p>
+
+                  {b.stats.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
+                      {b.stats.map((st, k) => (
+                        <div key={k} className="min-w-[120px] flex-1 rounded-lg bg-white/[0.03] px-3 py-2"
+                          title={`${st.value} — ${st.label}. Figure taken from the verified data below.`}>
+                          <p className="text-xl font-bold tabular-nums text-sky-300">{st.value}</p>
+                          <p className="text-[11px] leading-tight text-slate-500">{st.label}</p>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                  {s.why && <p className="mt-1.5 text-sm leading-relaxed text-slate-300">{s.why}</p>}
                 </article>
               ))}
             </div>

@@ -42,14 +42,21 @@ export type FactPack = {
   narratives: { title: string; stance: string | null; coordinated: boolean; posts: number }[];
 };
 
-export type PovShift = {
-  claim: string; magnitude: string; why: string;
+/** Un numero da mettere in evidenza sulla slide: valore grande + didascalia. */
+export type PovStat = { value: string; label: string };
+
+/** Blocco pronto per una slide: titolo, testo esplicativo, numeri a sostegno. */
+export type PovBlock = {
+  title: string;
+  kind: 'trend' | 'innovation' | 'concept' | 'risk' | 'opportunity';
+  body: string;
+  stats: PovStat[];
   confidence: 'high' | 'medium' | 'low';
   citations: number[];
 };
 export type PointOfView = {
   headline: string;
-  shifts: PovShift[];
+  blocks: PovBlock[];
   counterSignals: { point: string; citations: number[] }[];
   implications: string[];
   watch: string[];
@@ -171,25 +178,29 @@ export async function povFactPack(projectId: number, days = 90): Promise<FactPac
   };
 }
 
-const POV_SYSTEM = `You are a senior market analyst writing a Point of View for an executive audience.
+const POV_SYSTEM = `You are a senior market analyst writing a Point of View that will be turned into PRESENTATION SLIDES.
 
 You receive VERIFIED figures (already computed — never recompute or invent numbers) plus a CLOSED list of citable posts and, when available, academic research evidence.
 
-Write a defensible argument, not a summary. Rules:
-- Use ONLY the numbers provided. Quote them precisely (volumes, % change, sentiment values, dates).
-- Every shift must cite 1-3 post ids taken ONLY from the provided citable list.
-- Be intellectually honest: include counter-signals — what argues AGAINST the thesis, weak evidence, or alternative readings.
+Produce 3-5 BLOCKS. Each block must work as one slide: a title that NAMES the idea, a paragraph with real substance, and the numbers that prove it.
+
+Rules:
+- "title": name the trend / innovation / concept, do not describe it vaguely. Max 8 words, specific and memorable. Not a generic label like "Growth" — something a reader remembers.
+- "body": 3-4 full sentences of real substance — what is happening, what is driving it, why it matters for decisions. This is the slide narrative: no filler, no hedging clichés.
+- "stats": 2-3 figures taken ONLY from the provided data, each with a short label. Use the exact values given (e.g. value "+43%", label "mentions vs previous 30 days"). Never invent a number.
+- "citations": 1-3 post ids taken ONLY from the provided citable list.
+- Be intellectually honest: also give counter-signals — what argues AGAINST the thesis, weak evidence, alternative readings.
 - Set confidence honestly: "high" only when volume is meaningful AND the trend is consistent; "low" when the sample is thin.
 - If research evidence is provided, use it to corroborate or challenge the market conversation.
-- No filler, no hedging clichés. Concrete and specific.
 
 Respond ONLY with this JSON object:
 {
-  "headline": "<the thesis in one sentence>",
-  "shifts": [{
-    "claim": "<what is changing>",
-    "magnitude": "<the numbers that prove it>",
-    "why": "<what is driving it / what it means>",
+  "headline": "<the overall thesis in one sentence>",
+  "blocks": [{
+    "title": "<the named idea — max 8 words>",
+    "kind": "trend|innovation|concept|risk|opportunity",
+    "body": "<3-4 substantial sentences>",
+    "stats": [{ "value": "<figure>", "label": "<what it measures>" }],
     "confidence": "high|medium|low",
     "citations": [<post ids>]
   }],
@@ -197,7 +208,7 @@ Respond ONLY with this JSON object:
   "implications": ["<so what — the stance to take>"],
   "watch": ["<leading indicator or open question to monitor>"]
 }
-3-5 shifts, 1-3 counter-signals, 2-4 implications, 2-4 watch items.`;
+3-5 blocks, 1-3 counter-signals, 2-4 implications, 2-4 watch items.`;
 
 function asArray(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [];
@@ -211,24 +222,31 @@ export function validate(raw: unknown, allowed: Set<number>): PointOfView | null
   const ids = (v: unknown) => asArray(v).map(Number).filter((n) => allowed.has(n)).slice(0, 3);
   const str = (v: unknown, max = 400) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
-  const shifts: PovShift[] = asArray(o.shifts).map((s) => {
+  const KINDS = ['trend', 'innovation', 'concept', 'risk', 'opportunity'] as const;
+
+  const blocks: PovBlock[] = asArray(o.blocks).map((s) => {
     const x = s as Record<string, unknown>;
     const c = String(x.confidence ?? 'medium').toLowerCase();
-    const confidence: PovShift['confidence'] = c === 'high' ? 'high' : c === 'low' ? 'low' : 'medium';
+    const confidence: PovBlock['confidence'] = c === 'high' ? 'high' : c === 'low' ? 'low' : 'medium';
+    const k = String(x.kind ?? 'trend').toLowerCase() as PovBlock['kind'];
     return {
-      claim: str(x.claim, 300),
-      magnitude: str(x.magnitude, 300),
-      why: str(x.why, 500),
+      title: str(x.title, 120),
+      kind: KINDS.includes(k) ? k : 'trend',
+      body: str(x.body, 900),
+      stats: asArray(x.stats).map((st) => {
+        const y = st as Record<string, unknown>;
+        return { value: str(y.value, 40), label: str(y.label, 90) };
+      }).filter((st) => st.value && st.label).slice(0, 3),
       confidence,
       citations: ids(x.citations),
     };
-  }).filter((s) => s.claim).slice(0, 6);
+  }).filter((s) => s.title && s.body).slice(0, 6);
 
-  if (shifts.length === 0) return null;
+  if (blocks.length === 0) return null;
 
   return {
-    headline: str(o.headline, 300) || shifts[0].claim,
-    shifts,
+    headline: str(o.headline, 300) || blocks[0].title,
+    blocks,
     counterSignals: asArray(o.counterSignals).map((c) => {
       const x = c as Record<string, unknown>;
       return { point: str(x.point, 400), citations: ids(x.citations) };
@@ -247,6 +265,17 @@ export type PovResult = {
   reason?: 'no_ai' | 'thin_data' | 'failed';
 };
 
+/**
+ * Versione per l'export: restituisce la tesi SOLO se già in cache e i numeri,
+ * senza mai chiamare l'AI (un export non deve generare spesa a sorpresa).
+ */
+export async function getPovCached(projectId: number, days = 90): Promise<{ facts: FactPack; pov: PointOfView | null }> {
+  const facts = await povFactPack(projectId, days);
+  const key = `pov:v2:${projectId}:${days}:${new Date().toISOString().slice(0, 10)}`;
+  const pov = await getMeta<PointOfView>(key);
+  return { facts, pov };
+}
+
 /** Point of View completo: numeri + ricerca + tesi AI. Cache giornaliera. */
 export async function getPointOfView(projectId: number, days = 90, force = false): Promise<PovResult> {
   const facts = await povFactPack(projectId, days);
@@ -256,7 +285,7 @@ export async function getPointOfView(projectId: number, days = 90, force = false
 
   if (facts.total < 15) return { facts, research, pov: null, reason: 'thin_data' };
 
-  const key = `pov:${projectId}:${days}:${new Date().toISOString().slice(0, 10)}`;
+  const key = `pov:v2:${projectId}:${days}:${new Date().toISOString().slice(0, 10)}`;
   if (!force) {
     const cached = await getMeta<PointOfView>(key);
     if (cached) return { facts, research, pov: cached };
@@ -285,7 +314,7 @@ export async function getPointOfView(projectId: number, days = 90, force = false
   const text = await callClaude(
     MODELS.sonnet, 'point_of_view', POV_SYSTEM,
     `Sector monitored: ${project?.name ?? 'n/a'}\n\n${JSON.stringify(payload).slice(0, 14000)}`,
-    2200, true,
+    3000, true,
   );
   if (!text) return { facts, research, pov: null, reason: 'failed' };
 

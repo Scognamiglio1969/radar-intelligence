@@ -9,6 +9,7 @@ import { getTrends } from '@/lib/trends';
 import { getNarratives } from '@/lib/narratives';
 import { getTimeline } from '@/lib/timeline';
 import { geoDistribution, emotionDistribution, brandHealthReport, momentumQuadrant, semanticConstellation, sovOverTime, conversationFlow, influencerNetwork, crisisAnatomy, authorPyramid } from '@/lib/insights';
+import { getPovCached } from '@/lib/pov';
 import { SOURCE_META } from '@/lib/connectors';
 import type { projects } from '@/lib/db/schema';
 
@@ -59,8 +60,10 @@ export async function collectExportData(project: Project, days = 30) {
       .limit(3000),
   ]);
   const health = await brandHealthReport(project.id, 14);
+  // Solo se già generato: l'export non deve mai far scattare una spesa AI.
+  const pov = await getPovCached(project.id, 90);
 
-  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, sov, flow, network, crisis, pyramid, health, allMentions };
+  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, sov, flow, network, crisis, pyramid, health, pov, allMentions };
 }
 
 export type ExportData = Awaited<ReturnType<typeof collectExportData>>;

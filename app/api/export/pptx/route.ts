@@ -407,6 +407,54 @@ export async function GET(req: Request) {
     ], { x: 0.5, y: 1.3, w: 12.3, colW: [7.1, 1.6, 1.4, 1.1, 1.1], border: { color: '1E2A4A' }, autoPage: false });
   }
 
+  // ── Point of View: una slide per blocco (titolo, narrativa, numeri)
+  if (has('pov') && data.pov.pov) {
+    const pv = data.pov.pov;
+    const KIND_COLOR: Record<string, string> = {
+      trend: ACCENT, innovation: 'A78BFA', concept: '22D3EE', risk: 'F87171', opportunity: '34D399',
+    };
+    // Slide di apertura con la tesi
+    const st0 = pptx.addSlide({ masterName: 'DARK' });
+    st0.addText('Point of View', { x: 0.5, y: 2.4, w: 12.3, h: 0.5, fontSize: 16, color: ACCENT, align: 'center', charSpacing: 4 });
+    st0.addText(pv.headline, { x: 1.2, y: 2.9, w: 10.9, h: 2, fontSize: 32, bold: true, color: TEXT, align: 'center' });
+
+    for (const [i, b] of pv.blocks.entries()) {
+      const s = pptx.addSlide({ masterName: 'DARK' });
+      const kc = KIND_COLOR[b.kind] ?? ACCENT;
+      s.addText(b.kind.toUpperCase(), { x: 0.5, y: 0.35, w: 6, h: 0.3, fontSize: 11, color: kc, charSpacing: 3 });
+      s.addText(`${String(i + 1).padStart(2, '0')}`, { x: 11.8, y: 0.35, w: 1, h: 0.4, fontSize: 14, color: MUTED, align: 'right' });
+      s.addText(b.title, { x: 0.5, y: 0.75, w: 12.3, h: 1, fontSize: 30, bold: true, color: TEXT });
+      s.addText(b.body, { x: 0.5, y: 1.95, w: 12.3, h: 2.6, fontSize: 15, color: TEXT, lineSpacing: 24, valign: 'top' });
+
+      // Riquadri numerici a sostegno
+      b.stats.slice(0, 3).forEach((stat, k) => {
+        const x = 0.5 + k * 4.25;
+        s.addShape('roundRect', { x, y: 4.75, w: 3.95, h: 1.6, fill: { color: PANEL }, line: { color: '1E2A4A' }, rectRadius: 0.08 });
+        s.addText(stat.value, { x: x + 0.25, y: 4.95, w: 3.45, h: 0.75, fontSize: 30, bold: true, color: kc });
+        s.addText(stat.label, { x: x + 0.25, y: 5.7, w: 3.45, h: 0.55, fontSize: 11, color: MUTED });
+      });
+      s.addText(`${b.confidence} confidence`, { x: 0.5, y: 6.5, w: 6, h: 0.3, fontSize: 10, color: MUTED });
+    }
+
+    // Contro-segnali + implicazioni
+    if (pv.counterSignals.length || pv.implications.length) {
+      const sc = pptx.addSlide({ masterName: 'DARK' });
+      sc.addText('Counter-signals & implications', titleOpts);
+      if (pv.counterSignals.length) {
+        sc.addText('What argues against', { x: 0.5, y: 1.3, w: 6, h: 0.35, fontSize: 14, bold: true, color: 'FBBF24' });
+        sc.addText(pv.counterSignals.map((c) => ({
+          text: c.point, options: { fontSize: 13, color: TEXT, bullet: { code: '2022' }, breakLine: true },
+        })), { x: 0.5, y: 1.75, w: 6, h: 4.6, lineSpacing: 20, valign: 'top' });
+      }
+      if (pv.implications.length) {
+        sc.addText('So what', { x: 6.9, y: 1.3, w: 6, h: 0.35, fontSize: 14, bold: true, color: ACCENT });
+        sc.addText(pv.implications.map((t) => ({
+          text: t, options: { fontSize: 13, color: TEXT, bullet: { code: '2022' }, breakLine: true },
+        })), { x: 6.9, y: 1.75, w: 6, h: 4.6, lineSpacing: 20, valign: 'top' });
+      }
+    }
+  }
+
   // ── Narrazioni
   if (has('narratives') && data.narratives.length) {
     const sn = pptx.addSlide({ masterName: 'DARK' });

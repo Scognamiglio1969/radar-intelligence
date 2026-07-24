@@ -28,6 +28,7 @@ export const EXPORT_SECTIONS = [
   { id: 'network', label: 'Influencer network', group: 'Benchmark & audience' },
   { id: 'pyramid', label: 'Author pyramid', group: 'Benchmark & audience' },
   // Intelligence — narrazione e sintesi
+  { id: 'pov', label: 'Point of View', group: 'Intelligence' },
   { id: 'narratives', label: 'Narratives', group: 'Intelligence' },
   { id: 'timeline', label: 'Event timeline', group: 'Intelligence' },
   { id: 'alerts', label: 'Alerts', group: 'Intelligence' },
