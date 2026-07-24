@@ -101,12 +101,18 @@ function sanitize(s: string): string {
  * are mapped to that provider's equivalent models. The historical name is kept
  * so ~25 call sites don't change.
  */
-export async function callClaude(model: string, purpose: string, system: string, user: string, maxTokens: number): Promise<string | null> {
+export async function callClaude(model: string, purpose: string, system: string, user: string, maxTokens: number, localize = false): Promise<string | null> {
   // Public demo: never spend on the API, regardless of any configured key.
   if (process.env.DEMO_MODE === '1') return null;
   const provider = await aiProvider();
   const key = await providerKey(provider);
   if (!key) return null;
+  // Contenuti rivolti all'utente: scrivi nella lingua scelta per i contenuti
+  // (default inglese). Non si applica alle analisi dati (localize resta false).
+  if (localize) {
+    const { getContentLocale, localeDirective } = await import('@/lib/content-locale');
+    system += localeDirective(await getContentLocale());
+  }
   system = sanitize(system);
   user = sanitize(user);
   // Emergency brake: never exceed the spend cap (since last reset).
@@ -294,7 +300,7 @@ export async function scoreTopContent(projectId: number, topic: string): Promise
   }));
   const text = await callClaude(
     SONNET, 'content_ratings', QUALITY_SYSTEM,
-    `Monitored topic: ${topic}\n\n${JSON.stringify(payload)}`, 3500,
+    `Monitored topic: ${topic}\n\n${JSON.stringify(payload)}`, 3500, true,
   );
   const rows = parseJson<(Quality & { id: number })[]>(text);
   if (!rows) return 0;
@@ -341,7 +347,7 @@ export async function clusterNewsStories(projectId: number): Promise<number> {
   if (news.length < 4) return 0;
 
   const payload = news.filter((n) => n.title).map((n) => ({ id: n.id, title: n.title!.slice(0, 150) }));
-  const text = await callClaude(SONNET, 'story_clustering', STORIES_SYSTEM, JSON.stringify(payload), 3000);
+  const text = await callClaude(SONNET, 'story_clustering', STORIES_SYSTEM, JSON.stringify(payload), 3000, true);
   const groups = parseJson<{ title: string; summary: string; ids: number[] }[]>(text);
   if (!groups) return 0;
 
@@ -385,7 +391,7 @@ export async function generateDailyBrief(projectId: number, projectName: string,
   const text = await callClaude(
     SONNET, 'daily_brief', BRIEF_SYSTEM,
     `Monitored sector: ${projectName}\nDate: ${new Date().toLocaleDateString('en-US', { dateStyle: 'full' })}\n\nLast 24 hours of data:\n${JSON.stringify(briefData).slice(0, 9000)}`,
-    1300,
+    1300, true,
   );
   if (!text) return false;
   await db.insert(briefs).values({ projectId, briefDate: today, content: text })
