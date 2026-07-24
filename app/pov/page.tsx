@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, BookOpen, Eye, Quote, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BookOpen, Eye, Quote, Sparkles, TrendingUp } from 'lucide-react';
 import { getCurrentProject } from '@/lib/data';
 import { getPointOfView, type Citation } from '@/lib/pov';
 import { claudeAvailable } from '@/lib/claude';
@@ -17,6 +17,20 @@ const CONF_STYLE: Record<string, string> = {
 const STATUS_STYLE: Record<string, string> = {
   emerging: 'text-violet-300', rising: 'text-emerald-400',
   declining: 'text-red-400', stable: 'text-slate-500',
+};
+const CROSS_STYLE: Record<string, string> = {
+  ahead: 'bg-violet-500/20 text-violet-300',
+  validated: 'bg-emerald-500/20 text-emerald-300',
+  hype: 'bg-amber-500/20 text-amber-300',
+  cooling: 'bg-slate-500/15 text-slate-400',
+  unknown: 'bg-slate-700/40 text-slate-500',
+};
+const CROSS_HINT: Record<string, string> = {
+  ahead: 'research is moving first — the market has not caught up',
+  validated: 'both rising — a structural shift, not a fad',
+  hype: 'loud market, thin research backing',
+  cooling: 'neither side is moving',
+  unknown: 'research signal unavailable — no conclusion drawn',
 };
 const KIND_STYLE: Record<string, string> = {
   trend: 'bg-sky-500/15 text-sky-300',
@@ -54,7 +68,7 @@ function Cites({ ids, byId }: { ids: number[]; byId: Map<number, Citation> }) {
 export default async function PovPage() {
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
-  const { facts, research, pov, reason } = await getPointOfView(project.id, 90);
+  const { facts, research, cross, pov, reason } = await getPointOfView(project.id, 90);
   const aiOn = await claudeAvailable();
   const byId = new Map(facts.citations.map((c) => [c.id, c]));
 
@@ -62,8 +76,8 @@ export default async function PovPage() {
     <>
       <PageHeader
         title="Point of View"
-        info="A defensible argument about where the market is moving, built on 90 days of your data. Every figure is computed from your mentions by the database (never invented by the AI), and every claim cites real posts you can open. Counter-signals are included on purpose: they are what makes the thesis credible."
-        subtitle="The thesis you can take into a meeting: what is shifting over the last 90 days, the numbers that prove it, the posts that evidence it — plus what argues against it. Click any citation number to read the source post."
+        info="A defensible argument about where the market is moving, built on 90 days of your data crossed with academic research. Every figure is computed from your mentions by the database (never invented by the AI), and every claim cites real posts you can open. The Market × Research crossover is what makes it a point of view rather than a report: it shows where research is moving ahead of the market, and where the market is loud without research behind it. Counter-signals are included on purpose — they are what makes the thesis credible."
+        subtitle="The thesis you can take into a meeting: what is shifting over the last 90 days, the numbers that prove it, the posts that evidence it — plus what research says and what argues against it. Each block is slide-ready. Click any citation number to read the source post."
       />
 
       {/* Numeri verificati: presenti SEMPRE, anche senza AI. */}
@@ -217,6 +231,40 @@ export default async function PovPage() {
         </div>
       )}
 
+      {/* Incrocio mercato × ricerca: dove nasce il punto di vista non ovvio */}
+      {cross.length > 0 && (
+        <section className="panel mt-6 px-5 py-4">
+          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-300">
+            <Sparkles className="size-4 text-violet-400" /> Market × Research
+          </h2>
+          <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
+            What the market talks about crossed with what research is publishing. The gap between the two is where a
+            non-obvious point of view lives: something the labs are already working on but the market has not priced in,
+            or something loud online that no research backs.
+          </p>
+          <ul className="flex flex-col gap-1.5 text-xs">
+            {cross.map((c) => (
+              <li key={c.topic} className="flex flex-wrap items-center gap-2"
+                title={`“${c.topic}”\nMarket: ${c.marketNow} mentions in 30 days${c.marketChangePct !== null ? ` (${pct(c.marketChangePct)} vs the 30 before)` : ' (new in the window)'}\nResearch: ${fmtNum(c.researchWorks)} academic works${c.researchGrowthPct !== null ? `, ${growth(c.researchGrowthPct)} over the last 2 complete years` : ' (too few to measure a trend)'}\nReading: ${CROSS_HINT[c.quadrant]}`}>
+                <span className={`w-[86px] shrink-0 rounded-full px-2 py-0.5 text-center text-[10px] font-medium uppercase ${CROSS_STYLE[c.quadrant]}`}>
+                  {c.quadrant}
+                </span>
+                <Link href={`/listening?q=${encodeURIComponent(c.topic)}`}
+                  className="w-40 shrink-0 truncate text-slate-300 hover:text-sky-300">{c.topic}</Link>
+                <span className="w-28 shrink-0 tabular-nums text-slate-500">
+                  market {c.marketChangePct === null ? 'new' : pct(c.marketChangePct)}
+                </span>
+                <span className="flex-1 tabular-nums text-slate-500">
+                  research {c.researchGrowthPct === null ? '—' : growth(c.researchGrowthPct)}
+                  <span className="ml-1 text-slate-600">({fmtNum(c.researchWorks)} papers)</span>
+                </span>
+                <span className="hidden text-slate-600 sm:inline">{CROSS_HINT[c.quadrant]}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Evidenza: i numeri che l'AI ha potuto usare, verificabili uno per uno */}
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <section className="panel px-5 py-4">
@@ -246,8 +294,12 @@ export default async function PovPage() {
           <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-300">
             <BookOpen className="size-4 text-violet-400" /> Academic evidence
           </h2>
-          {!research ? (
-            <p className="py-6 text-center text-sm text-slate-600">Research index unavailable right now.</p>
+          {!research || research.status !== 'ok' ? (
+            <p className="py-6 text-center text-sm leading-relaxed text-slate-500">
+              {research?.status === 'empty'
+                ? <>No academic literature matches “{research.query}”. That is normal for brands, products or very local themes — academic indexes only cover research subjects.</>
+                : <>The research index is temporarily unavailable (usage limit reached or service unreachable). It is cached daily and retries on its own — nothing else on this page is affected.</>}
+            </p>
           ) : (
             <>
               <p className="mb-3 text-[11px] text-slate-500">

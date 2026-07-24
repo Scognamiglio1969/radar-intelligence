@@ -3,7 +3,7 @@ import { getDb, getMeta, setMeta } from '@/lib/db';
 import { callClaude, claudeAvailable, MODELS } from '@/lib/claude';
 import { getCurrentProject } from '@/lib/data';
 import { getNarratives } from '@/lib/narratives';
-import { researchEvidence, type ResearchEvidence } from '@/lib/openalex';
+import { researchEvidence, topicResearchTrends, type ResearchEvidence } from '@/lib/openalex';
 
 // ---------------------------------------------------------------------------
 // Point of View — la tesi argomentata sul mercato, con i numeri sotto.
@@ -40,6 +40,24 @@ export type FactPack = {
   peaks: { day: string; n: number; topic: string | null }[];
   citations: Citation[];
   narratives: { title: string; stance: string | null; coordinated: boolean; posts: number }[];
+};
+
+/**
+ * Incrocio fra il segnale di MERCATO (di cosa si parla) e quello della RICERCA
+ * (cosa si sta studiando). È qui che nasce un punto di vista non ovvio:
+ *  - ahead      ricerca accelera, mercato non ancora → segnale precoce
+ *  - validated  crescono entrambi → spostamento strutturale, non moda
+ *  - hype       il mercato ne parla ma la ricerca non lo sostiene → fragile
+ *  - cooling    entrambi fermi o in calo
+ *  - unknown    segnale della ricerca non disponibile: NON si conclude nulla
+ */
+export type SignalCross = {
+  topic: string;
+  marketChangePct: number | null;
+  marketNow: number;
+  researchWorks: number;
+  researchGrowthPct: number | null;
+  quadrant: 'ahead' | 'validated' | 'hype' | 'cooling' | 'unknown';
 };
 
 /** Un numero da mettere in evidenza sulla slide: valore grande + didascalia. */
@@ -191,7 +209,13 @@ Rules:
 - "citations": 1-3 post ids taken ONLY from the provided citable list.
 - Be intellectually honest: also give counter-signals — what argues AGAINST the thesis, weak evidence, alternative readings.
 - Set confidence honestly: "high" only when volume is meaningful AND the trend is consistent; "low" when the sample is thin.
-- If research evidence is provided, use it to corroborate or challenge the market conversation.
+
+MOST IMPORTANT — the "market_vs_research" data crosses what the MARKET talks about with what RESEARCH is publishing. This crossover is where a real point of view comes from, so AT LEAST ONE OR TWO blocks must be built on it. Read it like this:
+- "ahead": research is accelerating while the market has not caught up → an early signal. Say what it means to move first.
+- "validated": both rising → a structural shift, not a fad. Say why it is durable.
+- "hype": the market is loud but research is not backing it → fragile foundation. Say what could deflate it.
+- "cooling": neither is moving → say what is replacing it.
+These blocks may be interpretive and forward-looking, but must stay anchored to the given figures — flag them honestly with "medium" or "low" confidence, and never state a speculation as an established fact.
 
 Respond ONLY with this JSON object:
 {
@@ -257,9 +281,43 @@ export function validate(raw: unknown, allowed: Set<number>): PointOfView | null
   };
 }
 
+/** Classifica un tema incrociando slancio di mercato e slancio della ricerca. */
+export function crossSignals(
+  topics: TopicShift[],
+  research: { topic: string; ok: boolean; works: number; growthPct: number | null }[],
+): SignalCross[] {
+  const byTopic = new Map(research.map((r) => [r.topic, r]));
+  return topics.slice(0, 6).map((t) => {
+    const r = byTopic.get(t.topic);
+    // "Nuovo" nell'ascolto = slancio massimo; altrimenti la variazione misurata.
+    const market = t.changePct ?? (t.nPrev === 0 && t.nNow >= 3 ? 100 : 0);
+    const res = r?.growthPct ?? null;
+    const marketUp = market >= 25;
+    const researchUp = res !== null && res >= 25;
+    // Senza un segnale di ricerca affidabile non si conclude: mai spacciare
+    // un dato mancante per "il mercato ne parla e la ricerca no".
+    const known = r?.ok === true && (r.works > 0 || res !== null);
+    const quadrant: SignalCross['quadrant'] =
+      !known ? 'unknown'
+        : researchUp && !marketUp ? 'ahead'
+          : researchUp && marketUp ? 'validated'
+            : !researchUp && marketUp ? 'hype'
+              : 'cooling';
+    return {
+      topic: t.topic,
+      marketChangePct: t.changePct,
+      marketNow: t.nNow,
+      researchWorks: r?.works ?? 0,
+      researchGrowthPct: res,
+      quadrant,
+    };
+  });
+}
+
 export type PovResult = {
   facts: FactPack;
   research: ResearchEvidence | null;
+  cross: SignalCross[];
   pov: PointOfView | null;
   /** Perché manca la tesi AI (il fact pack resta comunque disponibile). */
   reason?: 'no_ai' | 'thin_data' | 'failed';
@@ -281,16 +339,20 @@ export async function getPointOfView(projectId: number, days = 90, force = false
   const facts = await povFactPack(projectId, days);
   const project = await getCurrentProject();
   const terms = [project?.name ?? '', ...(project?.keywords ?? [])].filter(Boolean);
-  const research = await researchEvidence(terms);
+  const [research, topicRes] = await Promise.all([
+    researchEvidence(terms),
+    topicResearchTrends(facts.topics.slice(0, 6).map((t) => t.topic)),
+  ]);
+  const cross = crossSignals(facts.topics, topicRes);
 
-  if (facts.total < 15) return { facts, research, pov: null, reason: 'thin_data' };
+  if (facts.total < 15) return { facts, research, cross, pov: null, reason: 'thin_data' };
 
   const key = `pov:v2:${projectId}:${days}:${new Date().toISOString().slice(0, 10)}`;
   if (!force) {
     const cached = await getMeta<PointOfView>(key);
-    if (cached) return { facts, research, pov: cached };
+    if (cached) return { facts, research, cross, pov: cached };
   }
-  if (!await claudeAvailable()) return { facts, research, pov: null, reason: 'no_ai' };
+  if (!await claudeAvailable()) return { facts, research, cross, pov: null, reason: 'no_ai' };
 
   const payload = {
     window_days: days,
@@ -301,11 +363,20 @@ export async function getPointOfView(projectId: number, days = 90, force = false
     sources: facts.sources,
     peak_days: facts.peaks,
     narratives: facts.narratives,
-    research: research && {
+    research: research && research.status === 'ok' ? {
       total_works: research.total, growth_pct_3y: research.growthPct,
       top_institutions: research.topInstitutions.slice(0, 6),
       by_year: research.byYear.slice(-6),
-    },
+    } : null,
+    // Incrocio mercato × ricerca: la materia prima per le tesi speculative.
+    market_vs_research: cross.filter((c) => c.quadrant !== "unknown").map((c) => ({
+      topic: c.topic,
+      market_change_pct: c.marketChangePct,
+      market_mentions_30d: c.marketNow,
+      research_works: c.researchWorks,
+      research_growth_pct_2y: c.researchGrowthPct,
+      reading: c.quadrant,
+    })),
     citable_posts: facts.citations.map((c) => ({
       id: c.id, title: c.title.slice(0, 140), source: c.source, date: c.date, sentiment: c.sentiment,
     })),
@@ -316,16 +387,16 @@ export async function getPointOfView(projectId: number, days = 90, force = false
     `Sector monitored: ${project?.name ?? 'n/a'}\n\n${JSON.stringify(payload).slice(0, 14000)}`,
     3000, true,
   );
-  if (!text) return { facts, research, pov: null, reason: 'failed' };
+  if (!text) return { facts, research, cross, pov: null, reason: 'failed' };
 
   try {
     const start = text.indexOf('{');
     const parsed = JSON.parse(text.slice(start, text.lastIndexOf('}') + 1));
     const pov = validate(parsed, new Set(facts.citations.map((c) => c.id)));
-    if (!pov) return { facts, research, pov: null, reason: 'failed' };
+    if (!pov) return { facts, research, cross, pov: null, reason: 'failed' };
     await setMeta(key, pov);
-    return { facts, research, pov };
+    return { facts, research, cross, pov };
   } catch {
-    return { facts, research, pov: null, reason: 'failed' };
+    return { facts, research, cross, pov: null, reason: 'failed' };
   }
 }
