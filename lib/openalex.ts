@@ -29,6 +29,13 @@ export type ResearchEvidence = {
   prev3: number | null;
   topInstitutions: ResearchInstitution[];
   topWorks: ResearchWork[];
+  /** Dove si fa ricerca su questo tema: il quadro per paese/area. È la risposta
+   *  alla domanda "quali istituti, in quale geografia" — gli archivi statistici
+   *  (ISTAT, Eurostat, World Bank) non sanno rispondere per tema, OpenAlex sì. */
+  byCountry: { code: string; name: string; works: number }[];
+  /** Fronte di ricerca: i lavori più citati degli ultimi ~18 mesi. Sono i
+   *  segnali precoci da leggere quando la ricerca corre avanti al mercato. */
+  recentWorks: ResearchWork[];
 };
 
 /** OpenAlex chiede un contatto per la "polite pool". Opzionale: solo da env,
@@ -83,7 +90,7 @@ export async function researchEvidence(terms: string[]): Promise<ResearchEvidenc
   // Cache giornaliera: senza, ogni apertura della pagina spendeva 3 chiamate del
   // budget OpenAlex (condiviso per IP, quindi facile da esaurire su Vercel).
   const { getMeta, setMeta } = await import('@/lib/db');
-  const key = `openalex:v2:${primary.toLowerCase()}:${new Date().toISOString().slice(0, 10)}`;
+  const key = `openalex:v3:${primary.toLowerCase()}:${new Date().toISOString().slice(0, 10)}`;
   const cached = await getMeta<ResearchEvidence>(key);
   if (cached && cached.status === 'ok') return cached;
 
@@ -92,12 +99,19 @@ export async function researchEvidence(terms: string[]): Promise<ResearchEvidenc
     // significa davvero "lavori SU questo tema", non "che citano le parole".
     const f = `filter=title_and_abstract.search:${encodeURIComponent(query)}`;
     const p = politeParam();
-    const [works, insts, years] = await Promise.all([
+    // Fronte recente: ultimi 18 mesi, ordinati per citazioni.
+    const since = new Date(Date.now() - 548 * 86400_000).toISOString().slice(0, 10);
+    const [works, insts, years, countries, recent] = await Promise.all([
       fetchJson<WorksResp>(`${API}?${f}&per-page=8&sort=cited_by_count:desc${p}`),
       fetchJson<GroupResp>(`${API}?${f}&group_by=institutions.id&per-page=8${p}`),
       fetchJson<GroupResp>(`${API}?${f}&group_by=publication_year${p}`),
+      fetchJson<GroupResp>(`${API}?${f}&group_by=authorships.institutions.country_code&per-page=12${p}`),
+      // type:article + is_paratext:false = igiene: senza, in cima finiscono
+      // libri e atti di convegno con conteggi citazionali gonfiati, che sul
+      // "fronte di ricerca" sembrano errori.
+      fetchJson<WorksResp>(`${API}?${f},from_publication_date:${since},type:article,is_paratext:false&per-page=5&sort=cited_by_count:desc${p}`),
     ]);
-    return { works, insts, years, query };
+    return { works, insts, years, countries, recent, query };
   };
 
   let r = await run(primary);
@@ -107,13 +121,13 @@ export async function researchEvidence(terms: string[]): Promise<ResearchEvidenc
     if ((alt.works.data?.meta?.count ?? 0) > (r.works.data?.meta?.count ?? 0)) r = alt;
   }
 
-  const { works, insts, years, query } = r;
+  const { works, insts, years, countries, recent, query } = r;
   if (!works.data) {
     // Nessun dato: distinguo il limite/servizio giù dal tema senza letteratura.
     const out: ResearchEvidence = {
       query, status: works.limited ? 'unavailable' : 'empty',
       total: 0, byYear: [], growthPct: null, last3: null, prev3: null,
-      topInstitutions: [], topWorks: [],
+      topInstitutions: [], topWorks: [], byCountry: [], recentWorks: [],
     };
     return out;
   }
@@ -135,6 +149,16 @@ export async function researchEvidence(terms: string[]): Promise<ResearchEvidenc
     if (prev3 > 0) growthPct = Math.round(((last3 - prev3) / prev3) * 100);
   }
 
+  type RawWork = NonNullable<WorksResp['results']>[number];
+  const toWork = (w: RawWork): ResearchWork => ({
+    title: (w.title ?? 'untitled').slice(0, 200),
+    year: w.publication_year,
+    citations: w.cited_by_count,
+    url: w.doi ? `https://doi.org/${w.doi.replace(/^https?:\/\/doi\.org\//, '')}` : w.id,
+    institution: w.authorships?.find((a) => a.institutions?.length)?.institutions?.[0]?.display_name ?? null,
+    openAccess: Boolean(w.open_access?.is_oa),
+  });
+
   const total = works.data.meta?.count ?? 0;
   const result: ResearchEvidence = {
     query,
@@ -146,14 +170,12 @@ export async function researchEvidence(terms: string[]): Promise<ResearchEvidenc
       .filter((g) => g.key_display_name && g.key_display_name !== 'unknown')
       .slice(0, 8)
       .map((g) => ({ name: g.key_display_name, works: g.count })),
-    topWorks: (works.data.results ?? []).slice(0, 8).map((w) => ({
-      title: (w.title ?? 'untitled').slice(0, 200),
-      year: w.publication_year,
-      citations: w.cited_by_count,
-      url: w.doi ? `https://doi.org/${w.doi.replace(/^https?:\/\/doi\.org\//, '')}` : w.id,
-      institution: w.authorships?.find((a) => a.institutions?.length)?.institutions?.[0]?.display_name ?? null,
-      openAccess: Boolean(w.open_access?.is_oa),
-    })),
+    topWorks: (works.data.results ?? []).slice(0, 8).map(toWork),
+    byCountry: (countries.data?.group_by ?? [])
+      .filter((g) => g.key && g.key !== 'unknown' && g.key_display_name)
+      .slice(0, 10)
+      .map((g) => ({ code: g.key.toUpperCase(), name: g.key_display_name, works: g.count })),
+    recentWorks: (recent.data?.results ?? []).slice(0, 5).map(toWork),
   };
 
   if (result.status === 'ok') await setMeta(key, result);

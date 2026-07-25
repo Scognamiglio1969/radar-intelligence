@@ -319,9 +319,20 @@ export type PovResult = {
   research: ResearchEvidence | null;
   cross: SignalCross[];
   pov: PointOfView | null;
-  /** Perché manca la tesi AI (il fact pack resta comunque disponibile). */
-  reason?: 'no_ai' | 'thin_data' | 'failed';
+  /** Perché manca la tesi AI (il fact pack resta comunque disponibile).
+   *  not_built = mai generata: basta premere il pulsante (o attendere il ciclo). */
+  reason?: 'no_ai' | 'thin_data' | 'failed' | 'not_built';
 };
+
+/** Chiave STABILE (senza data): la tesi resta finché non viene rigenerata, così
+ *  aprire la pagina non costa nulla e non sparisce a mezzanotte. */
+const povKey = (projectId: number, days: number) => `pov:v3:${projectId}:${days}`;
+
+/** Una tesi più vecchia di 7 giorni è da rinfrescare (orizzonte 90 giorni). */
+export const POV_MAX_AGE_DAYS = 7;
+export function povAgeDays(pov: PointOfView): number {
+  return Math.floor((Date.now() - new Date(pov.generatedAt).getTime()) / 86400_000);
+}
 
 /**
  * Versione per l'export: restituisce la tesi SOLO se già in cache e i numeri,
@@ -329,13 +340,44 @@ export type PovResult = {
  */
 export async function getPovCached(projectId: number, days = 90): Promise<{ facts: FactPack; pov: PointOfView | null }> {
   const facts = await povFactPack(projectId, days);
-  const key = `pov:v2:${projectId}:${days}:${new Date().toISOString().slice(0, 10)}`;
-  const pov = await getMeta<PointOfView>(key);
+  const pov = await getMeta<PointOfView>(povKey(projectId, days));
   return { facts, pov };
 }
 
-/** Point of View completo: numeri + ricerca + tesi AI. Cache giornaliera. */
-export async function getPointOfView(projectId: number, days = 90, force = false): Promise<PovResult> {
+/**
+ * Point of View in SOLA LETTURA: numeri, ricerca e la tesi già salvata.
+ * Non chiama MAI l'AI — aprire la pagina non deve costare nulla. La tesi si
+ * genera con buildPointOfView (pulsante) o dal ciclo settimanale.
+ */
+export async function getPointOfView(projectId: number, days = 90): Promise<PovResult> {
+  const facts = await povFactPack(projectId, days);
+  const project = await getCurrentProject();
+  const terms = [project?.name ?? '', ...(project?.keywords ?? [])].filter(Boolean);
+  const [research, topicRes] = await Promise.all([
+    researchEvidence(terms),
+    topicResearchTrends(facts.topics.slice(0, 6).map((t) => t.topic)),
+  ]);
+  const cross = crossSignals(facts.topics, topicRes);
+  const pov = await getMeta<PointOfView>(povKey(projectId, days));
+  if (pov) return { facts, research, cross, pov };
+  if (facts.total < 15) return { facts, research, cross, pov: null, reason: 'thin_data' };
+  return { facts, research, cross, pov: null, reason: await claudeAvailable() ? 'not_built' : 'no_ai' };
+}
+
+/**
+ * Rinfresca la tesi solo se manca o ha più di una settimana. Chiamata dal ciclo
+ * giornaliero: di fatto genera una volta a settimana per progetto, perché una
+ * vista a 90 giorni non cambia da un giorno all'altro (e ogni giro costa).
+ */
+export async function refreshPointOfViewIfStale(projectId: number, days = 90): Promise<boolean> {
+  const existing = await getMeta<PointOfView>(povKey(projectId, days));
+  if (existing && povAgeDays(existing) < POV_MAX_AGE_DAYS) return false;
+  const { pov } = await buildPointOfView(projectId, days);
+  return pov !== null;
+}
+
+/** Genera (e salva) la tesi: solo su richiesta esplicita o dal ciclo settimanale. */
+export async function buildPointOfView(projectId: number, days = 90): Promise<PovResult> {
   const facts = await povFactPack(projectId, days);
   const project = await getCurrentProject();
   const terms = [project?.name ?? '', ...(project?.keywords ?? [])].filter(Boolean);
@@ -347,11 +389,7 @@ export async function getPointOfView(projectId: number, days = 90, force = false
 
   if (facts.total < 15) return { facts, research, cross, pov: null, reason: 'thin_data' };
 
-  const key = `pov:v2:${projectId}:${days}:${new Date().toISOString().slice(0, 10)}`;
-  if (!force) {
-    const cached = await getMeta<PointOfView>(key);
-    if (cached) return { facts, research, cross, pov: cached };
-  }
+  const key = povKey(projectId, days);
   if (!await claudeAvailable()) return { facts, research, cross, pov: null, reason: 'no_ai' };
 
   const payload = {

@@ -10,6 +10,7 @@ import { computeTrends, explainTrends } from '@/lib/trends';
 import { detectNarratives } from '@/lib/narratives';
 import { notifyAlerts, notifyDailyDigest } from '@/lib/notify';
 import { extractTimelineEvents } from '@/lib/timeline';
+import { refreshPointOfViewIfStale } from '@/lib/pov';
 import { alerts as alertsTable, users as usersTable } from '@/lib/db/schema';
 import { getTrends } from '@/lib/trends';
 
@@ -98,6 +99,9 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
         row.rated = await scoreTopContent(project.id, project.name);
         const briefData = await collectBriefData(project.id);
         row.brief = await generateDailyBrief(project.id, project.name, briefData);
+        // Point of View: vista a 90 giorni, quindi si rinfresca al massimo una
+        // volta a settimana. Senza questo esisterebbe solo se qualcuno clicca.
+        row.pov = await refreshPointOfViewIfStale(project.id);
 
         // Digest silenzioso del mattino: una riga di numeri + link al brief.
         // Solo dal cron (opts.digest): il refresh manuale non deve notificare a ogni click.

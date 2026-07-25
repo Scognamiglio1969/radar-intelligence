@@ -116,9 +116,7 @@ export default async function PovPage() {
               ? 'Not enough data yet: a point of view needs at least ~15 mentions in the window. The verified figures above are already live.'
               : reason === 'no_ai'
                 ? 'The argument needs an AI key (or the spend cap was reached). The verified figures above stay available.'
-                : aiOn
-                  ? 'Build the argument from the last 90 days: what is shifting, with the numbers and the posts that prove it (about 3 cents, once a day).'
-                  : 'The argument needs an AI key. The verified figures above stay available.'}
+                : 'Build the argument from the last 90 days: what is shifting, the numbers that prove it and the posts that evidence it (about 3 cents). From then on it refreshes itself weekly — opening this page never costs anything.'}
           </p>
           {aiOn && reason !== 'thin_data' && (
             <GenerateRefresh endpoint="/api/pov" label="Build the point of view" busyLabel="Analysing 90 days…" />
@@ -225,7 +223,7 @@ export default async function PovPage() {
           <div className="flex items-center gap-3">
             <GenerateRefresh endpoint="/api/pov" label="Rebuild the argument" busyLabel="Re-analysing…" />
             <span className="text-xs text-slate-600">
-              Generated {new Date(pov.generatedAt).toLocaleString('en-US')} · cached for the day
+              Generated {new Date(pov.generatedAt).toLocaleString('en-US')} · refreshes automatically once a week
             </span>
           </div>
         </div>
@@ -316,6 +314,55 @@ export default async function PovPage() {
                       {inst.name} <span className="text-slate-500">{fmtNum(inst.works)}</span>
                     </span>
                   ))}
+                </div>
+              )}
+
+              {/* Geografia della ricerca: dove si studia questo tema. */}
+              {research.byCountry.length > 0 && (
+                <div className="mb-3">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Where the research happens
+                  </p>
+                  <ul className="flex flex-col gap-1">
+                    {research.byCountry.slice(0, 6).map((c) => {
+                      const max = research.byCountry[0].works || 1;
+                      return (
+                        <li key={c.code} className="flex items-center gap-2 text-[11px]"
+                          title={`${c.name}: ${fmtNum(c.works)} works on this topic (institutions based there)`}>
+                          <span className="w-28 shrink-0 truncate text-slate-300">{c.name}</span>
+                          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
+                            <span className="block h-full rounded-full bg-violet-400/70"
+                              style={{ width: `${Math.round((c.works / max) * 100)}%` }} />
+                          </span>
+                          <span className="w-14 shrink-0 text-right tabular-nums text-slate-500">{fmtNum(c.works)}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {/* Fronte recente: cosa leggere quando la ricerca corre avanti. */}
+              {research.recentWorks.length > 0 && (
+                <div className="mb-3">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Research front · last 18 months
+                  </p>
+                  <p className="mb-1.5 text-[11px] text-slate-600">
+                    The most-cited recent work — what to read when research is running ahead of the market.
+                  </p>
+                  <ul className="flex flex-col gap-1 text-xs">
+                    {research.recentWorks.slice(0, 3).map((w) => (
+                      <li key={w.url}>
+                        <a href={w.url} target="_blank" rel="noopener noreferrer"
+                          className="text-slate-300 transition hover:text-violet-300"
+                          title={`${w.institution ?? 'unknown institution'} · ${w.citations} citations${w.openAccess ? ' · open access' : ''}`}>
+                          {w.title}
+                        </a>
+                        <span className="ml-1 text-slate-600">{w.year} · {fmtNum(w.citations)} cit.</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
               <ul className="flex flex-col gap-1.5 text-xs">
