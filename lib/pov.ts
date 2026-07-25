@@ -469,7 +469,9 @@ export async function buildPointOfView(projectId: number, days = 90): Promise<Po
   const text = await callClaude(
     MODELS.sonnet, 'point_of_view', POV_SYSTEM,
     `Sector monitored: ${project?.name ?? 'n/a'}\n\n${JSON.stringify(payload).slice(0, 14000)}`,
-    3000, true, 45_000,
+    // Ampio, ma sempre sotto il maxDuration della route: se il modello è lento
+    // vogliamo un errore nostro leggibile, non la funzione uccisa dalla piattaforma.
+    3000, true, 240_000,
   );
   if (!text) return { facts, research, cross, pov: null, reason: 'failed' };
 
@@ -522,7 +524,7 @@ export async function translatePointOfView(
 - Keep the same number of items in every array. Do not add or remove blocks, citations or research indexes.`;
 
   const text = await callClaude(
-    MODELS.haiku, 'pov_translate', system, JSON.stringify(canonical), 3000, false, 30_000,
+    MODELS.haiku, 'pov_translate', system, JSON.stringify(canonical), 3000, false, 240_000,
   );
   if (!text) return { pov: null, reason: 'failed' };
 

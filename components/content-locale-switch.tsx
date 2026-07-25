@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, PenLine } from 'lucide-react';
 import { LOCALES, type Locale } from '@/lib/i18n-dict';
@@ -21,27 +21,38 @@ export function ContentLocaleSwitch({ current, label, translateEndpoint }: {
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   function change(locale: Locale) {
     if (locale === current || pending) return;
+    setError(null);
     startTransition(async () => {
-      await fetch('/api/content-locale', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locale }),
-      });
+      const body = JSON.stringify({ locale });
+      const headers = { 'Content-Type': 'application/json' };
+      await fetch('/api/content-locale', { method: 'POST', headers, body });
+
       if (translateEndpoint) {
-        await fetch(translateEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ locale }),
-        }).catch(() => null);
+        // Una traduzione fallita NON deve passare inosservata: prima veniva
+        // ingoiata e il testo restava nella lingua di prima senza spiegazione,
+        // così sembrava che la bandierina non facesse nulla.
+        try {
+          const res = await fetch(translateEndpoint, { method: 'POST', headers, body });
+          if (!res.ok) {
+            const d = await res.json().catch(() => null);
+            throw new Error(d?.error ?? `translation failed (${res.status})`);
+          }
+        } catch (e) {
+          const m = (e as Error).message;
+          setError(/fetch|network/i.test(m) ? 'network error — retry' : m);
+          return;                       // niente refresh: l'errore resta visibile
+        }
       }
       router.refresh();
     });
   }
 
   return (
+    <span className="inline-flex flex-col items-start gap-1">
     <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white/[0.03] px-2.5 py-1"
       title={translateEndpoint
         ? 'The language this content is written in. Click a flag to translate what is already generated on this page — it does not redo the analysis.'
@@ -64,6 +75,8 @@ export function ContentLocaleSwitch({ current, label, translateEndpoint }: {
           {l.flag}
         </button>
       ))}
+    </span>
+    {error && <span className="max-w-[22rem] text-[11px] leading-snug text-red-400">{error}</span>}
     </span>
   );
 }

@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { getCurrentProject } from '@/lib/data';
 import { buildPointOfView } from '@/lib/pov';
 
-export const maxDuration = 60;
+// La tesi è la generazione più lunga dell'app: un solo passaggio produce
+// titolo, introduzione, blocchi, contro-segnali e implicazioni (~2300 token in
+// uscita), che su Sonnet può superare abbondantemente il minuto. Con il limite
+// a 60s la piattaforma uccideva la funzione a metà generazione — e la chiamata
+// non compariva nemmeno nei consumi, perché non arrivava mai a completarsi.
+export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 export async function POST() {

@@ -3,7 +3,9 @@ import { getCurrentProject } from '@/lib/data';
 import { translatePointOfView } from '@/lib/pov';
 import type { ContentLocale } from '@/lib/content-locale';
 
-export const maxDuration = 60;
+// Tradurre significa riprodurre l'INTERO documento: l'uscita è lunga quanto
+// l'originale, quindi serve lo stesso respiro della generazione.
+export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 /**
