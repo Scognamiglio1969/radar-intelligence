@@ -10,9 +10,15 @@ import { LOCALES, type Locale } from '@/lib/i18n-dict';
  * si può leggere Radar in italiano e far generare brief e Point of View in
  * inglese (o viceversa), perché la lingua del deliverable dipende da chi lo legge,
  * non da chi usa lo strumento.
- * Vale per i testi generati DA ORA: quelli già salvati restano come sono.
+ * Vale per i testi generati DA ORA: quelli già salvati restano come sono —
+ * a meno che translateEndpoint non sia passato: in quel caso il click sulla
+ * bandierina traduce SUBITO il contenuto già generato in quella pagina
+ * (es. Point of View), invece di limitarsi a impostare una preferenza per
+ * la prossima generazione manuale.
  */
-export function ContentLocaleSwitch({ current, label }: { current: Locale; label?: string }) {
+export function ContentLocaleSwitch({ current, label, translateEndpoint }: {
+  current: Locale; label?: string; translateEndpoint?: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -24,13 +30,22 @@ export function ContentLocaleSwitch({ current, label }: { current: Locale; label
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ locale }),
       });
+      if (translateEndpoint) {
+        await fetch(translateEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locale }),
+        }).catch(() => null);
+      }
       router.refresh();
     });
   }
 
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white/[0.03] px-2.5 py-1"
-      title="The language the AI writes in — briefs, Point of View, answers, narratives. Independent from the interface language: you can read Radar in one language and generate deliverables in another. Applies to text generated from now on.">
+      title={translateEndpoint
+        ? 'The language this content is written in. Click a flag to translate what is already generated on this page — it does not redo the analysis.'
+        : 'The language the AI writes in — briefs, Point of View, answers, narratives. Independent from the interface language: you can read Radar in one language and generate deliverables in another. Applies to text generated from now on.'}>
       {pending
         ? <Loader2 className="size-3 animate-spin text-violet-400" />
         : <PenLine className="size-3 text-violet-400" />}

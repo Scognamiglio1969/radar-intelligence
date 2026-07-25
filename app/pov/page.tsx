@@ -73,7 +73,7 @@ export default async function PovPage() {
   const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
-  const { facts, research, cross, pov, reason } = await getPointOfView(project.id, 90);
+  const { facts, research, cross, pov, reason } = await getPointOfView(project.id, 90, contentLocale);
   const aiOn = await claudeAvailable();
   const byId = new Map(facts.citations.map((c) => [c.id, c]));
 
@@ -259,7 +259,7 @@ export default async function PovPage() {
 
           <div className="flex items-center gap-3">
             <GenerateRefresh endpoint="/api/pov" label="Rebuild the argument" busyLabel="Re-analysing…" />
-            <ContentLocaleSwitch current={contentLocale} />
+            <ContentLocaleSwitch current={pov.locale ?? 'en'} translateEndpoint="/api/pov/translate" />
             <span className="text-xs text-slate-600">
               Generated {new Date(pov.generatedAt).toLocaleString('en-US')} · refreshes automatically once a week
             </span>

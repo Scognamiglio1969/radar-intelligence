@@ -115,7 +115,7 @@ function sanitize(s: string): string {
  * are mapped to that provider's equivalent models. The historical name is kept
  * so ~25 call sites don't change.
  */
-export async function callClaude(model: string, purpose: string, system: string, user: string, maxTokens: number, localize = false): Promise<string | null> {
+export async function callClaude(model: string, purpose: string, system: string, user: string, maxTokens: number, localize = false, timeoutMs = 50_000): Promise<string | null> {
   // Public demo: never spend on the API, regardless of any configured key.
   if (process.env.DEMO_MODE === '1') return null;
   const provider = await aiProvider();
@@ -148,16 +148,23 @@ export async function callClaude(model: string, purpose: string, system: string,
   let outputTokens: number;
   if (provider === 'anthropic') {
     const client = new Anthropic({ apiKey: key });
-    const msg = await client.messages.create({
-      model: actualModel,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content: user }],
-    });
-    const block = msg.content.find((b) => b.type === 'text');
-    text = block?.type === 'text' ? block.text : null;
-    inputTokens = msg.usage.input_tokens;
-    outputTokens = msg.usage.output_tokens;
+    try {
+      // Timeout tenuto sotto il maxDuration della route (60s): senza questo,
+      // una chiamata lenta viene uccisa dalla piattaforma con un 504 grezzo
+      // (nessun JSON, nessun messaggio utile). Niente retry: un retry qui
+      // raddoppierebbe il tempo e sforerebbe comunque il budget.
+      const msg = await client.messages.create(
+        { model: actualModel, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] },
+        { timeout: timeoutMs, maxRetries: 0 },
+      );
+      const block = msg.content.find((b) => b.type === 'text');
+      text = block?.type === 'text' ? block.text : null;
+      inputTokens = msg.usage.input_tokens;
+      outputTokens = msg.usage.output_tokens;
+    } catch (e) {
+      console.error(`[ai] "${purpose}" call failed:`, e);
+      return null;
+    }
   } else {
     const r = await callOpenAICompat(provider, key, actualModel, system, user, maxTokens);
     text = r.text;

@@ -4,6 +4,7 @@ import { callClaude, claudeAvailable, MODELS } from '@/lib/claude';
 import { getCurrentProject } from '@/lib/data';
 import { getNarratives } from '@/lib/narratives';
 import { researchEvidence, topicResearchTrends, type ResearchEvidence } from '@/lib/openalex';
+import { getContentLocale, type ContentLocale } from '@/lib/content-locale';
 
 // ---------------------------------------------------------------------------
 // Point of View — la tesi argomentata sul mercato, con i numeri sotto.
@@ -85,6 +86,8 @@ export type PointOfView = {
   implications: string[];
   watch: string[];
   generatedAt: string;
+  /** Lingua in cui questo testo è stato scritto (o tradotto). */
+  locale?: ContentLocale;
 };
 
 /** Tutti i numeri del Point of View: SQL puro, nessuna AI. */
@@ -354,6 +357,8 @@ export type PovResult = {
 /** Chiave STABILE (senza data): la tesi resta finché non viene rigenerata, così
  *  aprire la pagina non costa nulla e non sparisce a mezzanotte. */
 const povKey = (projectId: number, days: number) => `pov:v3:${projectId}:${days}`;
+const translationKey = (projectId: number, days: number, locale: ContentLocale) =>
+  `${povKey(projectId, days)}:tr:${locale}`;
 
 /** Una tesi più vecchia di 7 giorni è da rinfrescare (orizzonte 90 giorni). */
 export const POV_MAX_AGE_DAYS = 7;
@@ -376,7 +381,7 @@ export async function getPovCached(projectId: number, days = 90): Promise<{ fact
  * Non chiama MAI l'AI — aprire la pagina non deve costare nulla. La tesi si
  * genera con buildPointOfView (pulsante) o dal ciclo settimanale.
  */
-export async function getPointOfView(projectId: number, days = 90): Promise<PovResult> {
+export async function getPointOfView(projectId: number, days = 90, preferredLocale?: ContentLocale): Promise<PovResult> {
   const facts = await povFactPack(projectId, days);
   const project = await getCurrentProject();
   const terms = [project?.name ?? '', ...(project?.keywords ?? [])].filter(Boolean);
@@ -385,7 +390,13 @@ export async function getPointOfView(projectId: number, days = 90): Promise<PovR
     topicResearchTrends(facts.topics.slice(0, 6).map((t) => t.topic)),
   ]);
   const cross = crossSignals(facts.topics, topicRes);
-  const pov = await getMeta<PointOfView>(povKey(projectId, days));
+  let pov = await getMeta<PointOfView>(povKey(projectId, days));
+  // Se esiste una traduzione aggiornata (stessa generatedAt dell'originale) nella
+  // lingua richiesta, mostrarla al posto dell'originale — senza chiamare l'AI.
+  if (pov && preferredLocale && (pov.locale ?? 'en') !== preferredLocale) {
+    const translated = await getMeta<PointOfView>(translationKey(projectId, days, preferredLocale));
+    if (translated && translated.generatedAt === pov.generatedAt) pov = translated;
+  }
   if (pov) return { facts, research, cross, pov };
   if (facts.total < 15) return { facts, research, cross, pov: null, reason: 'thin_data' };
   return { facts, research, cross, pov: null, reason: await claudeAvailable() ? 'not_built' : 'no_ai' };
@@ -458,7 +469,7 @@ export async function buildPointOfView(projectId: number, days = 90): Promise<Po
   const text = await callClaude(
     MODELS.sonnet, 'point_of_view', POV_SYSTEM,
     `Sector monitored: ${project?.name ?? 'n/a'}\n\n${JSON.stringify(payload).slice(0, 14000)}`,
-    3000, true,
+    3000, true, 45_000,
   );
   if (!text) return { facts, research, cross, pov: null, reason: 'failed' };
 
@@ -467,9 +478,64 @@ export async function buildPointOfView(projectId: number, days = 90): Promise<Po
     const parsed = JSON.parse(text.slice(start, text.lastIndexOf('}') + 1));
     const pov = validate(parsed, new Set(facts.citations.map((c) => c.id)), research?.recentWorks.length ?? 0);
     if (!pov) return { facts, research, cross, pov: null, reason: 'failed' };
+    pov.locale = await getContentLocale();
     await setMeta(key, pov);
     return { facts, research, cross, pov };
   } catch {
     return { facts, research, cross, pov: null, reason: 'failed' };
+  }
+}
+
+/**
+ * Traduce la tesi già generata nella lingua richiesta — SENZA rifare l'analisi.
+ * È l'azione delle bandierine: veloce ed economica (solo traduzione, modello
+ * rapido), a differenza di "Rebuild the argument" che rilegge i dati e ragiona
+ * di nuovo. Le citazioni e gli indici di ricerca restano quelli originali:
+ * il modello non può inventarne di nuovi in traduzione.
+ */
+export async function translatePointOfView(
+  projectId: number, days: number, locale: ContentLocale,
+): Promise<{ pov: PointOfView | null; reason?: 'not_built' | 'no_ai' | 'failed' }> {
+  const key = povKey(projectId, days);
+  const canonical = await getMeta<PointOfView>(key);
+  if (!canonical) return { pov: null, reason: 'not_built' };
+  if ((canonical.locale ?? 'en') === locale) return { pov: canonical };
+
+  const trKey = translationKey(projectId, days, locale);
+  const cached = await getMeta<PointOfView>(trKey);
+  if (cached && cached.generatedAt === canonical.generatedAt) return { pov: cached };
+
+  if (!await claudeAvailable()) return { pov: null, reason: 'no_ai' };
+
+  const allowed = new Set<number>();
+  canonical.blocks.forEach((b) => b.citations.forEach((id) => allowed.add(id)));
+  canonical.intro.forEach((i) => i.citations.forEach((id) => allowed.add(id)));
+  canonical.counterSignals.forEach((c) => c.citations.forEach((id) => allowed.add(id)));
+  const researchIdx = canonical.intro.flatMap((i) => i.research);
+  const researchCount = researchIdx.length ? Math.max(...researchIdx) + 1 : 0;
+
+  const targetName = locale === 'it' ? 'Italian' : 'English';
+  const system = `You translate a market analysis document into ${targetName}. Rules:
+- Return ONLY a JSON object with the EXACT same shape as the input: headline, intro[], blocks[], counterSignals[], implications[], watch[].
+- Translate every natural-language string (headline, intro[].text, blocks[].title, blocks[].body, blocks[].stats[].label, counterSignals[].point, implications[], watch[]) into ${targetName}.
+- Do NOT translate or alter numbers, percentages, stats[].value, citations arrays, research arrays, kind values, or confidence values — copy them EXACTLY as given.
+- Keep the same number of items in every array. Do not add or remove blocks, citations or research indexes.`;
+
+  const text = await callClaude(
+    MODELS.haiku, 'pov_translate', system, JSON.stringify(canonical), 3000, false, 30_000,
+  );
+  if (!text) return { pov: null, reason: 'failed' };
+
+  try {
+    const start = text.indexOf('{');
+    const parsed = JSON.parse(text.slice(start, text.lastIndexOf('}') + 1));
+    const translated = validate(parsed, allowed, researchCount);
+    if (!translated) return { pov: null, reason: 'failed' };
+    translated.generatedAt = canonical.generatedAt;
+    translated.locale = locale;
+    await setMeta(trKey, translated);
+    return { pov: translated };
+  } catch {
+    return { pov: null, reason: 'failed' };
   }
 }
