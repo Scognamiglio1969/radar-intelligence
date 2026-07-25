@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     `Sector: ${project.name}
 ${project.brandVoice ? `Brand tone of voice: ${project.brandVoice}\n` : ''}${trends.length ? `Today's hot trends (tie in if relevant): ${trends.join(', ')}\n` : ''}
 Concept to develop: ${concept}`,
-    1800,
+    1800, true,
   );
   if (!text) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
 

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Sidebar } from '@/components/sidebar';
+import { getLocale, localeTag, setServerLocaleTag } from '@/lib/i18n';
 import { AutoRefresh } from '@/components/auto-refresh';
 import { ExportBar } from '@/components/export-bar';
 import { getCurrentProject, getLastIngestAt, getProjects, getPulse, getRecentAlertCount } from '@/lib/data';
@@ -33,9 +34,12 @@ export default async function RootLayout({
   const stale = !lastIngest || Date.now() - lastIngest.getTime() > 2 * 3600_000;
 
   const demo = process.env.DEMO_MODE === '1';
+  const locale = await getLocale();
+  // Le date lato server seguono la lingua scelta (fmtDate legge questo tag).
+  setServerLocaleTag(locale);
 
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang={locale} className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full">
         {demo && (
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-sky-500/15 px-4 py-2 text-center text-xs text-sky-200">
@@ -53,6 +57,7 @@ export default async function RootLayout({
             lastIngest={lastIngest?.toISOString() ?? null}
             alertCount={alertCount}
             user={user ? { name: user.name, role: user.role } : null}
+            locale={locale}
           />
           <div className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-10 lg:py-6">
             <div className="mx-auto max-w-[1250px]">

@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     `You are a copywriter. Rewrite the text following the user's instruction, keeping the format: ${FORMAT_LABEL[format] ?? 'social text'}.
 ${project.brandVoice ? `Brand tone of voice: ${project.brandVoice}\n` : ''}Respond ONLY with the revised text, no comments.`,
     `Current text:\n${text}\n\nInstruction: ${instruction}`,
-    900,
+    900, true,
   );
   if (!revised) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
   return NextResponse.json({ text: revised.trim() });

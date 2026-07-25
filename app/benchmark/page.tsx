@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { benchmarkData, getCurrentProject } from '@/lib/data';
 import { PageHeader, EmptyState, fmtNum } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { ShareOfVoicePie, BenchmarkTrend, ENTITY_COLORS } from '@/components/charts';
 
 export const metadata = { title: 'Benchmark' };
 
 export default async function BenchmarkPage() {
+  const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const results = await benchmarkData(project.id);
@@ -13,7 +15,7 @@ export default async function BenchmarkPage() {
   if (results.length === 0) {
     return (
       <>
-        <PageHeader title="Benchmark" />
+        <PageHeader title={t('page.benchmark.title', 'Benchmark')} />
         <EmptyState message="No entities to compare. Add them in Projects (e.g. brands or sector competitors)." />
       </>
     );

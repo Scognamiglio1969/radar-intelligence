@@ -74,7 +74,7 @@ export async function POST(req: Request) {
   const answer = await callClaude(
     MODELS.sonnet, 'ask_the_data', SYSTEM,
     `${historyText ? historyText + '\n\n' : ''}DATA:\n${JSON.stringify(context).slice(0, 14000)}\n\nQUESTION: ${question}`,
-    1000,
+    1000, true,
   );
   if (!answer) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
   return NextResponse.json({ answer });

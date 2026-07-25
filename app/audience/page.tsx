@@ -1,5 +1,6 @@
 import { audienceData, getCurrentProject } from '@/lib/data';
 import { PageHeader, EmptyState, SourceBadge } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { HBars } from '@/components/charts';
 import { InfluencerButton } from '@/components/influencer-button';
 import { claudeAvailable } from '@/lib/claude';
@@ -7,6 +8,7 @@ import { claudeAvailable } from '@/lib/claude';
 export const metadata = { title: 'Audience' };
 
 export default async function AudiencePage() {
+  const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const data = await audienceData(project.id);

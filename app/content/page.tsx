@@ -1,5 +1,6 @@
 import { contentData, getCurrentProject } from '@/lib/data';
 import { PageHeader, EmptyState, SourceBadge, fmtDate } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { ExternalLink } from 'lucide-react';
 
 const RISK_STYLE: Record<string, string> = {
@@ -9,6 +10,7 @@ const RISK_STYLE: Record<string, string> = {
 export const metadata = { title: 'Content' };
 
 export default async function ContentPage() {
+  const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const rows = await contentData(project.id);

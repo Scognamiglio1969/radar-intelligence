@@ -3,6 +3,7 @@ import { AlertTriangle, Euro } from 'lucide-react';
 import { getCurrentProject } from '@/lib/data';
 import { emvReport, EMV_ASSUMPTIONS } from '@/lib/emv';
 import { PageHeader, EmptyState, fmtNum } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { sourceLabel } from '@/lib/export-data';
 
 export const metadata = { title: 'Earned Media Value' };
@@ -10,6 +11,7 @@ export const metadata = { title: 'Earned Media Value' };
 const eur = (n: number) => `€${n.toLocaleString('en-US')}`;
 
 export default async function EmvPage() {
+  const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const r = await emvReport(project.id, 30);
@@ -20,7 +22,7 @@ export default async function EmvPage() {
   return (
     <>
       <PageHeader
-        title="Earned Media Value"
+        title={t('page.emv.title', 'Earned Media Value')}
         info="An estimate of what your earned coverage would have cost to buy. It is deliberately conservative and fully transparent: real reach is used when a source provides it, otherwise impressions are estimated per source type; negative coverage is valued at zero and reported separately as exposure; and there is no arbitrary 'PR multiplier'. Every figure can be recomputed by hand from the assumptions shown at the bottom. Period: last 30 days."
         subtitle="The question management always asks: what is this coverage worth? Here is a defensible answer — with every assumption on the table, because an EMV without its assumptions is just a number to argue about."
       />

@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   const profile = await callClaude(
     MODELS.sonnet, 'influencer_profile', SYSTEM,
     `Monitored topic: ${project.name}\nAuthor: ${author} (platform: ${source})\n\nTheir recent posts:\n${posts.map((p) => `- [eng ${Math.round(p.engagement)}] ${(p.title ?? p.content).slice(0, 200)}`).join('\n').slice(0, 8000)}`,
-    900,
+    900, true,
   );
   if (!profile) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
 

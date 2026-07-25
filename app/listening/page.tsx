@@ -2,13 +2,17 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { getCurrentProject, listeningData } from '@/lib/data';
 import { PageHeader, MentionCard, EmptyState, fmtNum } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { SOURCE_META } from '@/lib/connectors';
 import { SearchBox } from '@/components/search-box';
 import { TranslateBar } from '@/components/translate-bar';
 import { translateMentions, TRANSLATE_LANGS, type Translated } from '@/lib/translate';
 
 const SENTIMENTS = ['positive', 'neutral', 'negative'];
-const PERIODS = [{ v: 1, l: '24 hours' }, { v: 7, l: '7 days' }, { v: 30, l: '30 days' }, { v: 90, l: '90 days' }];
+const PERIODS = [
+  { v: 1, l: '24 hours', k: 'listening.h24' }, { v: 7, l: '7 days', k: 'listening.d7' },
+  { v: 30, l: '30 days', k: 'listening.d30' }, { v: 90, l: '90 days', k: 'listening.d90' },
+];
 
 function buildQS(params: Record<string, string | number | undefined>) {
   const qs = new URLSearchParams();
@@ -24,8 +28,9 @@ export const metadata = { title: 'Listening' };
 export default async function ListeningPage({ searchParams }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const sp = await searchParams;
   const semanticTerms = sp.st ? sp.st.split('|').filter(Boolean) : undefined;
   const filters = {
@@ -56,7 +61,7 @@ export default async function ListeningPage({ searchParams }: {
 
   return (
     <>
-      <PageHeader title="Listening" subtitle={`${fmtNum(data.total)} mentions found`} />
+      <PageHeader title={t('page.listening.title', 'Listening')} subtitle={`${fmtNum(data.total)} ${t('listening.found', 'mentions found')}`} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
         <div className="mr-2"><SearchBox /></div>
@@ -68,24 +73,24 @@ export default async function ListeningPage({ searchParams }: {
           </span>
         )}
 
-        <FilterGroup label="Source" items={Object.entries(SOURCE_META).map(([id, m]) => ({ value: id, label: m.label }))}
+        <FilterGroup label={t('ui.source', 'Source')} items={Object.entries(SOURCE_META).map(([id, m]) => ({ value: id, label: m.label }))}
           param="fonte" current={current} />
-        <FilterGroup label="Sentiment" items={SENTIMENTS.map((s) => ({ value: s, label: s }))}
+        <FilterGroup label={t('ui.sentiment', 'Sentiment')} items={SENTIMENTS.map((s) => ({ value: s, label: s }))}
           param="sentiment" current={current} />
-        <FilterGroup label="Period" items={PERIODS.map((p) => ({ value: String(p.v), label: p.l }))}
+        <FilterGroup label={t('ui.period', 'Period')} items={PERIODS.map((p) => ({ value: String(p.v), label: t(p.k, p.l) }))}
           param="giorni" current={current} />
-        <FilterGroup label="Language" items={data.languages.map((l) => ({ value: l.language!, label: l.language!.toUpperCase() }))}
+        <FilterGroup label={t('ui.language', 'Language')} items={data.languages.map((l) => ({ value: l.language!, label: l.language!.toUpperCase() }))}
           param="lingua" current={current} />
-        <FilterGroup label="Relevance" items={[{ value: '4', label: '★ ≥ 4' }, { value: '5', label: '★ 5' }]}
+        <FilterGroup label={t('ui.relevance', 'Relevance')} items={[{ value: '4', label: '★ ≥ 4' }, { value: '5', label: '★ 5' }]}
           param="rilevanza" current={current} />
-        <FilterGroup label="Sort" items={[
+        <FilterGroup label={t('ui.sort', 'Sort')} items={[
           { value: 'engagement', label: 'engagement' }, { value: 'rilevanza', label: 'relevance' },
         ]} param="ordina" current={current} />
         {sp.fonte && SOURCE_META[sp.fonte] && (
           <Link href={`/source/${sp.fonte}`}
             className="flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 font-semibold text-sky-300 transition hover:bg-sky-500/25"
             title={`Full channel analysis of ${SOURCE_META[sp.fonte].label}: volume, sentiment, topics and authors compared with the whole project`}>
-            🔬 Deep-dive {SOURCE_META[sp.fonte].label} →
+            🔬 {t('listening.deepdive', 'Deep-dive')} {SOURCE_META[sp.fonte].label} →
           </Link>
         )}
         {sp.autore && (
@@ -107,7 +112,7 @@ export default async function ListeningPage({ searchParams }: {
         {(sp.fonte || sp.sentiment || sp.lingua || sp.q || sp.st || sp.giorni || sp.rilevanza || sp.autore || sp.autori || sp.ids || sp.ordina) && (
           <Link href="/listening"
             className="flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-3.5 py-1.5 font-semibold text-sky-300 transition hover:bg-sky-500/25">
-            ↺ Show all
+            ↺ {t('ui.showAll', 'Show all')}
           </Link>
         )}
       </div>
@@ -115,17 +120,17 @@ export default async function ListeningPage({ searchParams }: {
       <div className="flex flex-col gap-2">
         {data.rows.length
           ? data.rows.map((m) => <MentionCard key={m.id} m={m} translated={translations.get(m.id)} />)
-          : <EmptyState message="No mentions with these filters." />}
+          : <EmptyState message={t('listening.noMentions', 'No mentions with these filters.')} />}
       </div>
 
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-center gap-3 text-sm">
           {data.page > 1 && (
-            <Link className="text-sky-400 hover:text-sky-300" href={`/listening${buildQS({ ...current, pagina: data.page - 1 })}`}>← previous</Link>
+            <Link className="text-sky-400 hover:text-sky-300" href={`/listening${buildQS({ ...current, pagina: data.page - 1 })}`}>← {t('ui.previous', 'previous')}</Link>
           )}
-          <span className="text-slate-500">page {data.page} of {totalPages}</span>
+          <span className="text-slate-500">{t('ui.page', 'page')} {data.page} {t('ui.of', 'of')} {totalPages}</span>
           {data.page < totalPages && (
-            <Link className="text-sky-400 hover:text-sky-300" href={`/listening${buildQS({ ...current, pagina: data.page + 1 })}`}>next →</Link>
+            <Link className="text-sky-400 hover:text-sky-300" href={`/listening${buildQS({ ...current, pagina: data.page + 1 })}`}>{t('ui.next', 'next')} →</Link>
           )}
         </div>
       )}

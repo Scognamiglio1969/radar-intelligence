@@ -4,6 +4,7 @@ import { getCurrentProject } from '@/lib/data';
 import { messagePullThrough } from '@/lib/messages';
 import { claudeAvailable } from '@/lib/claude';
 import { PageHeader, EmptyState, fmtNum } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { sourceLabel } from '@/lib/export-data';
 import { saveKeyMessages } from './actions';
 import { SubmitButton } from '@/components/submit-button';
@@ -15,6 +16,7 @@ const sentColor = (v: number | null) =>
   v === null ? 'text-slate-500' : v > 0.15 ? 'text-emerald-400' : v < -0.15 ? 'text-red-400' : 'text-slate-400';
 
 export default async function MessagesPage() {
+  const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const messages = project.keyMessages ?? [];
@@ -25,7 +27,7 @@ export default async function MessagesPage() {
   return (
     <>
       <PageHeader
-        title="Message pull-through"
+        title={t('page.messages.title', 'Message pull-through')}
         info="Whether the messages YOU want to land are actually being picked up. You write your key messages; each one is expanded once into the words journalists and users would really use, and from then on the matching is pure database work — every count is verifiable and costs nothing to refresh. Period: last 30 days."
         subtitle="Volume tells you how much they talk about you. This tells you whether they say what you wanted said — which of your key messages get picked up, by which sources, with what tone."
       />

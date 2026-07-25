@@ -184,7 +184,7 @@ export async function getClusters(projectId: number, force = false): Promise<Clu
   const text = await callClaude(
     MODELS.sonnet, 'cluster_conversazionali', CLUSTER_SYSTEM,
     `Temi: ${(topics.rows as { topic: string; n: number }[]).map((t) => `${t.topic} (${t.n})`).join(', ')}\n\nContenuti:\n${(sample.rows as { text: string }[]).map((s) => `- ${String(s.text).slice(0, 160)}`).join('\n').slice(0, 6000)}`,
-    1500,
+    1500, true,
   );
   if (!text) return null;
   try {
@@ -228,7 +228,7 @@ export async function getCausalChains(projectId: number, force = false): Promise
     narrazioni: narratives.map((n) => ({ titolo: n.title, coordinata: n.coordinated === 1, post: n.mentionCount })),
   };
   const text = await callClaude(
-    MODELS.sonnet, 'causa_effetto', CAUSAL_SYSTEM, JSON.stringify(payload).slice(0, 9000), 1600,
+    MODELS.sonnet, 'causa_effetto', CAUSAL_SYSTEM, JSON.stringify(payload).slice(0, 9000), 1600, true,
   );
   if (!text) return null;
   try {

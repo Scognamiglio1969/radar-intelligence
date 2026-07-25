@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { getCurrentProject, mediaData } from '@/lib/data';
 import { PageHeader, MentionCard, EmptyState, fmtDate } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { HBars } from '@/components/charts';
 import { ExternalLink } from 'lucide-react';
 import { TranslateBar } from '@/components/translate-bar';
@@ -9,6 +10,7 @@ import { translateMentions, TRANSLATE_LANGS, type Translated } from '@/lib/trans
 export const metadata = { title: 'Media' };
 
 export default async function MediaPage() {
+  const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const data = await mediaData(project.id);

@@ -3,6 +3,7 @@ import { AlertTriangle, GitBranch } from 'lucide-react';
 import { getCurrentProject } from '@/lib/data';
 import { getNarratives } from '@/lib/narratives';
 import { PageHeader, EmptyState, fmtDate } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 
 const STANCE_STYLE: Record<string, string> = {
   positive: 'bg-emerald-500/15 text-emerald-400',
@@ -21,6 +22,7 @@ function coordHref(n: { mentionIds: number[]; accounts: string[] }): string | nu
 }
 
 export default async function NarrativesPage() {
+  const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const rows = await getNarratives(project.id);
@@ -28,7 +30,7 @@ export default async function NarrativesPage() {
   return (
     <>
       <PageHeader
-        title="Narratives"
+        title={t('page.narratives.title', 'Narratives')}
         subtitle="Who is pushing what: clusters of messages supporting the same thesis, flagging coordinated patterns"
       />
       {rows.length === 0 ? (

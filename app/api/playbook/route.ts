@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       engagement: Math.round(m.engagementScore),
       text: `${m.title ?? ''} ${m.content}`.slice(0, 200).trim(),
     }))).slice(0, 12000)}`,
-    1300,
+    1300, true,
   );
   if (!playbook) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
 

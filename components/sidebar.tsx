@@ -11,37 +11,39 @@ import {
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
+import { LocaleSwitch } from './locale-switch';
+import { tFor, type Locale } from '@/lib/i18n-dict';
 
 // Menu organizzato per INTENZIONE (cosa stai facendo), non per tecnologia:
 // monitorare → analizzare → interpretare → produrre → configurare.
 // I 16 insight non stanno più in elenco: vivono nell'hub /insights, raggruppati
 // per tema. Così il menu resta leggibile e ogni grafico è spiegato dove sta.
-const NAV: ({ href: string; label: string; icon: typeof Radar } | { section: string })[] = [
-  { section: 'Monitor' },
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/listening', label: 'Listening', icon: Ear },
-  { href: '/media', label: 'Media', icon: Newspaper },
-  { href: '/alerts', label: 'Alerts', icon: Bell },
-  { href: '/changes', label: 'What changed', icon: Diff },
-  { section: 'Analyze' },
-  { href: '/audience', label: 'Audience', icon: Users },
-  { href: '/benchmark', label: 'Benchmark', icon: BarChart3 },
-  { href: '/content', label: 'Top content', icon: Star },
-  { href: '/messages', label: 'Message pull-through', icon: MessageSquareQuote },
-  { href: '/emv', label: 'Media value', icon: Euro },
-  { href: '/insights', label: 'Explore insights', icon: LayoutGrid },
-  { section: 'Interpret' },
-  { href: '/pov', label: 'Point of View', icon: Lightbulb },
-  { href: '/narratives', label: 'Narratives', icon: GitBranch },
-  { href: '/timeline', label: 'Timeline', icon: History },
-  { href: '/stakeholders', label: 'Stakeholder map', icon: Network },
-  { href: '/ask', label: 'Ask the data', icon: MessageSquareText },
-  { section: 'Create' },
-  { href: '/studio', label: 'Content Studio', icon: PenLine },
-  { href: '/brief', label: 'Daily brief', icon: FileText },
-  { href: '/tv', label: 'War Room', icon: MonitorPlay },
-  { section: 'Setup' },
-  { href: '/settings', label: 'Projects', icon: Settings },
+const NAV: ({ href: string; label: string; key: string; icon: typeof Radar } | { section: string; key: string })[] = [
+  { section: 'Monitor', key: 'nav.monitor' },
+  { href: '/', label: 'Dashboard', key: 'nav.dashboard', icon: LayoutDashboard },
+  { href: '/listening', label: 'Listening', key: 'nav.listening', icon: Ear },
+  { href: '/media', label: 'Media', key: 'nav.media', icon: Newspaper },
+  { href: '/alerts', label: 'Alerts', key: 'nav.alerts', icon: Bell },
+  { href: '/changes', label: 'What changed', key: 'nav.changes', icon: Diff },
+  { section: 'Analyze', key: 'nav.analyze' },
+  { href: '/audience', label: 'Audience', key: 'nav.audience', icon: Users },
+  { href: '/benchmark', label: 'Benchmark', key: 'nav.benchmark', icon: BarChart3 },
+  { href: '/content', label: 'Top content', key: 'nav.content', icon: Star },
+  { href: '/messages', label: 'Message pull-through', key: 'nav.messages', icon: MessageSquareQuote },
+  { href: '/emv', label: 'Media value', key: 'nav.emv', icon: Euro },
+  { href: '/insights', label: 'Explore insights', key: 'nav.insights', icon: LayoutGrid },
+  { section: 'Interpret', key: 'nav.interpret' },
+  { href: '/pov', label: 'Point of View', key: 'nav.pov', icon: Lightbulb },
+  { href: '/narratives', label: 'Narratives', key: 'nav.narratives', icon: GitBranch },
+  { href: '/timeline', label: 'Timeline', key: 'nav.timeline', icon: History },
+  { href: '/stakeholders', label: 'Stakeholder map', key: 'nav.stakeholders', icon: Network },
+  { href: '/ask', label: 'Ask the data', key: 'nav.ask', icon: MessageSquareText },
+  { section: 'Create', key: 'nav.create' },
+  { href: '/studio', label: 'Content Studio', key: 'nav.studio', icon: PenLine },
+  { href: '/brief', label: 'Daily brief', key: 'nav.brief', icon: FileText },
+  { href: '/tv', label: 'War Room', key: 'nav.tv', icon: MonitorPlay },
+  { section: 'Setup', key: 'nav.setup' },
+  { href: '/settings', label: 'Projects', key: 'nav.settings', icon: Settings },
 ];
 
 type Props = {
@@ -50,9 +52,11 @@ type Props = {
   lastIngest: string | null;
   alertCount?: number;
   user?: { name: string; role: string } | null;
+  locale?: Locale;
 };
 
-export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user = null }: Props) {
+export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user = null, locale = 'en' }: Props) {
+  const t = tFor(locale);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -72,16 +76,16 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
         <UserCircle2 className="size-5 shrink-0 text-slate-500" />
         <div className="min-w-0">
           <p className="truncate text-xs font-medium text-slate-300">{user.name}</p>
-          <p className="text-[10px] uppercase tracking-wide text-slate-600">{user.role === 'admin' ? 'Admin' : 'Member'}</p>
+          <p className="text-[10px] uppercase tracking-wide text-slate-600">{user.role === 'admin' ? t('nav.admin', 'Admin') : t('nav.member', 'Member')}</p>
         </div>
       </div>
       <Link href="/impostazioni/account" onClick={() => setOpen(false)}
         className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm text-slate-400 transition hover:bg-white/5 hover:text-slate-200">
-        <UserCog className="size-4" /> Settings
+        <UserCog className="size-4" /> {t('nav.account', 'Settings')}
       </Link>
       <button onClick={logout}
         className="flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm text-slate-400 transition hover:bg-white/5 hover:text-red-300">
-        <LogOut className="size-4" /> Log out
+        <LogOut className="size-4" /> {t('nav.logout', 'Log out')}
       </button>
     </div>
   );
@@ -107,12 +111,13 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
           <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col gap-4 overflow-y-auto bg-[#0c1226] px-3 py-4 shadow-2xl">
             <div className="flex items-center gap-2 px-2">
               <Brand />
+              <LocaleSwitch current={locale} compact />
               <button onClick={() => setOpen(false)} aria-label="Close menu"
                 className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white/10">
                 <X className="size-5" />
               </button>
             </div>
-            <NavLinks pathname={pathname} alertCount={alertCount} onNavigate={() => setOpen(false)} />
+            <NavLinks pathname={pathname} alertCount={alertCount} t={t} onNavigate={() => setOpen(false)} />
             {userBlock}
             <FooterBlock lastIngest={lastIngest} />
           </div>
@@ -124,8 +129,11 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
         <div className="px-2">
           <Brand />
         </div>
-        <ProjectSelect projects={projects} currentId={currentId} />
-        <NavLinks pathname={pathname} alertCount={alertCount} />
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1"><ProjectSelect projects={projects} currentId={currentId} /></div>
+          <LocaleSwitch current={locale} compact />
+        </div>
+        <NavLinks pathname={pathname} alertCount={alertCount} t={t} />
         <div className="mt-auto flex flex-col gap-3">
           {userBlock}
           <FooterBlock lastIngest={lastIngest} />
@@ -158,18 +166,18 @@ function ProjectSelect({ projects, currentId, compact }: {
   );
 }
 
-function NavLinks({ pathname, alertCount = 0, onNavigate }: {
-  pathname: string; alertCount?: number; onNavigate?: () => void;
+function NavLinks({ pathname, alertCount = 0, t, onNavigate }: {
+  pathname: string; alertCount?: number; t: (k: string, f: string) => string; onNavigate?: () => void;
 }) {
   return (
     <nav className="flex flex-col gap-0.5 overflow-y-auto">
       {NAV.map((item, i) => {
         if ('section' in item) {
           return item.section
-            ? <p key={i} className="mt-3 mb-0.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">{item.section}</p>
+            ? <p key={i} className="mt-3 mb-0.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">{t(item.key, item.section)}</p>
             : <hr key={i} className="my-2 border-[var(--border)]" />;
         }
-        const { href, label, icon: Icon } = item;
+        const { href, label, key, icon: Icon } = item;
         // L'hub resta evidenziato anche quando sei dentro un singolo insight.
         const active = href === '/insights'
           ? pathname.startsWith('/insights')
@@ -186,7 +194,7 @@ function NavLinks({ pathname, alertCount = 0, onNavigate }: {
             }`}
           >
             <Icon className="size-4" />
-            {label}
+            {t(key, label)}
             {href === '/alerts' && alertCount > 0 && (
               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[11px] font-bold text-white">
                 {alertCount > 9 ? '9+' : alertCount}

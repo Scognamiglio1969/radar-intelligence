@@ -4,6 +4,7 @@ import { getCurrentProject } from '@/lib/data';
 import { getPointOfView, type Citation } from '@/lib/pov';
 import { claudeAvailable } from '@/lib/claude';
 import { PageHeader, EmptyState, fmtNum } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { GenerateRefresh } from '@/components/generate-refresh';
 import { sourceLabel } from '@/lib/export-data';
 
@@ -66,6 +67,7 @@ function Cites({ ids, byId }: { ids: number[]; byId: Map<number, Citation> }) {
 }
 
 export default async function PovPage() {
+  const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const { facts, research, cross, pov, reason } = await getPointOfView(project.id, 90);
@@ -75,7 +77,7 @@ export default async function PovPage() {
   return (
     <>
       <PageHeader
-        title="Point of View"
+        title={t('page.pov.title', 'Point of View')}
         info="A defensible argument about where the market is moving, built on 90 days of your data crossed with academic research. Every figure is computed from your mentions by the database (never invented by the AI), and every claim cites real posts you can open. The Market × Research crossover is what makes it a point of view rather than a report: it shows where research is moving ahead of the market, and where the market is loud without research behind it. Counter-signals are included on purpose — they are what makes the thesis credible."
         subtitle="The thesis you can take into a meeting: what is shifting over the last 90 days, the numbers that prove it, the posts that evidence it — plus what research says and what argues against it. Each block is slide-ready. Click any citation number to read the source post."
       />

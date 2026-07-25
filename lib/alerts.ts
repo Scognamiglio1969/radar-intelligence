@@ -53,7 +53,7 @@ async function buildAlertContext(projectId: number, kind: 'volume' | 'sentiment'
       MODELS.haiku, 'alert_explanation',
       `You are a media analyst. Explain in at most 2 sentences in English what is causing this ${kind === 'volume' ? 'spike in conversations' : 'drop in sentiment'} and why it deserves attention. Be concrete, cite facts from the provided content. Respond only with the 2 sentences.`,
       `Topics of the last 24h: ${topics.join(', ') || 'n/a'}\n\nKey content:\n${keyMentions.map((m) => `- [${m.source}] ${m.title}`).join('\n')}`,
-      200,
+      200, true,
     );
     if (text) explanation = text.trim();
   }

@@ -48,7 +48,7 @@ ${dashboard.topTopics.slice(0, 10).map((t) => `- ${t.topic} (${t.n})`).join('\n'
 
 Content that is performing (to understand what works):
 ${top.slice(0, 8).map((r) => `- [${r.source}, eng ${Math.round(r.engagementScore)}] ${(r.title || r.content).slice(0, 140)}`).join('\n')}`,
-    1500,
+    1500, true,
   );
   if (!ideas) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
 

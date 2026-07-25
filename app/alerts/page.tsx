@@ -1,6 +1,7 @@
 import { getCurrentProject } from '@/lib/data';
 import { getRecentAlerts, type AlertContext } from '@/lib/alerts';
 import { PageHeader, EmptyState, SourceBadge, fmtDate } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { PlaybookButton } from '@/components/playbook-button';
 import { claudeAvailable } from '@/lib/claude';
 import { SOURCE_META } from '@/lib/connectors';
@@ -14,6 +15,7 @@ const TYPE_META: Record<string, { label: string; icon: typeof Bell }> = {
 export const metadata = { title: 'Alerts' };
 
 export default async function AlertsPage() {
+  const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
   const rows = await getRecentAlerts(project.id);
@@ -22,7 +24,7 @@ export default async function AlertsPage() {
   return (
     <>
       <PageHeader
-        title="Alerts"
+        title={t('page.alerts.title', 'Alerts')}
         subtitle="On every update, Radar checks whether the volume or tone of conversations departs from the week's norm. When an alert fires, here you find what caused it: the explanation, topics, sources and key news."
       />
       {rows.length === 0 ? (

@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     `You are a copywriting expert. Generate 10 alternative HOOKS/HEADLINES for a piece of content, in English: strong, curious, scroll-stopping. Vary the styles (question, shocking stat, contrarian, promise, storytelling).
 Take inspiration from what performs in the sector but do NOT copy. Respond ONLY with a JSON array of 10 short strings.`,
     `Concept: ${concept}${top.length ? `\n\nContent that performs in the sector:\n${top.map((t) => `- ${t}`).join('\n')}` : ''}`,
-    700,
+    700, true,
   );
   if (!text) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
 

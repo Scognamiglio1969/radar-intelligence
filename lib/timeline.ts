@@ -50,7 +50,7 @@ export async function extractTimelineEvents(projectId: number): Promise<number> 
   const text = await callClaude(
     MODELS.haiku, 'timeline_eventi', SYSTEM,
     `${existing.length ? `Events already recorded recently (do NOT repeat them): ${existing.map((e) => e.title).join(' | ')}\n\n` : ''}News:\n${JSON.stringify(payload).slice(0, 9000)}`,
-    700,
+    700, true,
   );
   if (!text) return 0;
 

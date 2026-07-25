@@ -112,8 +112,15 @@ export function SentimentBadge({ sentiment }: { sentiment: string | null }) {
   );
 }
 
+/** Le date seguono la lingua scelta. Il locale arriva dall'attributo lang del
+ *  documento, così server e client formattano allo stesso modo senza prop drilling. */
+function docLocale(): string {
+  if (typeof document !== 'undefined') return document.documentElement.lang === 'it' ? 'it-IT' : 'en-US';
+  return globalThis.__srLocaleTag ?? 'en-US';
+}
+
 export function fmtDate(d: Date | string) {
-  return new Date(d).toLocaleString('en-US', {
+  return new Date(d).toLocaleString(docLocale(), {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
 }

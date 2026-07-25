@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { ParticleField } from '@/components/particle-field';
 import { Brand } from '@/components/brand';
+import { LocaleSwitch } from '@/components/locale-switch';
+import { getLocale, getT } from '@/lib/i18n';
 
 export const metadata = { title: 'Radar — open-source media intelligence' };
 
@@ -173,7 +175,8 @@ const STEPS = [
   { n: '03', title: 'You decide', text: 'Dashboards, briefs, maps and export-ready reports: decisions made with the data in front of you.' },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const [locale, t] = await Promise.all([getLocale(), getT()]);
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#04070f] text-slate-200">
       {/* backgrounds */}
@@ -188,41 +191,42 @@ export default function LandingPage() {
       {/* header */}
       <header className="relative z-10 mx-auto flex max-w-6xl items-center gap-4 px-5 py-5 sm:px-8">
         <Brand />
-        <Link href="/login"
-          className="ml-auto rounded-lg bg-sky-500/90 px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400">
-          Sign in
-        </Link>
+        <div className="ml-auto flex items-center gap-3">
+          <LocaleSwitch current={locale} publicPage />
+          <Link href="/login"
+            className="rounded-lg bg-sky-500/90 px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400">
+            {t('landing.signin', 'Sign in')}
+          </Link>
+        </div>
       </header>
 
       <main className="relative z-10 mx-auto max-w-6xl px-5 sm:px-8">
         {/* hero */}
         <section className="tv-3d flex flex-col items-center py-16 text-center sm:py-24">
           <span className="mb-6 flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-1.5 text-xs font-medium tracking-wide text-sky-300">
-            <Sparkles className="size-3.5" /> AI-powered media intelligence
+            <Sparkles className="size-3.5" /> {t('landing.badge', 'AI-powered media intelligence')}
           </span>
           <h1 className="max-w-3xl text-4xl font-black leading-[1.08] tracking-tight sm:text-6xl">
-            Everything the world says about your topic.{' '}
+            {t('landing.h1a', 'Everything the world says about your topic.')}{' '}
             <span className="bg-gradient-to-r from-sky-300 via-cyan-200 to-violet-300 bg-clip-text text-transparent">
-              Understood, rated, briefed.
+              {t('landing.h1b', 'Understood, rated, briefed.')}
             </span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
-            Radar listens to news and social in 30+ languages, judges the relevance of every item,
-            catches trends before they explode, and writes your briefing every morning.
-            The work of an enterprise platform, without the enterprise price.
+            {t('landing.lead', 'Radar listens to news and social in 30+ languages, judges the relevance of every item, catches trends before they explode, and writes your briefing every morning. The work of an enterprise platform, without the enterprise price.')}
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link href="/login"
               className="flex items-center gap-2 rounded-xl bg-sky-500 px-7 py-3 text-base font-bold text-slate-950 shadow-lg shadow-sky-500/25 transition hover:bg-sky-400">
-              Open Radar <ArrowRight className="size-4" />
+              {t('landing.open', 'Open Radar')} <ArrowRight className="size-4" />
             </Link>
             <a href="/tour.html" target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 px-7 py-3 text-base font-semibold text-sky-200 transition hover:bg-sky-500/20">
-              ▶ Watch the tour
+              {t('landing.tour', '▶ Watch the tour')}
             </a>
             <a href="#features"
               className="rounded-xl border border-[var(--border)] px-7 py-3 text-base font-medium text-slate-300 transition hover:bg-white/5">
-              See the features
+              {t('landing.seeFeatures', 'See the features')}
             </a>
           </div>
         </section>

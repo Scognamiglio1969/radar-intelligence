@@ -60,7 +60,7 @@ export async function POST() {
   const comparison = await callClaude(
     MODELS.sonnet, 'weekly_comparison', SYSTEM,
     `Sector: ${project.name}\n\nVolume and sentiment by source:\n${JSON.stringify(bySource.rows)}\n\nCurrent-week topics:\n${JSON.stringify(topicsNow.rows)}\n\nPrevious-week topics:\n${JSON.stringify(topicsPrev.rows)}\n\nCommunities:\n${JSON.stringify(communities.rows)}`,
-    900,
+    900, true,
   );
   if (!comparison) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
 

@@ -52,7 +52,7 @@ export async function detectNarratives(projectId: number): Promise<number> {
   const payload = posts.map((p) => ({
     id: p.id, autore: p.author, fonte: p.source, testo: p.content.slice(0, 220),
   }));
-  const text = await callClaude(MODELS.sonnet, 'narrazioni', SYSTEM, JSON.stringify(payload), 2500);
+  const text = await callClaude(MODELS.sonnet, 'narrazioni', SYSTEM, JSON.stringify(payload), 2500, true);
   const groups = parseJson<{
     title: string; description: string; stance: string; coordinated: boolean;
     accounts: string[]; ids: number[];
