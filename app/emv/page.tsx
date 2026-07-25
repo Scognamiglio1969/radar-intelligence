@@ -27,6 +27,37 @@ export default async function EmvPage() {
         subtitle="The question management always asks: what is this coverage worth? Here is a defensible answer — with every assumption on the table, because an EMV without its assumptions is just a number to argue about."
       />
 
+      {/* Spiegazione in chiaro: senza, "€14.519" è un numero che nessuno sa difendere. */}
+      <section className="panel mb-4 border-emerald-500/20 px-5 py-4">
+        <p className="text-sm leading-relaxed text-slate-300">
+          <strong className="text-slate-100">{t('emv.what', 'People are talking about you — and you did not pay for it.')}</strong>{' '}
+          {t('emv.what.body', 'Journalists write articles, users post, communities discuss. All of that attention reached real people. If you had wanted the same attention through advertising, you would have had to buy it. This page estimates that bill: what your earned coverage would have cost as paid media.')}
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="rounded-lg bg-white/[0.03] px-3 py-2" title="Every article and post about your topic in the period">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">1 · {t('emv.step1', 'The coverage')}</p>
+            <p className="mt-0.5 text-sm text-slate-300">
+              {fmtNum(r.items)} {t('emv.step1.body', 'pieces talking about your topic')}
+            </p>
+          </div>
+          <div className="rounded-lg bg-white/[0.03] px-3 py-2" title="How many people plausibly saw it: real reach where the source publishes it, a conservative estimate otherwise">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">2 · {t('emv.step2', 'How many saw it')}</p>
+            <p className="mt-0.5 text-sm text-slate-300">
+              {fmtNum(r.impressions)} {t('emv.step2.body', 'estimated views')}
+            </p>
+          </div>
+          <div className="rounded-lg bg-emerald-500/[0.07] px-3 py-2" title="Advertising is sold per thousand views (CPM). Same views, bought at a conservative market rate.">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">3 · {t('emv.step3', 'What it would have cost')}</p>
+            <p className="mt-0.5 text-sm font-semibold text-emerald-300">
+              {eur(r.emv)} {t('emv.step3.body', 'in advertising')}
+            </p>
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] text-slate-500">
+          {t('emv.caveat', 'It is an estimate, not an invoice — and a deliberately cautious one: negative coverage is worth nothing here, and none of the inflating tricks of the old AVE metric are applied. The full method is at the bottom of the page.')}
+        </p>
+      </section>
+
       {r.items === 0 ? (
         <EmptyState message="No coverage in the last 30 days yet." />
       ) : (

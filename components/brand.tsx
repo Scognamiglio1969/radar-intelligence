@@ -12,9 +12,11 @@ export function Brand({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   return (
     <span className="flex items-center gap-2">
       <Radar className={`${icon} shrink-0 text-sky-400`} />
-      <span className="flex flex-col leading-none">
+      <span className="flex min-w-0 flex-col leading-none">
         <span className={`${title} font-bold tracking-tight`}>{APP_NAME}</span>
-        <span className={`${byline} mt-0.5 font-medium uppercase tracking-[0.14em] text-slate-500`}>
+        {/* La firma non deve mai spezzarsi su più righe: se lo spazio manca
+            (header mobile con bandierine e selettore) semplicemente sparisce. */}
+        <span className={`${byline} mt-0.5 hidden whitespace-nowrap font-medium uppercase tracking-[0.14em] text-slate-500 sm:block`}>
           {APP_BYLINE}
         </span>
       </span>

@@ -9,8 +9,11 @@ with zero configuration.
 ![CI](https://img.shields.io/badge/CI-GitHub_Actions-informational)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 
-> The user interface and AI outputs are in English. Full internationalization (i18n) for
-> additional languages is on the roadmap and contributions are very welcome.
+> **Bilingual (English / Italian).** A flag in the sidebar switches both the interface and
+> the language the AI writes in — briefs, narratives, Point of View and every other generated
+> text. Your collected data is never translated: mentions, topics and sentiment stay in their
+> original language, because the interface language must not alter the dataset. More languages
+> are welcome as contributions — a missing translation simply falls back to English.
 
 ## Screenshots
 
@@ -32,6 +35,22 @@ Pick your AI engine — Claude, OpenAI or Grok — enter its key and set the mod
 the app. No code, no redeploy:
 
 ![Choose your AI engine](docs/screenshots/ai-engine.png)
+
+**Point of View** — 90 days of data turned into a thesis you can defend, in slide-ready
+blocks with clickable citations, plus the Market × Research crossover that shows where
+academic research is running ahead of the market:
+
+![Point of View](docs/screenshots/pov.png)
+
+**Earned Media Value** — what your coverage would have cost to buy, explained in plain
+language and with every assumption on screen:
+
+![Earned Media Value](docs/screenshots/emv.png)
+
+The **insights hub**: 16 visualizations grouped by the question they answer, so the sidebar
+stays readable and every chart says what it is for:
+
+![Explore insights](docs/screenshots/insights.png)
 
 Zoom into any single channel with a **source deep-dive** — how that channel's volume,
 sentiment, topics and authors compare with the whole project, each figure a verifiable
@@ -66,6 +85,17 @@ just want to collect data).
   (from any platform or vendor). Radar runs the whole analysis engine — sentiment, topics,
   narratives, insights — over rows it never scraped, so external data lives alongside live
   listening.
+- **Point of View** ✦: turns 90 days of data into a defensible thesis for a meeting — 3-5
+  slide-ready blocks (named idea, narrative, supporting figures), counter-signals and
+  clickable citations to the real posts. The numbers come from SQL, never from the model,
+  and invented citations are dropped by a validation pass. It also crosses your market
+  signal with **academic research** (via the open OpenAlex index) to show where research is
+  running ahead of the market, and where the market is loud with no research behind it.
+- **Message pull-through**: whether the messages *you* want to land are actually picked up —
+  by which sources, with what tone, and where exactly they landed.
+- **Earned Media Value**: what the coverage would have cost to buy, computed conservatively
+  with every assumption on screen (negative coverage valued at zero and reported separately,
+  no arbitrary AVE multiplier).
 - **Per-source deep-dive**: focus on one channel and compare its volume, sentiment, topics
   and authors against the whole project — every number a verifiable subset of the totals,
   with a banner spelling out how that source's data is collected.
@@ -139,6 +169,11 @@ features turn on immediately.
 
 ## Modules
 
+The sidebar is organised by what you are trying to do — **Monitor** (what is happening),
+**Analyze** (understand the numbers), **Interpret** (what it means), **Create** (what you
+produce) and **Setup** — instead of by chart type. The advanced visualizations live in a
+hub that groups them by the question they answer, so the menu stays readable.
+
 | Page | What it does |
 |---|---|
 | Dashboard | KPIs, volume per source, sentiment, emerging topics, latest brief |
@@ -149,7 +184,10 @@ features turn on immediately.
 | Benchmark | Share of voice, trends and comparative sentiment across configurable entities |
 | Audience | Most active communities, languages, influential authors, topics by community |
 | Content | Engagement ranking (per-platform percentile) + AI quality score |
-| Advanced insights | 12 dedicated visualizations — see the section below |
+| Point of View | An evidence-backed market thesis in slide-ready blocks, with research corroboration |
+| Message pull-through | Are your key messages being picked up, and by whom |
+| Media value | Earned Media Value with every assumption exposed |
+| Explore insights | A hub grouping 16 visualizations by the question they answer |
 | Content Studio | Concept → multi-format kit, Hook Lab, conversational refinement |
 | Alerts / Brief | Auto-detected volume spikes & sentiment drops; daily executive brief |
 | War Room | Full-screen live view for a wall display |

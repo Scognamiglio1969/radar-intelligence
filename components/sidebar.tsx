@@ -79,10 +79,13 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
           <p className="text-[10px] uppercase tracking-wide text-slate-600">{user.role === 'admin' ? t('nav.admin', 'Admin') : t('nav.member', 'Member')}</p>
         </div>
       </div>
-      <Link href="/impostazioni/account" onClick={() => setOpen(false)}
-        className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm text-slate-400 transition hover:bg-white/5 hover:text-slate-200">
-        <UserCog className="size-4" /> {t('nav.account', 'Settings')}
-      </Link>
+      <div className="flex items-center gap-1">
+        <Link href="/impostazioni/account" onClick={() => setOpen(false)}
+          className="flex flex-1 items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm text-slate-400 transition hover:bg-white/5 hover:text-slate-200">
+          <UserCog className="size-4" /> {t('nav.account', 'Settings')}
+        </Link>
+        <LocaleSwitch current={locale} compact />
+      </div>
       <button onClick={logout}
         className="flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm text-slate-400 transition hover:bg-white/5 hover:text-red-300">
         <LogOut className="size-4" /> {t('nav.logout', 'Log out')}
@@ -99,7 +102,8 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
           <Menu className="size-5" />
         </button>
         <Brand size="sm" />
-        <div className="ml-auto">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <LocaleSwitch current={locale} compact />
           <ProjectSelect projects={projects} currentId={currentId} compact />
         </div>
       </header>
@@ -111,7 +115,6 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
           <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col gap-4 overflow-y-auto bg-[#0c1226] px-3 py-4 shadow-2xl">
             <div className="flex items-center gap-2 px-2">
               <Brand />
-              <LocaleSwitch current={locale} compact />
               <button onClick={() => setOpen(false)} aria-label="Close menu"
                 className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white/10">
                 <X className="size-5" />
@@ -126,13 +129,10 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
 
       {/* Sidebar desktop (da lg in su) */}
       <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col gap-3 border-r border-[var(--border)] bg-[#0c1226] px-3 py-5 lg:flex">
-        <div className="px-2">
+        <div className="px-2 [&_span_span_span:last-child]:block">
           <Brand />
         </div>
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1"><ProjectSelect projects={projects} currentId={currentId} /></div>
-          <LocaleSwitch current={locale} compact />
-        </div>
+        <ProjectSelect projects={projects} currentId={currentId} />
         <NavLinks pathname={pathname} alertCount={alertCount} t={t} />
         <div className="mt-auto flex flex-col gap-3">
           {userBlock}
@@ -156,7 +156,7 @@ function ProjectSelect({ projects, currentId, compact }: {
         router.refresh();
       }}
       className={`rounded-lg border border-[var(--border)] bg-[var(--panel)] text-sm outline-none ${
-        compact ? 'max-w-[45vw] truncate px-2 py-1 text-xs' : 'mx-1 px-2 py-1.5'
+        compact ? 'max-w-[38vw] truncate px-2 py-1 text-xs' : 'mx-1 w-[calc(100%-0.5rem)] truncate px-2 py-1.5'
       }`}
     >
       {projects.map((p) => (

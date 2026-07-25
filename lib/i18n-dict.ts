@@ -131,6 +131,17 @@ const IT: Record<string, string> = {
   'listening.d30': '30 giorni',
   'listening.d90': '90 giorni',
 
+  // ── Valore dei media (EMV): spiegazione in chiaro
+  'emv.what': 'Si parla di te — e non l\'hai pagato.',
+  'emv.what.body': 'Giornalisti che scrivono articoli, utenti che pubblicano, community che discutono: tutta quell\'attenzione ha raggiunto persone vere. Se avessi voluto la stessa attenzione con la pubblicità, avresti dovuto comprarla. Questa pagina stima quel conto: quanto sarebbe costata la tua copertura se l\'avessi pagata.',
+  'emv.step1': 'La copertura',
+  'emv.step1.body': 'contenuti che parlano del tuo tema',
+  'emv.step2': 'Quante persone l\'hanno vista',
+  'emv.step2.body': 'visualizzazioni stimate',
+  'emv.step3': 'Quanto sarebbe costata',
+  'emv.step3.body': 'in pubblicità',
+  'emv.caveat': 'È una stima, non una fattura — e volutamente prudente: qui la copertura negativa non vale nulla, e non si applica nessuno dei trucchi gonfia-numeri della vecchia metrica AVE. Il metodo completo è in fondo alla pagina.',
+
   // ── Landing pubblica
   'landing.cta': 'Accedi',
   'landing.hero.sub': 'Media intelligence e social listening open source: un\'alternativa auto-ospitabile a Talkwalker e Brandwatch, costruita su fonti gratuite e sull\'AI che scegli tu.',
