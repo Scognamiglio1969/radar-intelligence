@@ -532,35 +532,66 @@ export async function translatePointOfView(
 
   if (!await claudeAvailable()) return { pov: null, reason: 'no_ai' };
 
-  const allowed = new Set<number>();
-  canonical.blocks.forEach((b) => b.citations.forEach((id) => allowed.add(id)));
-  canonical.intro.forEach((i) => i.citations.forEach((id) => allowed.add(id)));
-  canonical.counterSignals.forEach((c) => c.citations.forEach((id) => allowed.add(id)));
-  const researchIdx = canonical.intro.flatMap((i) => i.research);
-  const researchCount = researchIdx.length ? Math.max(...researchIdx) + 1 : 0;
+  // Si traducono SOLO le stringhe, non il documento.
+  //
+  // Far riscrivere al modello l'intero JSON significava rispedire indietro anche
+  // numeri, citazioni ed enum — che devono restare identici per definizione — e
+  // l'uscita sfondava il tetto dei token troncando il JSON a metà: la traduzione
+  // falliva sempre. Qui esce solo prosa, e il documento lo ricompone il codice:
+  // meno della metà dei token, e citazioni e statistiche non possono derivare.
+  const strings: string[] = [
+    canonical.headline,
+    ...canonical.intro.map((i) => i.text),
+    ...canonical.blocks.flatMap((b) => [b.title, b.body, ...b.stats.map((s) => s.label)]),
+    ...canonical.counterSignals.map((c) => c.point),
+    ...canonical.implications,
+    ...canonical.watch,
+  ];
 
   const targetName = locale === 'it' ? 'Italian' : 'English';
-  const system = `You translate a market analysis document into ${targetName}. Rules:
-- Return ONLY a JSON object with the EXACT same shape as the input: headline, intro[], blocks[], counterSignals[], implications[], watch[].
-- Translate every natural-language string (headline, intro[].text, blocks[].title, blocks[].body, blocks[].stats[].label, counterSignals[].point, implications[], watch[]) into ${targetName}.
-- Do NOT translate or alter numbers, percentages, stats[].value, citations arrays, research arrays, kind values, or confidence values — copy them EXACTLY as given.
-- Keep the same number of items in every array. Do not add or remove blocks, citations or research indexes.`;
+  const system = `You translate market-analysis prose into ${targetName}.
+You receive a JSON array of strings. Return ONLY a JSON array of translated strings:
+- EXACTLY the same number of items, in the same order.
+- Translate each item into natural, professional ${targetName}.
+- Keep every number, percentage, date and proper name exactly as it appears.
+- Never merge, split, reorder, drop or add items. An empty string stays an empty string.`;
 
   const text = await callClaude(
-    MODELS.haiku, 'pov_translate', system, JSON.stringify(canonical), 3000, false, 240_000,
+    MODELS.haiku, 'pov_translate', system, JSON.stringify(strings), 8000, false, 240_000,
   );
   if (!text) return { pov: null, reason: 'failed' };
 
+  let out: unknown;
   try {
-    const start = text.indexOf('{');
-    const parsed = JSON.parse(text.slice(start, text.lastIndexOf('}') + 1));
-    const translated = validate(parsed, allowed, researchCount);
-    if (!translated) return { pov: null, reason: 'failed' };
-    translated.generatedAt = canonical.generatedAt;
-    translated.locale = locale;
-    await setMeta(trKey, translated);
-    return { pov: translated };
+    out = JSON.parse(text.slice(text.indexOf('['), text.lastIndexOf(']') + 1));
   } catch {
     return { pov: null, reason: 'failed' };
   }
+  // Il disallineamento va rifiutato: ricomporre su un elenco di lunghezza
+  // diversa sposterebbe le frasi sui blocchi sbagliati, in silenzio.
+  if (!Array.isArray(out) || out.length !== strings.length) return { pov: null, reason: 'failed' };
+  const t = out.map((s, i) => (typeof s === 'string' && s.trim() ? s.trim() : strings[i]));
+
+  // Ricomposizione nello STESSO ordine in cui sono state estratte.
+  let k = 0;
+  const next = () => t[k++];
+  const translated: PointOfView = {
+    ...canonical,
+    headline: next(),
+    intro: canonical.intro.map((i) => ({ ...i, text: next() })),
+    blocks: canonical.blocks.map((b) => ({
+      ...b,
+      title: next(),
+      body: next(),
+      stats: b.stats.map((s) => ({ ...s, label: next() })),
+    })),
+    counterSignals: canonical.counterSignals.map((c) => ({ ...c, point: next() })),
+    implications: canonical.implications.map(() => next()),
+    watch: canonical.watch.map(() => next()),
+    generatedAt: canonical.generatedAt,
+    locale,
+  };
+
+  await setMeta(trKey, translated);
+  return { pov: translated };
 }
