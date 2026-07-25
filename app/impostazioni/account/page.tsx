@@ -1,5 +1,6 @@
 import { getCurrentUser } from '@/lib/auth';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { ChangePasswordForm } from '@/components/change-password-form';
 
 export const metadata = { title: 'Il mio account' };
@@ -7,13 +8,14 @@ export const metadata = { title: 'Il mio account' };
 export default async function AccountPage({ searchParams }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const t = await getT();
   const user = await getCurrentUser();
   if (!user) return <EmptyState message="Sessione scaduta, rientra." />;
   const first = (await searchParams).first === '1';
 
   return (
     <>
-      <PageHeader title="Il mio account" />
+      <PageHeader title={t('page.account.title', 'My account')} />
       <div className="max-w-md">
         <div className="panel mb-4 px-5 py-4 text-sm">
           <p><span className="text-slate-500">Nome:</span> {user.name}</p>

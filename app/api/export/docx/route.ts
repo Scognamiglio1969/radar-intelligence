@@ -77,7 +77,7 @@ export async function GET(req: Request) {
       h1('At a glance'),
       bullet(`${kpi.total7.toLocaleString('en-US')}  mentions in the last 7 days from ${kpi.sources} active sources`),
       bullet(`Overall sentiment: ${sentimentLabel}${kpi.avgSentiment !== null ? ` (score ${kpi.avgSentiment.toFixed(2)})` : ''}`),
-      bullet(` topics detected,  recent alerts`),
+      bullet(`${data.dashboard.topTopics.length} topics detected, ${data.alerts.length} recent alerts`),
     );
   }
 
@@ -260,6 +260,7 @@ export async function GET(req: Request) {
     const pv = data.pov.pov;
     children.push(h1('Point of View'));
     children.push(p(pv.headline, { bold: true, size: 26 }));
+    for (const par of pv.intro ?? []) children.push(p(par.text));
     for (const [i, b] of pv.blocks.entries()) {
       children.push(h2(`${i + 1}. ${b.title}`));
       children.push(p(`${b.kind} · ${b.confidence} confidence`, { muted: true, size: 18 }));

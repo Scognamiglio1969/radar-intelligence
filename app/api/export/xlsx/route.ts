@@ -286,6 +286,7 @@ export async function GET(req: Request) {
       { header: 'Figures', key: 'f', width: 45 }, { header: 'Narrative', key: 'b', width: 90 },
     ]);
     ws.addRow({ i: '', k: 'THESIS', t: pv.headline, c: '', f: '', b: '' });
+    for (const par of pv.intro ?? []) ws.addRow({ k: 'intro', b: par.text });
     for (const [i, b] of pv.blocks.entries()) {
       ws.addRow({
         i: i + 1, k: b.kind, t: b.title, c: b.confidence,

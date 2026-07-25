@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { Heart, Scale, Package, Image as ImageIcon, Database, ShieldAlert, ExternalLink } from 'lucide-react';
 
 export const metadata = { title: 'Credits & Legal' };
@@ -34,10 +35,11 @@ function Ext({ href, children }: { href: string; children: React.ReactNode }) {
   );
 }
 
-export default function CreditsPage() {
+export default async function CreditsPage() {
+  const t = await getT();
   return (
     <>
-      <PageHeader title="Credits & Legal" subtitle="Who built Radar, what it's made of, and the terms it's released under." />
+      <PageHeader title={t('page.credits.title', 'Credits & Legal')} subtitle="Who built Radar, what it's made of, and the terms it's released under." />
 
       <div className="flex max-w-2xl flex-col gap-4">
         {/* Chi */}

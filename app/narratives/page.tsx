@@ -24,17 +24,17 @@ function coordHref(n: { mentionIds: number[]; accounts: string[] }): string | nu
 export default async function NarrativesPage() {
   const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const rows = await getNarratives(project.id);
 
   return (
     <>
       <PageHeader
         title={t('page.narratives.title', 'Narratives')}
-        subtitle="Who is pushing what: clusters of messages supporting the same thesis, flagging coordinated patterns"
+        subtitle={t('page.narratives.subtitle', 'Who is pushing what: clusters of messages supporting the same thesis, flagging coordinated patterns')}
       />
       {rows.length === 0 ? (
-        <EmptyState message="No narratives detected. The analysis runs with the daily cycle (needs at least 8 social posts in the last 48 hours)." />
+        <EmptyState message={t('narratives.none', 'No narratives detected. The analysis runs with the daily cycle (needs at least 8 social posts in the last 48 hours).')} />
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map((n) => (

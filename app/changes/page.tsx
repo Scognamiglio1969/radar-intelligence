@@ -1,4 +1,5 @@
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { getCurrentProject } from '@/lib/data';
 import { claudeAvailable } from '@/lib/claude';
 import { getMeta } from '@/lib/db';
@@ -8,15 +9,16 @@ import { GenerateMd } from '@/components/generate-md';
 export const metadata = { title: 'What changed' };
 
 export default async function ChangesPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const cached = await getMeta<string>(`compare:${project.id}:${new Date().toISOString().slice(0, 10)}`);
 
   return (
     <>
       <PageHeader
-        title="What changed"
-        subtitle="Smart comparison: the last 7 days vs the previous 7, explained in English"
+        title={t('page.changes.title', 'What changed')}
+        subtitle={t('page.changes.subtitle', 'Smart comparison: the last 7 days vs the previous 7, explained in words')}
       />
       {await claudeAvailable() && !isDemoMode() ? (
         <GenerateMd

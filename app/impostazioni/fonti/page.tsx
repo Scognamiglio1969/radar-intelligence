@@ -5,6 +5,7 @@ import { getConnectorCredStatuses, hydrateConnectorCredentials } from '@/lib/con
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { ConnectorKeys } from '@/components/connector-keys';
 import { PageHeader, fmtDate } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import type { SourceStatus } from '@/lib/ingest';
 
 export const metadata = { title: 'Sources' };
@@ -30,6 +31,7 @@ const SOURCE_INFO: Record<string, string> = {
 };
 
 export default async function FontiPage() {
+  const t = await getT();
   // Hydrate saved keys before reading the "active" status of the connectors.
   await hydrateConnectorCredentials();
   const [sourceStatus, credStatuses, currentUser] = await Promise.all([
@@ -40,7 +42,7 @@ export default async function FontiPage() {
   return (
     <>
       <PageHeader
-        title="Sources"
+        title={t('page.sources.title', 'Sources')}
         subtitle="Status of the listening sources and their API keys. AI spend and budget are in the Budget tab."
       />
 

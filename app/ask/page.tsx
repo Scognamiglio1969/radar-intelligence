@@ -1,4 +1,7 @@
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
+import { ContentLocaleSwitch } from '@/components/content-locale-switch';
+import { getContentLocale } from '@/lib/content-locale';
 import { getCurrentProject } from '@/lib/data';
 import { claudeAvailable } from '@/lib/claude';
 import { isDemoMode } from '@/lib/session';
@@ -7,16 +10,19 @@ import { AskChat } from '@/components/ask-chat';
 export const metadata = { title: 'Ask the data' };
 
 export default async function AskPage() {
+  const contentLocale = await getContentLocale();
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const aiOn = await claudeAvailable();
 
   return (
     <>
       <PageHeader
-        title="Ask the data"
+        title={t('page.ask.title', 'Ask the data')}
         subtitle={`Ask questions in plain language about the data for “${project.name}”: the AI analyst answers with numbers and evidence`}
       />
+      <div className="mb-4 flex justify-end"><ContentLocaleSwitch current={contentLocale} /></div>
       {aiOn && !isDemoMode()
         ? <AskChat suggestions={[
             'What was the most discussed topic in the last 3 days?',

@@ -7,6 +7,7 @@ import { AiEngine, type EngineOption } from '@/components/ai-engine';
 import { claudeAvailable, costControl } from '@/lib/claude';
 import { AI_PROVIDERS, AI_PROVIDER_IDS, aiProvider, aiModels } from '@/lib/ai-provider';
 import { PageHeader } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { ExternalLink } from 'lucide-react';
 
 export const metadata = { title: 'Budget' };
@@ -22,6 +23,7 @@ const PAID_NOTE: Record<string, string> = {
 };
 
 export default async function BudgetPage() {
+  const t = await getT();
   await hydrateConnectorCredentials();
   const [cost, credStatuses, currentUser, activeProvider] = await Promise.all([
     costControl(), getConnectorCredStatuses(), getCurrentUser(), aiProvider(),
@@ -45,7 +47,7 @@ export default async function BudgetPage() {
   return (
     <>
       <PageHeader
-        title="Budget & costs"
+        title={t('page.budget.title', 'Budget & costs')}
         subtitle="The AI key that powers analysis, its spend cap, and where your paid data-source costs come from."
       />
 

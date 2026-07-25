@@ -4,11 +4,13 @@ import { getDb } from '@/lib/db';
 import { users, projects } from '@/lib/db/schema';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { PageHeader } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { TeamManager } from '@/components/team-manager';
 
 export const metadata = { title: 'Team' };
 
 export default async function TeamPage() {
+  const t = await getT();
   const me = await getCurrentUser();
   if (!isAdmin(me)) redirect('/impostazioni/account');
   const db = await getDb();
@@ -26,7 +28,7 @@ export default async function TeamPage() {
   return (
     <>
       <PageHeader
-        title="Team"
+        title={t('page.team.title', 'Team')}
         subtitle="Manage access. Members with AI on “hold” collect data but don’t consume API until you enable them (requires budget)."
       />
       <TeamManager users={rows.map((r) => ({ ...r, projectCount: countByOwner.get(r.id) ?? 0 }))} />

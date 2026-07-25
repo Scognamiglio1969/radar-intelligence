@@ -2,6 +2,7 @@ import { getCurrentProject } from '@/lib/data';
 import { conversationFlow } from '@/lib/insights';
 import { SOURCE_META } from '@/lib/connectors';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { SankeyFlow } from '@/components/insight-charts';
 
 export const metadata = { title: 'Conversation flow' };
@@ -11,14 +12,15 @@ const sourceColors = Object.fromEntries(
 );
 
 export default async function FlowInsightPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const { nodes, links } = await conversationFlow(project.id, 14);
 
   return (
     <>
       <PageHeader
-        title="Conversation flow"
+        title={t('ins.flow.title', 'Conversation flow')}
         info="How the conversation flows from Source → Topic → Sentiment; band width = number of mentions. Data: your analyzed mentions. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="How the conversation flows from source to topic to sentiment (last 14 days). Read the ribbons to see, at a glance, which sources drive which topics and where the negativity concentrates."
       />

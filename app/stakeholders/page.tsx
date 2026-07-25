@@ -2,13 +2,15 @@ import { sql } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { getCurrentProject } from '@/lib/data';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { StakeholderMap } from '@/components/stakeholder-map';
 
 export const metadata = { title: 'Mappa attori' };
 
 export default async function StakeholdersPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const db = await getDb();
   const d14 = new Date(Date.now() - 14 * 86400_000).toISOString();
 
@@ -54,7 +56,7 @@ export default async function StakeholdersPage() {
   return (
     <>
       <PageHeader
-        title="Stakeholder map"
+        title={t('page.stakeholders.title', 'Stakeholder map')}
         subtitle="Who matters in the conversation: size = weight, color = sentiment. The most influential are at the center."
       />
       {entityNodes.length + authorNodes.length < 5 ? (

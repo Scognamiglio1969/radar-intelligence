@@ -12,18 +12,18 @@ export const metadata = { title: 'Content' };
 export default async function ContentPage() {
   const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const rows = await contentData(project.id);
 
   return (
     <>
       <PageHeader
-        title="Social Content Ratings"
-        subtitle="Highest-engagement content (7 days): per-platform percentile + AI rating"
+        title={t('page.content.title2', 'Social Content Ratings')}
+        subtitle={t('page.content.subtitle', 'Highest-engagement content (7 days): per-platform percentile + AI rating')}
       />
 
       {rows.length === 0 ? (
-        <EmptyState message="No content with engagement in the last 7 days." />
+        <EmptyState message={t('content.none', 'No content with engagement in the last 7 days.')} />
       ) : (
         <section className="panel overflow-x-auto px-5 py-4">
           <table className="w-full text-sm">

@@ -1,20 +1,22 @@
 import { getCurrentProject } from '@/lib/data';
 import { sentimentWaterfall } from '@/lib/insights';
 import { PageHeader, EmptyState, SentimentBadge } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { SentimentWaterfall } from '@/components/insight-charts';
 import { ExternalLink } from 'lucide-react';
 
 export const metadata = { title: 'Sentiment Waterfall' };
 
 export default async function WaterfallPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const { steps, swings } = await sentimentWaterfall(project.id, 14);
 
   return (
     <>
       <PageHeader
-        title="Sentiment Waterfall"
+        title={t('ins.waterfall.title', 'Sentiment Waterfall')}
         info="Shows how sentiment moved day by day: each bar is that day's net (positive − negative posts), the line is the running balance. Data: the sentiment tag of each mention. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="How sentiment moved day by day: the green/red bars are each day's net contribution, the blue line the cumulative balance. Below, the content that weighed most on the turning-point days."
       />

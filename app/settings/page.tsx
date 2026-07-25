@@ -7,6 +7,7 @@ import { CopyButton } from '@/components/copy-button';
 import { SubmitButton } from '@/components/submit-button';
 import { getBenchmarkEntities, getCurrentProject, getProjects } from '@/lib/data';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import type { projects as projectsTable } from '@/lib/db/schema';
 import {
   addEntity, createProject, createImportProject, createShareLink, deleteEntity, deleteProject,
@@ -35,6 +36,7 @@ export const metadata = { title: 'Projects' };
 export default async function SettingsPage({ searchParams }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const t = await getT();
   const sp = await searchParams;
   const [allProjects, current] = await Promise.all([getProjects(), getCurrentProject()]);
   if (allProjects.length === 0) return <EmptyState message="No project." />;
@@ -55,7 +57,7 @@ export default async function SettingsPage({ searchParams }: {
   return (
     <>
       <PageHeader
-        title="Projects"
+        title={t('page.settings.title', 'Projects')}
         subtitle="Each project is an independent listening scope: query, languages, geographies and entities to compare"
       />
 

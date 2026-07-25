@@ -1,20 +1,22 @@
 import { getCurrentProject } from '@/lib/data';
 import { crisisAnatomy } from '@/lib/insights';
 import { PageHeader, EmptyState, SourceBadge, fmtDate } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { RiskGauge } from '@/components/insight-charts';
 import { ExternalLink } from 'lucide-react';
 
 export const metadata = { title: 'Crisis radar' };
 
 export default async function CrisisInsightPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const { risk, level, drivers, peak } = await crisisAnatomy(project.id, 14);
 
   return (
     <>
       <PageHeader
-        title="Crisis radar & peak anatomy"
+        title={t('ins.crisis.title', 'Crisis radar & peak anatomy')}
         info="A risk gauge plus the anatomy of the biggest volume/sentiment spike in the window — what drove it and the content that weighed most. Data: your analyzed mentions. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="One risk number, plus the autopsy of the biggest spike (last 14 days): what drove the risk up, and — on the peak day — which topics and content weighed most. Your early-warning, single-glance crisis view."
       />

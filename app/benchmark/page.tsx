@@ -9,14 +9,14 @@ export const metadata = { title: 'Benchmark' };
 export default async function BenchmarkPage() {
   const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const results = await benchmarkData(project.id);
 
   if (results.length === 0) {
     return (
       <>
         <PageHeader title={t('page.benchmark.title', 'Benchmark')} />
-        <EmptyState message="No entities to compare. Add them in Projects (e.g. brands or sector competitors)." />
+        <EmptyState message={t('bench.noEntities', 'No entities to compare. Add them in Projects (e.g. brands or sector competitors).')} />
       </>
     );
   }
@@ -27,7 +27,7 @@ export default async function BenchmarkPage() {
     <>
       <PageHeader
         title="Benchmark"
-        subtitle="Share of voice and sentiment comparison across sector entities (last 14 days)"
+        subtitle={t('page.benchmark.subtitle', 'Share of voice and sentiment comparison across sector entities (last 14 days)')}
       />
 
       <div className="grid gap-4 lg:grid-cols-3">

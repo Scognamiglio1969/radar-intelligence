@@ -361,7 +361,9 @@ export async function GET(req: Request) {
   if (has('pov') && data.pov.pov) {
     const p = data.pov.pov;
     heading('Point of View');
-    para(p.headline, { bold: true, size: 12, gap: 0.5 });
+    para(p.headline, { bold: true, size: 12, gap: 0.4 });
+    for (const par of p.intro ?? []) para(par.text, { size: 10, gap: 0.35 });
+    if ((p.intro ?? []).length) doc.moveDown(0.2);
     for (const [i, b] of p.blocks.entries()) {
       para(`${i + 1}. ${b.title}  [${b.kind} · ${b.confidence} confidence]`, { bold: true, size: 10.5, gap: 0.2 });
       if (b.stats.length) {

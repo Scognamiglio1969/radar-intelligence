@@ -1,19 +1,21 @@
 import { getCurrentProject } from '@/lib/data';
 import { conversationGalaxy } from '@/lib/insights';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { ConversationGalaxy } from '@/components/conversation-galaxy';
 
 export const metadata = { title: 'Conversation Galaxy' };
 
 export default async function GalaxyInsightPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const g = await conversationGalaxy(project.id, 14);
 
   return (
     <>
       <PageHeader
-        title="Conversation Galaxy"
+        title={t('ins.galaxy.title', 'Conversation Galaxy')}
         info="The whole conversation as a solar system: the sun is your Health Index, planets are sources (size = volume), each planet's three moons are sized by its positive/neutral/negative split. An outer belt shows the dominant topics, and golden pulsing comets mark emerging trends — both toggleable. Data: your analyzed mentions, last 14 days, across all active sources."
         subtitle="Your conversation as a real solar system (last 14 days). Each planet is a source — sized by volume — orbiting the sun, whose glow reflects your Health Index. Every planet has three moons sized 1–10 by its sentiment split. Around it all, an outer belt of topics (what's discussed) and golden comets for emerging trends — switch any layer on or off. Drag to orbit, scroll to fly closer."
       />

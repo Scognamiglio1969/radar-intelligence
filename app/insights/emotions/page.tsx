@@ -1,6 +1,7 @@
 import { getCurrentProject } from '@/lib/data';
 import { emotionDistribution } from '@/lib/insights';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { EmotionRadar } from '@/components/insight-charts';
 
 export const metadata = { title: 'Emotion radar' };
@@ -10,15 +11,16 @@ const LABEL: Record<string, string> = {
 };
 
 export default async function EmotionsInsightPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const data = await emotionDistribution(project.id, 30);
   const top = [...data].sort((a, b) => b.value - a.value)[0];
 
   return (
     <>
       <PageHeader
-        title="Emotion radar"
+        title={t('ins.emotions.title', 'Emotion radar')}
         info="The emotional fingerprint of the conversation beyond sentiment (joy, trust, fear, anger, sadness, surprise). Data: the AI emotion tag on each mention. Period: last 30 days. Source: your collected mentions across all active sources."
         subtitle="Beyond positive/negative: the emotional fingerprint of the conversation (last 30 days). It separates a crisis driven by fear from one driven by anger — very different responses. Emotions are AI-tagged on newly analyzed mentions."
       />

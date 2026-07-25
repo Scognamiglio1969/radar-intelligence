@@ -4,11 +4,13 @@ import { Flame, UploadCloud } from 'lucide-react';
 import { dashboardData, getCurrentProject } from '@/lib/data';
 import { getTrends } from '@/lib/trends';
 import { PageHeader, KpiCard, MentionCard, EmptyState, fmtCompact, fmtNum } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { VolumeChart, SentimentPie } from '@/components/charts';
 
 export default async function DashboardPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured. Go to Projects to create one." />;
+  if (!project) return <EmptyState message={t('dash.noProject', 'No project configured. Go to Projects to create one.')} />;
   const [data, trends] = await Promise.all([dashboardData(project.id), getTrends(project.id)]);
 
   const sentimentLabel = data.kpi.avgSentiment === null
@@ -58,15 +60,15 @@ export default async function DashboardPage() {
       )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Mentions (7 days)" value={fmtCompact(data.kpi.total7)}
+        <KpiCard label={t('dash.kpi.mentions', 'Mentions (7 days)')} value={fmtCompact(data.kpi.total7)}
           exact={`${fmtNum(data.kpi.total7)} mentions`} />
         <KpiCard
-          label="Average sentiment"
+          label={t('dash.kpi.sentiment', 'Average sentiment')}
           value={sentimentLabel}
           hint={data.kpi.avgSentiment !== null ? `score ${data.kpi.avgSentiment.toFixed(2)}` : 'awaiting analysis'}
         />
-        <KpiCard label="Active sources" value={String(data.kpi.sources)} />
-        <KpiCard label="Topics detected" value={String(data.topTopics.length)} />
+        <KpiCard label={t('dash.kpi.sources', 'Active sources')} value={String(data.kpi.sources)} />
+        <KpiCard label={t('dash.kpi.topics', 'Topics detected')} value={String(data.topTopics.length)} />
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-3">
@@ -80,13 +82,13 @@ export default async function DashboardPage() {
           <h2 className="mb-3 text-sm font-semibold text-slate-300">Sentiment (7 days)</h2>
           {data.sentimentDist.length
             ? <SentimentPie data={data.sentimentDist} />
-            : <p className="py-16 text-center text-sm text-slate-500">Awaiting AI analysis</p>}
+            : <p className="py-16 text-center text-sm text-slate-500">{t('dash.awaiting', 'Awaiting AI analysis')}</p>}
         </section>
       </div>
 
       {data.topTopics.length > 0 && (
         <section className="panel mt-4 px-5 py-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-300">Emerging topics</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-300">{t('dash.emerging', 'Emerging topics')}</h2>
           <div className="flex flex-wrap gap-2">
             {data.topTopics.map((t) => (
               <span key={t.topic} className="rounded-full bg-sky-500/10 px-3 py-1 text-xs text-sky-300">
@@ -100,18 +102,18 @@ export default async function DashboardPage() {
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <section>
           <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-slate-300">Latest mentions</h2>
+            <h2 className="text-sm font-semibold text-slate-300">{t('dash.latestMentions', 'Latest mentions')}</h2>
             <Link href="/listening" className="text-xs text-sky-400 hover:text-sky-300">see all →</Link>
           </div>
           <div className="flex flex-col gap-2">
             {data.latest.length
               ? data.latest.map((m) => <MentionCard key={m.id} m={m} />)
-              : <EmptyState message="No mentions collected yet." />}
+              : <EmptyState message={t('dash.noMentions', 'No mentions collected yet.')} />}
           </div>
         </section>
         <section>
           <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-slate-300">Latest brief</h2>
+            <h2 className="text-sm font-semibold text-slate-300">{t('dash.latestBrief', 'Latest brief')}</h2>
             <Link href="/brief" className="text-xs text-sky-400 hover:text-sky-300">archive →</Link>
           </div>
           {data.latestBrief ? (

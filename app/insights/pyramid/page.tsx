@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getCurrentProject } from '@/lib/data';
 import { authorPyramid } from '@/lib/insights';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { AuthorPyramid } from '@/components/insight-charts';
 
 export const metadata = { title: 'Author pyramid' };
@@ -11,14 +12,15 @@ const TIER_DOT: Record<string, string> = {
 };
 
 export default async function PyramidInsightPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const { tiers, totalAuthors, topConcentration, topAuthors } = await authorPyramid(project.id, 14);
 
   return (
     <>
       <PageHeader
-        title="Author influence pyramid"
+        title={t('ins.pyramid.title', 'Author influence pyramid')}
         info="Authors tiered by influence (mega / macro / micro / long tail) and the share of total reach each tier holds — is the conversation carried by a few big voices or spread broadly? Data: the authors and reach of your mentions. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="How concentrated your conversation is (last 14 days): authors ranked into influence tiers, with the share of total reach each tier holds. A top-heavy pyramid means you depend on a few big voices; a broad base means resilience."
       />

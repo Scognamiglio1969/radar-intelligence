@@ -2,6 +2,7 @@ import { getCurrentProject } from '@/lib/data';
 import { getClusters } from '@/lib/insights';
 import { claudeAvailable } from '@/lib/claude';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { ClusterTreemap } from '@/components/insight-charts';
 import { GenerateRefresh } from '@/components/generate-refresh';
 
@@ -12,15 +13,16 @@ const SENT_STYLE: Record<string, string> = {
 };
 
 export default async function ClustersPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const clusters = await getClusters(project.id);
   const aiOn = await claudeAvailable();
 
   return (
     <>
       <PageHeader
-        title="Conversation clusters"
+        title={t('ins.clusters.title', 'Conversation clusters')}
         info="The families of discourse (the framings) your conversation splits into, sized by share. Data: an AI clustering of your topics and content, refreshed daily. Period: recent window. Source: your collected mentions across all active sources (AI-derived grouping)."
         subtitle="The families of discourse used to talk about the topic: not the subject (the topics), but the frame — price, scandal, irony, quality, politics, customer care… Size = weight in the conversation, color = tone."
       />

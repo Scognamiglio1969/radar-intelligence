@@ -5,6 +5,8 @@ import { getPointOfView, type Citation } from '@/lib/pov';
 import { claudeAvailable } from '@/lib/claude';
 import { PageHeader, EmptyState, fmtNum } from '@/components/ui';
 import { getT } from '@/lib/i18n';
+import { ContentLocaleSwitch } from '@/components/content-locale-switch';
+import { getContentLocale } from '@/lib/content-locale';
 import { GenerateRefresh } from '@/components/generate-refresh';
 import { sourceLabel } from '@/lib/export-data';
 
@@ -67,6 +69,7 @@ function Cites({ ids, byId }: { ids: number[]; byId: Map<number, Citation> }) {
 }
 
 export default async function PovPage() {
+  const contentLocale = await getContentLocale();
   const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
@@ -121,7 +124,10 @@ export default async function PovPage() {
                 : 'Build the argument from the last 90 days: what is shifting, the numbers that prove it and the posts that evidence it (about 3 cents). From then on it refreshes itself weekly — opening this page never costs anything.'}
           </p>
           {aiOn && reason !== 'thin_data' && (
-            <GenerateRefresh endpoint="/api/pov" label="Build the point of view" busyLabel="Analysing 90 days…" />
+            <>
+              <ContentLocaleSwitch current={contentLocale} />
+              <GenerateRefresh endpoint="/api/pov" label="Build the point of view" busyLabel="Analysing 90 days…" />
+            </>
           )}
         </div>
       ) : (
@@ -131,6 +137,35 @@ export default async function PovPage() {
             <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-sky-400">The thesis</p>
             <h2 className="text-lg font-semibold leading-snug text-slate-100">{pov.headline}</h2>
           </section>
+
+          {/* Apertura discorsiva: introduce il punto di vista prima dei blocchi */}
+          {pov.intro?.length > 0 && (
+            <section className="panel px-6 py-5">
+              <div className="flex flex-col gap-3">
+                {pov.intro.map((p, i) => (
+                  <p key={i} className="text-sm leading-relaxed text-slate-300">
+                    {p.text}
+                    <Cites ids={p.citations} byId={byId} />
+                    {p.research.length > 0 && research?.recentWorks && (
+                      <span className="ml-1 inline-flex gap-1 align-super">
+                        {p.research.map((ri) => {
+                          const w = research.recentWorks[ri];
+                          if (!w) return null;
+                          return (
+                            <a key={ri} href={w.url} target="_blank" rel="noopener noreferrer"
+                              title={`${w.title}\n${w.institution ?? 'unknown institution'} · ${w.year} · ${w.citations} citations`}
+                              className="rounded bg-violet-500/15 px-1 text-[10px] font-semibold text-violet-300 transition hover:bg-violet-500/30">
+                              {w.year}
+                            </a>
+                          );
+                        })}
+                      </span>
+                    )}
+                  </p>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Blocchi pronti per slide: titolo + testo + numeri */}
           <section>
@@ -224,6 +259,7 @@ export default async function PovPage() {
 
           <div className="flex items-center gap-3">
             <GenerateRefresh endpoint="/api/pov" label="Rebuild the argument" busyLabel="Re-analysing…" />
+            <ContentLocaleSwitch current={contentLocale} />
             <span className="text-xs text-slate-600">
               Generated {new Date(pov.generatedAt).toLocaleString('en-US')} · refreshes automatically once a week
             </span>
@@ -367,6 +403,12 @@ export default async function PovPage() {
                   </ul>
                 </div>
               )}
+              <p className="mb-1 mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Foundational works · all time
+              </p>
+              <p className="mb-1.5 text-[11px] text-slate-600">
+                The most-cited literature on the topic, whatever the year — background, not evidence of what is happening now.
+              </p>
               <ul className="flex flex-col gap-1.5 text-xs">
                 {research.topWorks.slice(0, 5).map((w) => (
                   <li key={w.url}>

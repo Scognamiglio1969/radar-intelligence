@@ -10,15 +10,15 @@ export const metadata = { title: 'Audience' };
 export default async function AudiencePage() {
   const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const data = await audienceData(project.id);
   const aiOn = await claudeAvailable();
 
   return (
     <>
       <PageHeader
-        title="Audience Insights"
-        subtitle="Who discusses the topic: communities, languages and most influential voices (last 14 days)"
+        title={t('page.audience.title2', 'Audience Insights')}
+        subtitle={t('page.audience.subtitle', 'Who discusses the topic: communities, languages and most influential voices (last 14 days)')}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

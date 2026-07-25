@@ -1,19 +1,21 @@
 import { getCurrentProject } from '@/lib/data';
 import { momentumQuadrant } from '@/lib/insights';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { MomentumQuadrant } from '@/components/insight-charts';
 
 export const metadata = { title: 'Momentum quadrant' };
 
 export default async function MomentumInsightPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const points = await momentumQuadrant(project.id, 14);
 
   return (
     <>
       <PageHeader
-        title="Momentum quadrant"
+        title={t('ins.momentum.title', 'Momentum quadrant')}
         info="Shows each topic by how big it is (volume) and how fast it's moving (acceleration). Data: the topic tags and publish dates of your mentions; the last 14 days are split into two halves to measure acceleration. Source: your collected mentions across all active sources."
         subtitle="A strategic 2×2 of topics by volume (how big) and acceleration (how fast it is moving), last 14 days. Rising stars are big and still growing; Emerging are small but surging; Steady are big but flat; Declining are fading."
       />

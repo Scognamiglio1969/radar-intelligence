@@ -9,11 +9,14 @@ with zero configuration.
 ![CI](https://img.shields.io/badge/CI-GitHub_Actions-informational)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 
-> **Bilingual (English / Italian).** A flag in the sidebar switches both the interface and
-> the language the AI writes in — briefs, narratives, Point of View and every other generated
-> text. Your collected data is never translated: mentions, topics and sentiment stay in their
-> original language, because the interface language must not alter the dataset. More languages
-> are welcome as contributions — a missing translation simply falls back to English.
+> **Bilingual (English / Italian), on two independent axes.** One flag switches the
+> **interface**; a separate one sets the language the **AI writes in** — briefs, Point of View,
+> answers, narratives. They are deliberately decoupled: you can read Radar in Italian and
+> still generate deliverables in English, because the language of the output depends on who
+> will read it, not on who is using the tool. Your collected data is never translated:
+> mentions, topics and sentiment stay in their original language, because the interface
+> language must not alter the dataset. More languages are welcome as contributions — a
+> missing translation simply falls back to English.
 
 ## Screenshots
 

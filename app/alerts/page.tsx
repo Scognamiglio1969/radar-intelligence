@@ -17,7 +17,7 @@ export const metadata = { title: 'Alerts' };
 export default async function AlertsPage() {
   const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const rows = await getRecentAlerts(project.id);
   const aiOn = await claudeAvailable();
 
@@ -28,7 +28,7 @@ export default async function AlertsPage() {
         subtitle="On every update, Radar checks whether the volume or tone of conversations departs from the week's norm. When an alert fires, here you find what caused it: the explanation, topics, sources and key news."
       />
       {rows.length === 0 ? (
-        <EmptyState message="No alerts. The check runs on every data update." />
+        <EmptyState message={t('alerts.none', 'No alerts. The check runs on every data update.')} />
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map((a) => {

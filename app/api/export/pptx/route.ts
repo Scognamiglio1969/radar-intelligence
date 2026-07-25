@@ -416,7 +416,11 @@ export async function GET(req: Request) {
     // Slide di apertura con la tesi
     const st0 = pptx.addSlide({ masterName: 'DARK' });
     st0.addText('Point of View', { x: 0.5, y: 2.4, w: 12.3, h: 0.5, fontSize: 16, color: ACCENT, align: 'center', charSpacing: 4 });
-    st0.addText(pv.headline, { x: 1.2, y: 2.9, w: 10.9, h: 2, fontSize: 32, bold: true, color: TEXT, align: 'center' });
+    st0.addText(pv.headline, { x: 1.2, y: 2.4, w: 10.9, h: 1.6, fontSize: 30, bold: true, color: TEXT, align: 'center' });
+    if ((pv.intro ?? []).length) {
+      st0.addText(pv.intro.map((par) => par.text).join('\n\n'),
+        { x: 1.6, y: 4.1, w: 10.1, h: 2.4, fontSize: 13, color: MUTED, align: 'center', lineSpacing: 20, valign: 'top' });
+    }
 
     for (const [i, b] of pv.blocks.entries()) {
       const s = pptx.addSlide({ masterName: 'DARK' });

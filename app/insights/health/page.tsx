@@ -2,19 +2,21 @@ import Link from 'next/link';
 import { getCurrentProject } from '@/lib/data';
 import { brandHealthReport } from '@/lib/insights';
 import { PageHeader, EmptyState, InfoTip } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { BrandHealthGauge, HealthBars, CompareBars, Sparkline } from '@/components/insight-charts';
 
 export const metadata = { title: 'Health Index' };
 
 export default async function HealthInsightPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const { theme, brand, compare } = await brandHealthReport(project.id, 14);
 
   if (theme.total === 0) {
     return (
       <>
-        <PageHeader title="Health Index" subtitle="How the conversation is doing, as one 0–100 score."
+        <PageHeader title={t('ins.health.title', 'Health Index')} subtitle="How the conversation is doing, as one 0–100 score."
           info="One 0–100 composite of the conversation's health, blending sentiment, positive share, momentum and resonance. Data: your analyzed mentions. Period: last 14 days. Source: your collected mentions across all active sources." />
         <EmptyState message="Not enough mentions in the last 14 days to compute the index." />
       </>
@@ -24,7 +26,7 @@ export default async function HealthInsightPage() {
   return (
     <>
       <PageHeader
-        title={brand ? 'Brand Health Index' : 'Market Health Index'}
+        title={brand ? t('ins.health.brand', 'Brand Health Index') : t('ins.health.market', 'Market Health Index')}
         subtitle={brand
           ? `How your brand “${brand.name}” is doing versus the market and the competitors (last 14 days). One 0–100 score combining sentiment, positive share, momentum and resonance.`
           : 'How the whole conversation on your topic is doing (last 14 days): the health of the market/theme as one 0–100 score. Mark a benchmark entity as “your brand” in Settings to unlock brand-vs-market comparison.'}

@@ -1,19 +1,21 @@
 import { getCurrentProject } from '@/lib/data';
 import { topicSentimentMap } from '@/lib/insights';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { TopicSentimentBubble } from '@/components/insight-charts';
 
 export const metadata = { title: 'Topics × Sentiment' };
 
 export default async function TopicsInsightPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const data = await topicSentimentMap(project.id, 14);
 
   return (
     <>
       <PageHeader
-        title="Topics × Sentiment map"
+        title={t('ins.topics.title', 'Topics × Sentiment map')}
         info="Each bubble is a topic, placed by its sentiment (left–right) and relative weight (up–down); bubble size = volume. Data: the AI topic and sentiment tags on your mentions. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="Each bubble is a topic: horizontal = sentiment, vertical = how much it is gaining or losing weight in the conversation, size = volume. Topics gaining importance are at the top, declining ones at the bottom."
       />

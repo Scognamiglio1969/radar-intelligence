@@ -2,21 +2,23 @@ import { getCurrentProject } from '@/lib/data';
 import { getCausalChains } from '@/lib/insights';
 import { claudeAvailable } from '@/lib/claude';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { GenerateRefresh } from '@/components/generate-refresh';
 import { Zap, ArrowRight, GitBranch } from 'lucide-react';
 
 export const metadata = { title: 'Cause-Effect' };
 
 export default async function CausalPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const chains = await getCausalChains(project.id);
   const aiOn = await claudeAvailable();
 
   return (
     <>
       <PageHeader
-        title="Cause-Effect chart"
+        title={t('ins.causal.title', 'Cause-Effect chart')}
         info="The cause → effect chains the AI reconstructs for the period: which events produced measurable consequences (spikes, sentiment shifts, new narratives). Data: your mentions plus AI reasoning — shown as an AI reconstruction, not a measured fact. Period: last 14 days. Source: your collected mentions across all active sources."
         subtitle="The AI's reconstruction of how events produced consequences: volume spikes, sentiment shifts, new narratives. An interpretive reading of the links, not statistical proof."
       />

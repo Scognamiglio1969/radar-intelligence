@@ -12,7 +12,7 @@ export const metadata = { title: 'Media' };
 export default async function MediaPage() {
   const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const data = await mediaData(project.id);
 
   const readLang = (await cookies()).get('sr_translate')?.value ?? null;
@@ -22,7 +22,7 @@ export default async function MediaPage() {
 
   return (
     <>
-      <PageHeader title="Media Monitoring" subtitle="News and press from the last 7 days, grouped by story" />
+      <PageHeader title={t('page.media.title2', 'Media Monitoring')} subtitle={t('page.media.subtitle', 'News and press from the last 7 days, grouped by story')} />
       <div className="mb-4 flex items-center gap-2 text-xs">
         <TranslateBar current={readLang} langs={TRANSLATE_LANGS} />
       </div>

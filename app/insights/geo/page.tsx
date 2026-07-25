@@ -1,19 +1,21 @@
 import { getCurrentProject } from '@/lib/data';
 import { geoDistribution } from '@/lib/insights';
 import { PageHeader, EmptyState } from '@/components/ui';
+import { getT } from '@/lib/i18n';
 import { GeoBubbleMap } from '@/components/insight-charts';
 
 export const metadata = { title: 'Geographic map' };
 
 export default async function GeoInsightPage() {
+  const t = await getT();
   const project = await getCurrentProject();
-  if (!project) return <EmptyState message="No project configured." />;
+  if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const points = await geoDistribution(project.id, 30);
 
   return (
     <>
       <PageHeader
-        title="Languages of the conversation"
+        title={t('ins.geo.title', 'Languages of the conversation')}
         info="Which languages people use when they talk about your topic, shaded over the regions where each language is primarily spoken. Data: the language tag of each mention — NOT geolocation. Period: last 30 days. Source: your collected mentions across all active sources."
         subtitle="What language people use when they talk about your topic (last 30 days). The map shades each language over the regions where it is primarily spoken — intensity = share of the conversation, not a claim about location. A language can be used anywhere. Sentiment is shown per language below, never painted onto a country."
       />

@@ -72,8 +72,14 @@ export type PovBlock = {
   confidence: 'high' | 'medium' | 'low';
   citations: number[];
 };
+/** Paragrafo di apertura: introduce la tesi citando i post reali (e, se pertinente,
+ *  la ricerca RECENTE — mai i classici di vent'anni fa solo perché contengono la keyword). */
+export type PovIntro = { text: string; citations: number[]; research: number[] };
+
 export type PointOfView = {
   headline: string;
+  /** 2-3 paragrafi che introducono il punto di vista prima dei blocchi. */
+  intro: PovIntro[];
   blocks: PovBlock[];
   counterSignals: { point: string; citations: number[] }[];
   implications: string[];
@@ -217,9 +223,18 @@ MOST IMPORTANT — the "market_vs_research" data crosses what the MARKET talks a
 - "cooling": neither is moving → say what is replacing it.
 These blocks may be interpretive and forward-looking, but must stay anchored to the given figures — flag them honestly with "medium" or "low" confidence, and never state a speculation as an established fact.
 
+Open with an INTRO of 2-3 short paragraphs that sets up this specific point of view: what changed, why it matters now, what is at stake. Write it as an analyst briefing a client — concrete, no throat-clearing. Ground it: each paragraph cites the posts it rests on, and may cite recent research by its index when it genuinely supports the argument.
+
+ON RESEARCH: only the recent work provided is admissible. Never present decades-old literature as evidence of a current shift — a keyword match is not relevance. If the research does not really speak to the point, cite none.
+
 Respond ONLY with this JSON object:
 {
   "headline": "<the overall thesis in one sentence>",
+  "intro": [{
+    "text": "<a paragraph of the opening argument>",
+    "citations": [<post ids that support it>],
+    "research": [<indexes into recent_research, or empty>]
+  }],
   "blocks": [{
     "title": "<the named idea — max 8 words>",
     "kind": "trend|innovation|concept|risk|opportunity",
@@ -240,7 +255,7 @@ function asArray(v: unknown): unknown[] {
 
 /** Scarta ogni citazione che non punti a un post realmente fornito.
  *  Esportata perché è la garanzia anti-invenzione: va poter essere testata. */
-export function validate(raw: unknown, allowed: Set<number>): PointOfView | null {
+export function validate(raw: unknown, allowed: Set<number>, researchCount = 0): PointOfView | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   const ids = (v: unknown) => asArray(v).map(Number).filter((n) => allowed.has(n)).slice(0, 3);
@@ -268,8 +283,20 @@ export function validate(raw: unknown, allowed: Set<number>): PointOfView | null
 
   if (blocks.length === 0) return null;
 
+  const intro: PovIntro[] = asArray(o.intro).map((i) => {
+    const x = i as Record<string, unknown>;
+    return {
+      text: str(x.text, 900),
+      citations: ids(x.citations),
+      // Gli indici di ricerca devono puntare a lavori realmente forniti (e recenti).
+      research: asArray(x.research).map(Number)
+        .filter((n) => Number.isInteger(n) && n >= 0 && n < researchCount).slice(0, 3),
+    };
+  }).filter((i) => i.text).slice(0, 4);
+
   return {
     headline: str(o.headline, 300) || blocks[0].title,
+    intro,
     blocks,
     counterSignals: asArray(o.counterSignals).map((c) => {
       const x = c as Record<string, unknown>;
@@ -406,6 +433,11 @@ export async function buildPointOfView(projectId: number, days = 90): Promise<Po
       top_institutions: research.topInstitutions.slice(0, 6),
       by_year: research.byYear.slice(-6),
     } : null,
+    // SOLO lavori recenti: i classici molto citati (1992, 1995…) corrispondono
+    // alla keyword ma non dicono nulla su ciò che sta accadendo ora.
+    recent_research: (research?.status === 'ok' ? research.recentWorks : []).map((w, i) => ({
+      index: i, title: w.title, year: w.year, citations: w.citations, institution: w.institution,
+    })),
     // Incrocio mercato × ricerca: la materia prima per le tesi speculative.
     market_vs_research: cross.filter((c) => c.quadrant !== "unknown").map((c) => ({
       topic: c.topic,
@@ -430,7 +462,7 @@ export async function buildPointOfView(projectId: number, days = 90): Promise<Po
   try {
     const start = text.indexOf('{');
     const parsed = JSON.parse(text.slice(start, text.lastIndexOf('}') + 1));
-    const pov = validate(parsed, new Set(facts.citations.map((c) => c.id)));
+    const pov = validate(parsed, new Set(facts.citations.map((c) => c.id)), research?.recentWorks.length ?? 0);
     if (!pov) return { facts, research, cross, pov: null, reason: 'failed' };
     await setMeta(key, pov);
     return { facts, research, cross, pov };
