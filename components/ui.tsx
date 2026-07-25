@@ -2,6 +2,7 @@ import { ExternalLink, Heart, Info, MessageCircle, Repeat2, Star } from 'lucide-
 import { SOURCE_META } from '@/lib/connectors';
 import type { mentions } from '@/lib/db/schema';
 import { MentionBody } from '@/components/mention-translate';
+import { ArticleBody } from '@/components/article-body';
 
 /** Piccola "i" con balloon esplicativo al passaggio del mouse. */
 export function InfoTip({ title, children }: { title?: string; children: React.ReactNode }) {
@@ -143,10 +144,14 @@ function authorLink(m: Mention): string | null {
   }
 }
 
-export function MentionCard({ m, translated }: {
+export function MentionCard({ m, translated, highlight, keywords }: {
   m: Mention;
   /** Text translated into the reading language chosen by the user */
   translated?: { title?: string; content: string };
+  /** What the user is searching for right now — highlighted first in the body. */
+  highlight?: string[];
+  /** Terms the project watches — highlighted as secondary. */
+  keywords?: string[];
 }) {
   const e = m.engagement;
   const aLink = authorLink(m);
@@ -169,6 +174,9 @@ export function MentionCard({ m, translated }: {
       </div>
       <MentionBody id={m.id} lang={m.language} url={m.url} title={title ?? null} content={content ?? null}
         allowTranslate={!translated} />
+      {m.articleText && (
+        <ArticleBody text={m.articleText} query={highlight} keywords={keywords} />
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
         {m.author && (aLink ? (
           <a href={aLink} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-sky-300" title="Open the author on the source">

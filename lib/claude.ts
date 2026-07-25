@@ -233,6 +233,7 @@ export async function analyzePendingMentions(projectId: number, theme: string, l
   const pendingCond = sql`(${mentions.analyzedAt} IS NULL OR ((${mentions.relevance} IS NULL OR ${mentions.emotion} IS NULL) AND ${mentions.publishedAt} >= ${d3.toISOString()}::timestamptz))`;
   const pending = await db.select({
     id: mentions.id, title: mentions.title, content: mentions.content, source: mentions.source,
+    articleText: mentions.articleText,
   }).from(mentions)
     .where(and(eq(mentions.projectId, projectId), pendingCond))
     .orderBy(desc(mentions.publishedAt))
@@ -247,9 +248,15 @@ export async function analyzePendingMentions(projectId: number, theme: string, l
 
   let analyzed = 0;
   await Promise.all(chunks.map(async (chunk) => {
+    // Quando il pezzo è stato estratto si giudica su quello, non sul sommario:
+    // un titolo è scritto per fare clic, e il sentiment che se ne ricava è il
+    // sentiment del titolo. Il tetto resta stretto perché ogni carattere qui
+    // viene moltiplicato per il numero di mention analizzate.
     const payload = chunk.map((m) => ({
       id: m.id,
-      text: `${m.title ?? ''} ${m.content}`.slice(0, 400).trim(),
+      text: (m.articleText
+        ? `${m.title ?? ''}\n${m.articleText}`
+        : `${m.title ?? ''} ${m.content}`).slice(0, 900).trim(),
     }));
     try {
       const text = await callClaude(

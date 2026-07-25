@@ -42,6 +42,7 @@ export default async function ListeningPage({ searchParams }: {
     author: sp.autore,
     authors: sp.autori ? sp.autori.split('|').filter(Boolean) : undefined,
     ids: sp.ids ? sp.ids.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0) : undefined,
+    kind: (sp.tipo === 'article' || sp.tipo === 'post' ? sp.tipo : undefined) as 'article' | 'post' | undefined,
     sortBy: (sp.ordina as 'data' | 'engagement' | 'rilevanza' | undefined) ?? 'data',
   };
   const data = await listeningData(project.id, filters);
@@ -55,6 +56,7 @@ export default async function ListeningPage({ searchParams }: {
   const current = {
     fonte: sp.fonte, sentiment: sp.sentiment, lingua: sp.lingua, q: sp.q, st: sp.st,
     giorni: sp.giorni, rilevanza: sp.rilevanza, autore: sp.autore, autori: sp.autori, ids: sp.ids,
+    tipo: sp.tipo,
     ordina: sp.ordina,
   };
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
@@ -73,6 +75,10 @@ export default async function ListeningPage({ searchParams }: {
           </span>
         )}
 
+        <FilterGroup label={t('ui.kind', 'Type')} items={[
+          { value: 'article', label: t('ui.articles', 'articles') },
+          { value: 'post', label: t('ui.posts', 'posts') },
+        ]} param="tipo" current={current} />
         <FilterGroup label={t('ui.source', 'Source')} items={Object.entries(SOURCE_META).map(([id, m]) => ({ value: id, label: m.label }))}
           param="fonte" current={current} />
         <FilterGroup label={t('ui.sentiment', 'Sentiment')} items={SENTIMENTS.map((s) => ({ value: s, label: s }))}
@@ -109,7 +115,7 @@ export default async function ListeningPage({ searchParams }: {
           </span>
         )}
 
-        {(sp.fonte || sp.sentiment || sp.lingua || sp.q || sp.st || sp.giorni || sp.rilevanza || sp.autore || sp.autori || sp.ids || sp.ordina) && (
+        {(sp.tipo || sp.fonte || sp.sentiment || sp.lingua || sp.q || sp.st || sp.giorni || sp.rilevanza || sp.autore || sp.autori || sp.ids || sp.ordina) && (
           <Link href="/listening"
             className="flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-3.5 py-1.5 font-semibold text-sky-300 transition hover:bg-sky-500/25">
             ↺ {t('ui.showAll', 'Show all')}
@@ -119,7 +125,10 @@ export default async function ListeningPage({ searchParams }: {
 
       <div className="flex flex-col gap-2">
         {data.rows.length
-          ? data.rows.map((m) => <MentionCard key={m.id} m={m} translated={translations.get(m.id)} />)
+          ? data.rows.map((m) => (
+              <MentionCard key={m.id} m={m} translated={translations.get(m.id)}
+                highlight={semanticTerms ?? (sp.q ? [sp.q] : [])} keywords={project.keywords} />
+            ))
           : <EmptyState message={t('listening.noMentions', 'No mentions with these filters.')} />}
       </div>
 

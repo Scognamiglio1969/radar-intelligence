@@ -23,7 +23,32 @@ export const CONNECTORS: Connector[] = [
   xTwitter, instagram, facebook, tiktok, linkedin, newsapi,
 ];
 
-export const NEWS_SOURCES = ['googlenews', 'gdelt'];
+/**
+ * Articolo di testata o post social?
+ *
+ * È la distinzione che separa una rassegna stampa dall'ascolto sociale: hanno
+ * ritmi, autori e peso diversi, e vanno lette separate. Gli "upload" sono
+ * ritagli stampa importati da file, quindi articoli.
+ */
+export type MentionKind = 'article' | 'post';
+export const SOURCE_KIND: Record<string, MentionKind> = {
+  googlenews: 'article', gdelt: 'article', newsapi: 'article', rss: 'article', upload: 'article',
+  reddit: 'post', bluesky: 'post', mastodon: 'post', hackernews: 'post', youtube: 'post',
+  x: 'post', telegram: 'post', instagram: 'post', facebook: 'post', tiktok: 'post',
+  linkedin: 'post', linkedin_web: 'post',
+};
+/** Fonte sconosciuta: si presume post, la classe più prudente per il valore media. */
+export const kindOf = (source: string): MentionKind => SOURCE_KIND[source] ?? 'post';
+
+/**
+ * Fonti valutate a CPM giornalistico nel valore media. Derivate dalla mappa qui
+ * sopra per non avere due classificazioni divergenti — con l'eccezione degli
+ * upload, la cui provenienza è ignota: contarli come stampa gonfierebbe il
+ * valore di file che potrebbero contenere qualsiasi cosa.
+ */
+export const NEWS_SOURCES = Object.entries(SOURCE_KIND)
+  .filter(([id, k]) => k === 'article' && id !== 'upload')
+  .map(([id]) => id);
 
 export const SOURCE_META: Record<string, { label: string; color: string; note?: string }> = {
   googlenews: { label: 'Google News', color: '#f59e0b' },

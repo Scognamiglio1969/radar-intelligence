@@ -99,6 +99,16 @@ const DDL = [
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS relevance_reason TEXT`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS translations JSONB`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS emotion TEXT`,
+  `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'post'`,
+  `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS article_text TEXT`,
+  `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS article_at TIMESTAMPTZ`,
+  // Le mention già in archivio sono nate senza "kind": si assegna dalla fonte,
+  // una volta sola (le successive nascono già classificate dall'ingest).
+  `UPDATE mentions SET kind = 'article'
+     WHERE kind = 'post' AND source IN ('googlenews','gdelt','newsapi','rss','upload')`,
+  // Coda di estrazione: gli articoli senza testo ancora da tentare.
+  `CREATE INDEX IF NOT EXISTS mentions_article_todo ON mentions (project_id)
+     WHERE kind = 'article' AND article_at IS NULL`,
   `ALTER TABLE benchmark_entities ADD COLUMN IF NOT EXISTS is_own_brand INTEGER NOT NULL DEFAULT 0`,
   `CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,

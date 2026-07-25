@@ -1,6 +1,6 @@
 import { getDb, setMeta, getMeta } from '@/lib/db';
 import { mentions, projects } from '@/lib/db/schema';
-import { CONNECTORS } from '@/lib/connectors';
+import { CONNECTORS, kindOf } from '@/lib/connectors';
 import { setTelegramChannels } from '@/lib/connectors/telegram';
 import { setRssFeeds } from '@/lib/connectors/rss';
 import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
@@ -77,6 +77,7 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
       .map((m) => ({
         projectId: project.id,
         source: m.source,
+        kind: kindOf(m.source),
         externalId: m.externalId.slice(0, 500),
         url: m.url,
         title: m.title,

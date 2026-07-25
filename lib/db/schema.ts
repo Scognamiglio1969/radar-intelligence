@@ -75,6 +75,16 @@ export const mentions = pgTable('mentions', {
   url: text('url'),
   title: text('title'),
   content: text('content').notNull().default(''),
+  // Articolo di testata o post social? Dedotto dalla fonte (SOURCE_KIND).
+  // È la distinzione che separa una rassegna stampa dall'ascolto sociale.
+  kind: text('kind').$type<'article' | 'post'>().notNull().default('post'),
+  // Testo integrale dell'articolo, estratto dalla pagina. Il feed RSS dà solo
+  // titolo e sommario: senza questo non si sa se il tema è il soggetto del pezzo
+  // o una citazione di passaggio.
+  articleText: text('article_text'),
+  // Quando si è TENTATA l'estrazione (anche fallita): evita di riprovare
+  // all'infinito su paywall e pagine irraggiungibili.
+  articleAt: timestamp('article_at', { withTimezone: true }),
   author: text('author'),
   authorHandle: text('author_handle'),
   community: text('community'),

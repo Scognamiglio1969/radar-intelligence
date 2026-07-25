@@ -2,6 +2,7 @@ import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { getDb, getMeta, setMeta } from '@/lib/db';
 import { mentions, projects } from '@/lib/db/schema';
 import { ingestProject } from '@/lib/ingest';
+import { enrichArticles } from '@/lib/article-enrich';
 import {
   analyzePendingMentions, clusterNewsStories, generateDailyBrief, scoreTopContent,
 } from '@/lib/claude';
@@ -57,6 +58,16 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
             console.log(`[pipeline] ingestion completata: ${r.inserted} nuove mention`);
             return r;
           })();
+      // Testo degli articoli PRIMA dell'analisi: se il pezzo è disponibile,
+      // sentiment e temi si giudicano sul contenuto vero e non sul titolo.
+      // Non costa nulla in AI — sono solo pagine web.
+      const articles = project.mode === 'upload'
+        ? { tried: 0, extracted: 0 }
+        : await enrichArticles(project.id);
+      if (articles.tried) {
+        console.log(`[pipeline] articoli: ${articles.extracted}/${articles.tried} testi estratti`);
+      }
+
       // Se il proprietario è "dormiente" (membro senza AI), si raccolgono i dati
       // ma si saltano tutte le analisi Claude (nessun costo API).
       const aiOn = await ownerAiEnabled(db, project.ownerId);

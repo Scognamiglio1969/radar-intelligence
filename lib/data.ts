@@ -118,6 +118,8 @@ export type ListeningFilters = {
   authors?: string[];
   /** Mostra solo un insieme preciso di mention (es. i post di una narrazione) */
   ids?: number[];
+  /** Articoli di testata o post social: leggerli separati è il punto. */
+  kind?: 'article' | 'post';
   sortBy?: 'data' | 'engagement' | 'rilevanza';
 };
 
@@ -130,13 +132,20 @@ export async function listeningData(projectId: number, f: ListeningFilters) {
   if (f.sentiment) conds.push(eq(mentions.sentiment, f.sentiment));
   if (f.language) conds.push(eq(mentions.language, f.language));
   if (f.days) conds.push(gte(mentions.publishedAt, new Date(Date.now() - f.days * 86400_000)));
+  if (f.kind) conds.push(eq(mentions.kind, f.kind));
+  // La ricerca guarda anche DENTRO l'articolo, non solo titolo e sommario:
+  // altrimenti un pezzo che parla di te dalla seconda riga in poi resta invisibile.
   if (f.semanticTerms?.length) {
     const c = or(...f.semanticTerms.flatMap((t) => [
       ilike(mentions.content, `%${t}%`), ilike(mentions.title, `%${t}%`),
+      ilike(mentions.articleText, `%${t}%`),
     ]));
     if (c) conds.push(c);
   } else if (f.q) {
-    const c = or(ilike(mentions.content, `%${f.q}%`), ilike(mentions.title, `%${f.q}%`));
+    const c = or(
+      ilike(mentions.content, `%${f.q}%`), ilike(mentions.title, `%${f.q}%`),
+      ilike(mentions.articleText, `%${f.q}%`),
+    );
     if (c) conds.push(c);
   }
   if (f.minRelevance) conds.push(gte(mentions.relevance, f.minRelevance));
