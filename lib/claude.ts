@@ -22,6 +22,20 @@ export async function claudeAvailable(): Promise<boolean> {
   return Boolean(await providerKey(await aiProvider()));
 }
 
+/**
+ * Perché l'AI non sta generando. Serve a non lasciare l'utente davanti a un
+ * brief vecchio senza spiegazione: il tetto di spesa blocca le chiamate dentro
+ * callClaude in silenzio, e claudeAvailable() da solo non se ne accorge.
+ */
+export async function aiStatus(): Promise<{
+  hasKey: boolean; spend: number; budget: number; capReached: boolean; ready: boolean;
+}> {
+  const hasKey = await claudeAvailable();
+  const [spend, budget] = await Promise.all([currentSpendUsd(), budgetUsd()]);
+  const capReached = spend >= budget;
+  return { hasKey, spend, budget, capReached, ready: hasKey && !capReached };
+}
+
 /** API spend cap in USD. Admin-configurable (meta), else env API_BUDGET_USD, else 6. */
 export async function budgetUsd(): Promise<number> {
   const { getMeta } = await import('@/lib/db');

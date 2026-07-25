@@ -5,6 +5,7 @@ import { dashboardData, getCurrentProject } from '@/lib/data';
 import { getTrends } from '@/lib/trends';
 import { PageHeader, KpiCard, MentionCard, EmptyState, fmtCompact, fmtNum } from '@/components/ui';
 import { getT } from '@/lib/i18n';
+import { BriefFreshness } from '@/components/brief-freshness';
 import { VolumeChart, SentimentPie } from '@/components/charts';
 
 export default async function DashboardPage() {
@@ -116,6 +117,7 @@ export default async function DashboardPage() {
             <h2 className="text-sm font-semibold text-slate-300">{t('dash.latestBrief', 'Latest brief')}</h2>
             <Link href="/brief" className="text-xs text-sky-400 hover:text-sky-300">archive →</Link>
           </div>
+          <BriefFreshness latestDate={data.latestBrief?.briefDate ?? null} />
           {data.latestBrief ? (
             <div className="panel px-5 py-4">
               <p className="mb-2 text-xs text-slate-500">

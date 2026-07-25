@@ -18,12 +18,20 @@ export function GenerateRefresh({ endpoint, label, busyLabel }: {
     try {
       const res = await fetch(endpoint, { method: 'POST' });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error ?? 'error');
+        // Un 504/500 non restituisce JSON: senza questo ramo l'utente vedeva
+        // solo "error", che non dice nulla su cosa è andato storto.
+        const d = await res.json().catch(() => null);
+        throw new Error(
+          d?.error
+          ?? (res.status === 504 || res.status === 408
+            ? 'it took too long and timed out — try again in a moment'
+            : `the server returned ${res.status}${res.statusText ? ` ${res.statusText}` : ''}`),
+        );
       }
       router.refresh();
     } catch (e) {
-      setError((e as Error).message);
+      const m = (e as Error).message;
+      setError(/fetch|network/i.test(m) ? 'network error — check your connection and retry' : m);
     } finally {
       setBusy(false);
     }

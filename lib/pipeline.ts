@@ -134,7 +134,9 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
 }
 
 /** Dati aggregati delle ultime 24h da passare a Claude per il daily brief. */
-async function collectBriefData(projectId: number) {
+/** Dati delle ultime 24h per il brief. Esportata: la usa anche la generazione
+ *  su richiesta quando il ciclo notturno non ha prodotto il brief di oggi. */
+export async function collectBriefData(projectId: number) {
   const db = await getDb();
   const h24 = new Date(Date.now() - 24 * 3600_000);
 

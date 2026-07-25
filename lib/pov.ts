@@ -408,9 +408,12 @@ export async function buildPointOfView(projectId: number, days = 90): Promise<Po
   const facts = await povFactPack(projectId, days);
   const project = await getCurrentProject();
   const terms = [project?.name ?? '', ...(project?.keywords ?? [])].filter(Boolean);
+  // Solo cache: la pagina ha gia scaldato l'evidenza di ricerca. Rifarla qui
+  // significherebbe fino a 11 chiamate esterne prima della chiamata AI, dentro
+  // un limite di 60 secondi: era la causa dei timeout in generazione.
   const [research, topicRes] = await Promise.all([
-    researchEvidence(terms),
-    topicResearchTrends(facts.topics.slice(0, 6).map((t) => t.topic)),
+    researchEvidence(terms, { cachedOnly: true }),
+    topicResearchTrends(facts.topics.slice(0, 6).map((t) => t.topic), { cachedOnly: true }),
   ]);
   const cross = crossSignals(facts.topics, topicRes);
 

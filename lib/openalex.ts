@@ -79,7 +79,10 @@ type WorksResp = {
  * Fotografia della ricerca accademica su un tema.
  * Tre chiamate parallele (gratuite): lavori top, istituzioni, andamento annuale.
  */
-export async function researchEvidence(terms: string[]): Promise<ResearchEvidence | null> {
+export async function researchEvidence(
+  terms: string[],
+  opts: { cachedOnly?: boolean } = {},
+): Promise<ResearchEvidence | null> {
   const clean = terms.filter(Boolean).map((t) => t.trim()).filter(Boolean);
   if (clean.length === 0) return null;
   // Query lunghe restringono troppo (nome+4 keyword → poche decine di lavori):
@@ -93,6 +96,9 @@ export async function researchEvidence(terms: string[]): Promise<ResearchEvidenc
   const key = `openalex:v3:${primary.toLowerCase()}:${new Date().toISOString().slice(0, 10)}`;
   const cached = await getMeta<ResearchEvidence>(key);
   if (cached && cached.status === 'ok') return cached;
+  // Percorso "solo cache": usato dalla generazione del Point of View, che ha un
+  // budget di 60 secondi e non può permettersi 5 chiamate esterne prima dell'AI.
+  if (opts.cachedOnly) return cached ?? null;
 
   const run = async (query: string) => {
     // Cerco su titolo+abstract invece che sul full-text: dà un conteggio che
@@ -200,7 +206,10 @@ export type TopicResearch = {
  * Una chiamata per tema (max 6), con cache giornaliera per non erodere il
  * budget OpenAlex, che è a crediti per IP.
  */
-export async function topicResearchTrends(topics: string[]): Promise<TopicResearch[]> {
+export async function topicResearchTrends(
+  topics: string[],
+  opts: { cachedOnly?: boolean } = {},
+): Promise<TopicResearch[]> {
   const list = topics.filter(Boolean).slice(0, 6);
   if (list.length === 0) return [];
 
@@ -210,6 +219,7 @@ export async function topicResearchTrends(topics: string[]): Promise<TopicResear
   // Riuso la cache solo se COMPLETA: un risultato parziale non deve congelare
   // per tutto il giorno dei falsi "zero ricerca".
   if (cached?.length && cached.every((r) => r.ok)) return cached;
+  if (opts.cachedOnly) return cached ?? [];
 
   const thisYear = new Date().getFullYear();
   const out = await Promise.all(list.map(async (topic) => {
