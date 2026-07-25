@@ -360,6 +360,29 @@ const povKey = (projectId: number, days: number) => `pov:v3:${projectId}:${days}
 const translationKey = (projectId: number, days: number, locale: ContentLocale) =>
   `${povKey(projectId, days)}:tr:${locale}`;
 
+/**
+ * Legge una tesi salvata NORMALIZZANDOLA.
+ *
+ * I documenti in archivio possono venire da versioni precedenti del formato:
+ * `intro`, per esempio, è stato aggiunto dopo, quindi le tesi generate prima
+ * non ce l'hanno. Attraversarle come se fossero complete fa esplodere chi le
+ * legge — ed è esattamente ciò che faceva fallire la traduzione con un 500.
+ * Qualunque campo mancante diventa una lista vuota: chi legge non deve sapere
+ * con quale versione è stato scritto quello che trova.
+ */
+async function readPov(key: string): Promise<PointOfView | null> {
+  const raw = await getMeta<PointOfView>(key);
+  if (!raw) return null;
+  return {
+    ...raw,
+    intro: raw.intro ?? [],
+    blocks: raw.blocks ?? [],
+    counterSignals: raw.counterSignals ?? [],
+    implications: raw.implications ?? [],
+    watch: raw.watch ?? [],
+  };
+}
+
 /** Una tesi più vecchia di 7 giorni è da rinfrescare (orizzonte 90 giorni). */
 export const POV_MAX_AGE_DAYS = 7;
 export function povAgeDays(pov: PointOfView): number {
@@ -372,7 +395,7 @@ export function povAgeDays(pov: PointOfView): number {
  */
 export async function getPovCached(projectId: number, days = 90): Promise<{ facts: FactPack; pov: PointOfView | null }> {
   const facts = await povFactPack(projectId, days);
-  const pov = await getMeta<PointOfView>(povKey(projectId, days));
+  const pov = await readPov(povKey(projectId, days));
   return { facts, pov };
 }
 
@@ -390,11 +413,11 @@ export async function getPointOfView(projectId: number, days = 90, preferredLoca
     topicResearchTrends(facts.topics.slice(0, 6).map((t) => t.topic)),
   ]);
   const cross = crossSignals(facts.topics, topicRes);
-  let pov = await getMeta<PointOfView>(povKey(projectId, days));
+  let pov = await readPov(povKey(projectId, days));
   // Se esiste una traduzione aggiornata (stessa generatedAt dell'originale) nella
   // lingua richiesta, mostrarla al posto dell'originale — senza chiamare l'AI.
   if (pov && preferredLocale && (pov.locale ?? 'en') !== preferredLocale) {
-    const translated = await getMeta<PointOfView>(translationKey(projectId, days, preferredLocale));
+    const translated = await readPov(translationKey(projectId, days, preferredLocale));
     if (translated && translated.generatedAt === pov.generatedAt) pov = translated;
   }
   if (pov) return { facts, research, cross, pov };
@@ -408,7 +431,7 @@ export async function getPointOfView(projectId: number, days = 90, preferredLoca
  * vista a 90 giorni non cambia da un giorno all'altro (e ogni giro costa).
  */
 export async function refreshPointOfViewIfStale(projectId: number, days = 90): Promise<boolean> {
-  const existing = await getMeta<PointOfView>(povKey(projectId, days));
+  const existing = await readPov(povKey(projectId, days));
   if (existing && povAgeDays(existing) < POV_MAX_AGE_DAYS) return false;
   const { pov } = await buildPointOfView(projectId, days);
   return pov !== null;
@@ -499,12 +522,12 @@ export async function translatePointOfView(
   projectId: number, days: number, locale: ContentLocale,
 ): Promise<{ pov: PointOfView | null; reason?: 'not_built' | 'no_ai' | 'failed' }> {
   const key = povKey(projectId, days);
-  const canonical = await getMeta<PointOfView>(key);
+  const canonical = await readPov(key);
   if (!canonical) return { pov: null, reason: 'not_built' };
   if ((canonical.locale ?? 'en') === locale) return { pov: canonical };
 
   const trKey = translationKey(projectId, days, locale);
-  const cached = await getMeta<PointOfView>(trKey);
+  const cached = await readPov(trKey);
   if (cached && cached.generatedAt === canonical.generatedAt) return { pov: cached };
 
   if (!await claudeAvailable()) return { pov: null, reason: 'no_ai' };
