@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { getCurrentProject, listeningData } from '@/lib/data';
 import { PageHeader, MentionCard, EmptyState, fmtNum } from '@/components/ui';
+import { articleCoverage } from '@/lib/article-enrich';
 import { getT } from '@/lib/i18n';
 import { SOURCE_META } from '@/lib/connectors';
 import { SearchBox } from '@/components/search-box';
@@ -46,6 +47,7 @@ export default async function ListeningPage({ searchParams }: {
     sortBy: (sp.ordina as 'data' | 'engagement' | 'rilevanza' | undefined) ?? 'data',
   };
   const data = await listeningData(project.id, filters);
+  const coverage = await articleCoverage(project.id);
 
   // Reading language chosen by the user: translates the current page (cached in DB)
   const readLang = (await cookies()).get('sr_translate')?.value ?? null;
@@ -122,6 +124,23 @@ export default async function ListeningPage({ searchParams }: {
           </Link>
         )}
       </div>
+
+      {/* Copertura del testo pieno: senza questa riga, un progetto alimentato
+          solo da Google News sembrerebbe semplicemente rotto. */}
+      {coverage.articles > 0 && (
+        <p className="mb-3 text-xs leading-relaxed text-slate-500">
+          <span className="text-slate-400">
+            {fmtNum(coverage.withText)} of {fmtNum(coverage.articles)} articles can be read in full here.
+          </span>
+          {coverage.opaque > 0 && (
+            <> {fmtNum(coverage.opaque)} come from Google News, whose links do not lead to the publisher,
+              so their text cannot be retrieved — add that outlet’s RSS feed in Projects to get the full pieces.</>
+          )}
+          {coverage.withText === 0 && coverage.opaque < coverage.articles && (
+            <> Extraction runs with the daily cycle: press “Refresh now” to fetch them straight away.</>
+          )}
+        </p>
+      )}
 
       <div className="flex flex-col gap-2">
         {data.rows.length

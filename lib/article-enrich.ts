@@ -11,7 +11,7 @@ import { fetchArticles } from '@/lib/article-text';
  * si marca SEMPRE, anche quando l'estrazione fallisce — un paywall o una pagina
  * irraggiungibile non deve essere ritentata a ogni ciclo per sempre.
  */
-export async function enrichArticles(projectId: number, limit = 40): Promise<{
+export async function enrichArticles(projectId: number, limit = 150): Promise<{
   tried: number; extracted: number;
 }> {
   const db = await getDb();
@@ -52,19 +52,25 @@ export async function enrichArticles(projectId: number, limit = 40): Promise<{
   return { tried: jobs.length, extracted: texts.size };
 }
 
-/** Quanti articoli hanno il testo, per progetto: serve a mostrare la copertura. */
+/**
+ * Copertura del testo pieno. Serve a rendere visibile una cosa che altrimenti
+ * si può solo indovinare: perché alcuni articoli si aprono e altri no. Senza
+ * questo, un progetto alimentato solo da Google News sembra semplicemente rotto.
+ */
 export async function articleCoverage(projectId: number): Promise<{
-  articles: number; withText: number; posts: number;
+  articles: number; withText: number; opaque: number; posts: number;
 }> {
   const db = await getDb();
   const [r] = await db.select({
     articles: sql<number>`count(*) FILTER (WHERE ${mentions.kind} = 'article')`,
     withText: sql<number>`count(*) FILTER (WHERE ${mentions.articleText} IS NOT NULL)`,
+    opaque: sql<number>`count(*) FILTER (WHERE ${mentions.kind} = 'article' AND ${mentions.url} ILIKE '%news.google.%')`,
     posts: sql<number>`count(*) FILTER (WHERE ${mentions.kind} = 'post')`,
   }).from(mentions).where(eq(mentions.projectId, projectId));
   return {
     articles: Number(r?.articles ?? 0),
     withText: Number(r?.withText ?? 0),
+    opaque: Number(r?.opaque ?? 0),
     posts: Number(r?.posts ?? 0),
   };
 }

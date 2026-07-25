@@ -155,10 +155,24 @@ export async function seedDemo(db: DB) {
     rows.push({
       projectId: pid,
       source,
+      kind: isNews ? 'article' as const : 'post' as const,
       externalId: `demo-${idc++}`,
       url: 'https://example.com/article',
       title,
       content: `${title}. ${pick(SNIPPETS)} ${brandMention} is part of the discussion.`,
+      // Corpo dell'articolo: nella demo è sintetico come tutto il resto, ma serve
+      // a mostrare la lettura integrale con le parole evidenziate — senza, la
+      // funzione resterebbe invisibile proprio dove la si va a guardare.
+      articleText: isNews
+        ? `${title}. ${pick(SNIPPETS)} ${brandMention} is part of the discussion.\n\n`
+          + `Industry observers note that ${brandMention} has been at the centre of the debate for weeks. `
+          + `The shift towards generative AI is reshaping how teams evaluate artificial intelligence tooling, `
+          + `and several analysts argue the market has not yet priced in the change.\n\n`
+          + `A spokesperson declined to comment. ${brandMention} did not respond to a request for clarification `
+          + `about its roadmap, though people familiar with the matter said an announcement is expected shortly. `
+          + `Rivals are watching closely: the cost of falling behind on artificial intelligence is now measured in quarters, not years.`
+        : undefined,
+      articleAt: isNews ? new Date() : undefined,
       author: isNews ? pick(OUTLETS) : pick(NAMES),
       authorHandle: isNews ? undefined : pick(HANDLES),
       community: source === 'reddit' ? pick(SUBREDDITS) : isNews ? pick(OUTLETS) : source === 'youtube' ? pick(NAMES) : undefined,
