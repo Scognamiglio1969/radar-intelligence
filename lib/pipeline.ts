@@ -136,43 +136,91 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
 /** Dati aggregati delle ultime 24h da passare a Claude per il daily brief. */
 /** Dati delle ultime 24h per il brief. Esportata: la usa anche la generazione
  *  su richiesta quando il ciclo notturno non ha prodotto il brief di oggi. */
-export async function collectBriefData(projectId: number) {
+export type BriefData = {
+  /** Finestra effettivamente usata, da dichiarare nel brief. */
+  window: '24 hours' | '7 days' | '30 days';
+  /** Mention nella finestra. Se 0, non c'è niente da raccontare. */
+  total: number;
+  volumePerFonte: { source: string; n: number }[];
+  sentiment: { sentiment: string | null; n: number }[];
+  temiPrincipali: Record<string, unknown>[];
+  contenutiTop: { fonte: string; dove: string | null; sentiment: string | null; testo: string }[];
+};
+
+/** Scaletta di finestre: si allarga solo se la precedente è troppo magra. */
+const BRIEF_WINDOWS: { label: BriefData['window']; hours: number }[] = [
+  { label: '24 hours', hours: 24 },
+  { label: '7 days', hours: 24 * 7 },
+  { label: '30 days', hours: 24 * 30 },
+];
+/** Sotto questa soglia una giornata non regge un brief: si allarga la finestra. */
+const THIN_DAY = 5;
+
+async function briefWindow(projectId: number, hours: number) {
   const db = await getDb();
-  const h24 = new Date(Date.now() - 24 * 3600_000);
+  const since = new Date(Date.now() - hours * 3600_000);
+  const where = and(eq(mentions.projectId, projectId), gte(mentions.publishedAt, since));
 
   const bySource = await db.select({
     source: mentions.source, n: sql<number>`count(*)`,
-  }).from(mentions)
-    .where(and(eq(mentions.projectId, projectId), gte(mentions.publishedAt, h24)))
-    .groupBy(mentions.source);
+  }).from(mentions).where(where).groupBy(mentions.source);
+
+  const total = bySource.reduce((s, r) => s + Number(r.n), 0);
+  if (total === 0) return { total, bySource, bySentiment: [], topics: [], top: [] };
 
   const bySentiment = await db.select({
     sentiment: mentions.sentiment, n: sql<number>`count(*)`,
-  }).from(mentions)
-    .where(and(eq(mentions.projectId, projectId), gte(mentions.publishedAt, h24)))
-    .groupBy(mentions.sentiment);
+  }).from(mentions).where(where).groupBy(mentions.sentiment);
 
   const topTopics = await db.execute(sql`
     SELECT t AS topic, count(*) AS n
     FROM mentions, jsonb_array_elements_text(topics) AS t
-    WHERE project_id = ${projectId} AND published_at >= ${h24.toISOString()}::timestamptz
+    WHERE project_id = ${projectId} AND published_at >= ${since.toISOString()}::timestamptz
     GROUP BY t ORDER BY n DESC LIMIT 10
   `);
 
-  const topMentions = await db.select({
+  const top = await db.select({
     source: mentions.source, title: mentions.title, content: mentions.content,
     sentiment: mentions.sentiment, engagementScore: mentions.engagementScore,
     community: mentions.community,
-  }).from(mentions)
-    .where(and(eq(mentions.projectId, projectId), gte(mentions.publishedAt, h24)))
-    .orderBy(desc(mentions.engagementScore))
-    .limit(15);
+  }).from(mentions).where(where).orderBy(desc(mentions.engagementScore)).limit(15);
+
+  return { total, bySource, bySentiment, topics: topTopics.rows, top };
+}
+
+/**
+ * Dati per il brief. La finestra si allarga da sola quando le 24 ore sono magre.
+ *
+ * Perché: su un tema B2B di nicchia il volume giornaliero è legittimamente
+ * vicino a zero, e le fonti gratuite ordinano per pertinenza, non per data —
+ * quindi in 24 ore spesso non cade nulla anche quando la settimana è ricca.
+ * Con la sola finestra a 24 ore il brief usciva "vuoto" pur essendoci centinaia
+ * di articoli. Meglio un brief settimanale dichiarato che uno quotidiano finto.
+ */
+export async function collectBriefData(projectId: number): Promise<BriefData> {
+  let picked = BRIEF_WINDOWS[0];
+  let data = await briefWindow(projectId, picked.hours);
+
+  // Si prende la PRIMA finestra abbastanza ricca; se nessuna lo è, la più ricca
+  // fra quelle provate. Attenzione: non ci si può fermare al primo passo che
+  // non aggiunge nulla — una settimana vuota non implica un mese vuoto, ed è
+  // proprio il caso dei progetti alimentati a ondate (o da file caricati).
+  for (const w of BRIEF_WINDOWS.slice(1)) {
+    if (data.total >= THIN_DAY) break;
+    const wider = await briefWindow(projectId, w.hours);
+    if (wider.total > data.total) {
+      picked = w;
+      data = wider;
+    }
+  }
 
   return {
-    volumePerFonte: bySource,
-    sentiment: bySentiment,
-    temiPrincipali: topTopics.rows,
-    contenutiTop: topMentions.map((m) => ({
+    window: picked.label,
+    total: data.total,
+    volumePerFonte: data.bySource.map((r) => ({ source: r.source, n: Number(r.n) })),
+    sentiment: data.bySentiment.map((r) => ({ sentiment: r.sentiment, n: Number(r.n) })),
+    temiPrincipali: data.topics as Record<string, unknown>[],
+    contenutiTop: data.top.map((m) => ({
       fonte: m.source, dove: m.community, sentiment: m.sentiment,
       testo: `${m.title ?? ''} ${m.content}`.slice(0, 250).trim(),
     })),

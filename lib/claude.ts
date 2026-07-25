@@ -395,9 +395,13 @@ Required structure:
 ## What happened (the main stories, with context)
 ## Sentiment and conversations (tone, where it's discussed, emerging topics)
 ## Risks and opportunities (concrete, actionable)
-Max 500 words. Professional, direct tone. Base it ONLY on the provided data; if data is scarce, say so openly.`;
+Max 500 words. Professional, direct tone. Base it ONLY on the provided data; if data is scarce, say so openly.
+The payload states the WINDOW the figures cover. If it is not 24 hours, the last day was too quiet to stand alone: say so in one line at the top and write the briefing over that wider window instead. Never present a wider window as if it were the last 24 hours.`;
 
-export async function generateDailyBrief(projectId: number, projectName: string, briefData: unknown): Promise<boolean> {
+export async function generateDailyBrief(
+  projectId: number, projectName: string,
+  briefData: { window: string; total: number } & Record<string, unknown>,
+): Promise<boolean> {
   const db = await getDb();
   // Data del brief in ora locale (Europe/Rome), non UTC: vicino a mezzanotte
   // l'UTC può essere "ieri" e datare male il brief. en-CA → formato YYYY-MM-DD.
@@ -408,10 +412,22 @@ export async function generateDailyBrief(projectId: number, projectName: string,
     .where(and(eq(briefs.projectId, projectId), eq(briefs.briefDate, today)));
   if (existing) return true;
 
+  // Niente dati, niente brief. Senza questa guardia il modello scriveva pagine
+  // sicure di sé sul nulla ("nessun contenuto rilevato…"), le salvava come
+  // prodotto del giorno e le faceva pagare: un documento che sembra analisi ma
+  // è solo il racconto di una raccolta ferma. Meglio nessun brief e un avviso
+  // che dice all'utente cosa è successo davvero.
+  if (!briefData.total) {
+    console.warn(`[brief] "${projectName}": nessuna mention nella finestra — brief non generato`);
+    return false;
+  }
+
   if (!(await claudeAvailable())) return false;
   const text = await callClaude(
     SONNET, 'daily_brief', BRIEF_SYSTEM,
-    `Monitored sector: ${projectName}\nDate: ${new Date().toLocaleDateString('en-US', { dateStyle: 'full' })}\n\nLast 24 hours of data:\n${JSON.stringify(briefData).slice(0, 9000)}`,
+    `Monitored sector: ${projectName}\nDate: ${new Date().toLocaleDateString('en-US', { dateStyle: 'full' })}\n`
+    + `\nWINDOW COVERED BY THIS DATA: ${briefData.window} (${briefData.total} mentions)\n`
+    + `${JSON.stringify(briefData).slice(0, 9000)}`,
     1300, true,
   );
   if (!text) return false;

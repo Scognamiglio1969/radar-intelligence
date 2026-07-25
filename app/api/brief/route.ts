@@ -26,7 +26,15 @@ export async function POST() {
   }
 
   const data = await collectBriefData(project.id);
+  // Distinguere "non ho dati" da "il modello ha fallito": è la differenza fra
+  // un problema di raccolta e un problema di generazione, e l'utente deve
+  // sapere quale dei due ha davanti.
+  if (!data.total) {
+    return NextResponse.json({
+      error: 'nothing has been collected for this project in the last 30 days — check the keywords and sources in Settings, then use “Refresh now”',
+    }, { status: 400 });
+  }
   const ok = await generateDailyBrief(project.id, project.name, data);
   if (!ok) return NextResponse.json({ error: 'the model did not return a brief — try again' }, { status: 400 });
-  return NextResponse.json({ generated: true });
+  return NextResponse.json({ generated: true, window: data.window, mentions: data.total });
 }
