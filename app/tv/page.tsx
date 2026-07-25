@@ -2,6 +2,9 @@ import { getCurrentProject, dashboardData } from '@/lib/data';
 import { getTrends } from '@/lib/trends';
 import { getNarratives } from '@/lib/narratives';
 import { getRecentAlerts } from '@/lib/alerts';
+import {
+  emotionDistribution, geoDistribution, authorPyramid, hourlyHeatmap, brandHealth,
+} from '@/lib/insights';
 import { EmptyState } from '@/components/ui';
 import { TvShow } from '@/components/tv-show';
 
@@ -11,11 +14,18 @@ export default async function TvPage() {
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
 
-  const [data, trends, narratives, alerts] = await Promise.all([
+  // Tutte query SQL: la War Room si ricarica da sola ogni 5 minuti e non deve
+  // mai costare una chiamata AI per restare accesa.
+  const [data, trends, narratives, alerts, emotions, geo, pyramid, heat, health] = await Promise.all([
     dashboardData(project.id),
     getTrends(project.id),
     getNarratives(project.id),
     getRecentAlerts(project.id, 4),
+    emotionDistribution(project.id),
+    geoDistribution(project.id),
+    authorPyramid(project.id),
+    hourlyHeatmap(project.id),
+    brandHealth(project.id),
   ]);
 
   return (
@@ -36,6 +46,16 @@ export default async function TvPage() {
         source: m.source, title: m.title, content: m.content,
         community: m.community, sentiment: m.sentiment,
       }))}
+      emotions={emotions.filter((e) => e.value > 0)}
+      geo={geo.slice(0, 6).map((g) => ({
+        country: g.country, flag: g.flag, volume: g.volume, sentiment: g.sentiment, share: g.share,
+      }))}
+      pyramid={pyramid.tiers.map((t) => ({
+        key: t.key, label: t.label, authors: t.authors, sharePct: t.sharePct,
+      }))}
+      topConcentration={pyramid.topConcentration}
+      heat={heat}
+      health={{ score: health.score, grade: health.grade, spark: health.spark, components: health.components }}
     />
   );
 }

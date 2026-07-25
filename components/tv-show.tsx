@@ -1,14 +1,23 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flame, GitBranch, Bell, X, AlertTriangle } from 'lucide-react';
+import { Flame, GitBranch, Bell, X, AlertTriangle, Globe2, Users, Clock, HeartPulse, Orbit } from 'lucide-react';
 import { VolumeChart, SentimentPie } from './charts';
 import { ParticleField } from './particle-field';
 import { SOURCE_META } from '@/lib/connectors';
 import { APP_BYLINE } from './brand';
+import {
+  CountUp, SolarSystem, EmotionRadar, HealthRing, GeoBars, AuthorPyramidChart, HeatGrid,
+} from './tv-visuals';
 
-const SLIDE_MS = 18000;
+/** Durata standard di una slide. Tenuta corta di proposito: una War Room deve
+ *  scorrere, e con molte slide un giro completo resta comunque di pochi minuti. */
+const SLIDE_MS = 10000;
+/** Le slide che vivono di movimento (viaggio, feed) hanno bisogno di più respiro. */
+const SLIDE_MS_LONG = 15000;
+
+type Slide = { node: React.ReactNode; ms: number };
 
 type Props = {
   projectName: string;
@@ -20,27 +29,13 @@ type Props = {
   narratives: { title: string; stance: string | null; coordinated: boolean; count: number }[];
   alerts: { message: string; severity: string }[];
   latest: { source: string; title: string | null; content: string; community: string | null; sentiment: string | null }[];
+  emotions: { emotion: string; value: number; share: number }[];
+  geo: { country: string; flag: string; volume: number; sentiment: number | null; share: number }[];
+  pyramid: { key: string; label: string; authors: number; sharePct: number }[];
+  topConcentration: number;
+  heat: number[][];
+  health: { score: number; grade: string; spark: number[]; components: { key: string; label: string; value: number }[] };
 };
-
-// ---------------------------------------------------------------------------
-// Contatore animato: parte da 0 e sale con easing quando la slide entra
-// ---------------------------------------------------------------------------
-function CountUp({ value, duration = 1600 }: { value: number; duration?: number }) {
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    let raf = 0;
-    const t0 = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - t0) / duration);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setN(Math.round(value * eased));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [value, duration]);
-  return <>{n.toLocaleString('en-US')}</>;
-}
 
 // ---------------------------------------------------------------------------
 // Gauge del sentiment: semicerchio con lancetta animata
@@ -154,12 +149,13 @@ export function TvShow(props: Props) {
   const [slide, setSlide] = useState(0);
   const [clock, setClock] = useState('');
   const slides = buildSlides(props);
+  const current = slides[Math.min(slide, slides.length - 1)];
   const next = useCallback(() => setSlide((s) => (s + 1) % slides.length), [slides.length]);
 
   useEffect(() => {
-    const t = setInterval(next, SLIDE_MS);
-    return () => clearInterval(t);
-  }, [next, slide]);
+    const t = setTimeout(next, current?.ms ?? SLIDE_MS);
+    return () => clearTimeout(t);
+  }, [next, slide, current?.ms]);
 
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -209,7 +205,7 @@ export function TvShow(props: Props) {
 
       {/* Slide corrente */}
       <div key={slide} className="tv-slide relative z-10 flex min-h-0 flex-1 flex-col px-8 py-5 lg:px-14 lg:py-6">
-        {slides[slide]}
+        {current?.node}
       </div>
 
       {/* Striscia temi a scorrimento continuo */}
@@ -236,31 +232,35 @@ export function TvShow(props: Props) {
         </div>
         <div className="h-0.5 overflow-hidden rounded bg-white/5">
           <div key={slide} className="h-full bg-sky-500/70"
-            style={{ animation: `tvprogress ${SLIDE_MS}ms linear both` }} />
+            style={{ animation: `tvprogress ${current?.ms ?? SLIDE_MS}ms linear both` }} />
         </div>
       </footer>
     </div>
   );
 }
 
-function SlideTitle({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
+function SlideTitle({ icon, children, note }: {
+  icon?: React.ReactNode; children: React.ReactNode; note?: string;
+}) {
   return (
-    <h2 className="mb-5 flex items-center gap-3 text-xl font-bold tracking-tight text-slate-200 lg:text-3xl">
-      {icon}{children}
+    <h2 className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xl font-bold tracking-tight text-slate-200 lg:text-3xl">
+      <span className="flex items-center gap-3">{icon}{children}</span>
+      {note && <span className="text-sm font-medium text-slate-500 lg:text-base">{note}</span>}
     </h2>
   );
 }
 
 const card = 'tv-shine rounded-2xl border border-sky-500/20 bg-gradient-to-b from-[#0d1530]/90 to-[#0a0f22]/90 backdrop-blur';
 
-function buildSlides(p: Props): React.ReactNode[] {
-  const slides: React.ReactNode[] = [];
+function buildSlides(p: Props): Slide[] {
+  const slides: Slide[] = [];
+  const add = (node: React.ReactNode, ms = SLIDE_MS) => slides.push({ node, ms });
   const mentions24h = p.volumeByDay
     .filter((r) => r.day >= new Date(Date.now() - 86400_000).toISOString().slice(0, 10))
     .reduce((s, r) => s + r.n, 0);
 
   // ── 1. Quadro generale: contatori animati + gauge
-  slides.push(
+  add(
     <div className="flex flex-1 flex-col justify-center">
       <div className="tv-3d grid gap-6 lg:grid-cols-3">
         <div className={`tv-float ${card} px-8 py-9`}>
@@ -269,7 +269,7 @@ function buildSlides(p: Props): React.ReactNode[] {
             <CountUp value={p.kpi.total7} />
           </p>
           <p className="mt-3 text-sm text-slate-500">
-            di cui <span className="font-bold text-sky-300"><CountUp value={mentions24h} duration={2000} /></span> nelle ultime 24 ore
+            of which <span className="font-bold text-sky-300"><CountUp value={mentions24h} duration={2000} /></span> in the last 24 hours
           </p>
         </div>
         <div className={`tv-float ${card} flex flex-col items-center justify-center px-8 py-9`}>
@@ -291,15 +291,31 @@ function buildSlides(p: Props): React.ReactNode[] {
     </div>,
   );
 
-  // ── 2. Schermo radar coi trend
+  // ── 2. Viaggio nel sistema solare: il tema è la stella, di cui si parla
+  //       sono i pianeti in orbita, grandi quanto il loro volume.
+  if (p.topTopics.length > 1) {
+    add(
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SlideTitle icon={<Orbit className="size-7 text-sky-400" />} note="everything orbiting your topic, sized by volume">
+          The conversation system
+        </SlideTitle>
+        <div className="min-h-0 flex-1">
+          <SolarSystem topics={p.topTopics} projectName={p.projectName} />
+        </div>
+      </div>,
+      SLIDE_MS_LONG,
+    );
+  }
+
+  // ── 3. Schermo radar coi trend
   if (p.trends.length > 0) {
-    slides.push(
+    add(
       <div className="flex min-h-0 flex-1 flex-col">
         <SlideTitle icon={<Flame className="size-7 text-orange-400" />}>Radar — emerging trends</SlideTitle>
         <div className="grid min-h-0 flex-1 items-center gap-8 lg:grid-cols-5">
           <div className="hidden min-h-0 lg:col-span-3 lg:block"><RadarScreen trends={p.trends} /></div>
           <div className="tv-3d flex flex-col gap-4 lg:col-span-2">
-            {p.trends.slice(0, 5).map((t) => (
+            {p.trends.slice(0, 4).map((t) => (
               <div key={t.topic} className={`${card} px-5 py-4`}>
                 <div className="flex items-baseline gap-3">
                   <span className="text-3xl font-black text-orange-400">×{t.score.toFixed(0)}</span>
@@ -310,7 +326,7 @@ function buildSlides(p: Props): React.ReactNode[] {
                   <div className="h-full rounded bg-gradient-to-r from-orange-500 to-amber-300"
                     style={{ width: `${Math.min(100, (t.score / Math.max(...p.trends.map((x) => x.score))) * 100)}%`, transition: 'width 1.5s ease-out' }} />
                 </div>
-                {t.explanation && <p className="mt-2 line-clamp-2 text-xs leading-snug text-slate-400">{t.explanation}</p>}
+                {t.explanation && <p className="mt-2 line-clamp-1 text-xs leading-snug text-slate-400">{t.explanation}</p>}
               </div>
             ))}
           </div>
@@ -319,9 +335,9 @@ function buildSlides(p: Props): React.ReactNode[] {
     );
   }
 
-  // ── 3. Grafici (le barre si animano a ogni ingresso della slide)
+  // ── 4. Grafici (le barre si animano a ogni ingresso della slide)
   if (p.volumeByDay.length > 0) {
-    slides.push(
+    add(
       <div className="flex min-h-0 flex-1 flex-col">
         <SlideTitle>Volume and sentiment</SlideTitle>
         <div className="tv-3d grid min-h-0 flex-1 gap-6 lg:grid-cols-3">
@@ -340,13 +356,106 @@ function buildSlides(p: Props): React.ReactNode[] {
     );
   }
 
-  // ── 4. Narrazioni e alert
+  // ── 5. Emozioni: non solo positivo/negativo, ma di che umore si parla
+  if (p.emotions.length > 2) {
+    const top = [...p.emotions].sort((a, b) => b.share - a.share)[0];
+    add(
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SlideTitle icon={<HeartPulse className="size-7 text-pink-400" />} note="the mood behind the mentions, not just the polarity">
+          Emotional map
+        </SlideTitle>
+        <div className="grid min-h-0 flex-1 items-center gap-8 lg:grid-cols-5">
+          <div className="min-h-0 lg:col-span-3"><EmotionRadar data={p.emotions} /></div>
+          <div className="tv-3d flex flex-col gap-4 lg:col-span-2">
+            <div className={`${card} px-6 py-5`}>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Dominant emotion</p>
+              <p className="mt-2 text-4xl font-black capitalize text-pink-300 lg:text-5xl">{top.emotion}</p>
+              <p className="mt-1 text-sm text-slate-500">{top.share}% of all classified mentions</p>
+            </div>
+            {p.emotions.filter((e) => e.emotion !== top.emotion).sort((a, b) => b.share - a.share).slice(0, 3).map((e) => (
+              <div key={e.emotion} className={`${card} flex items-baseline gap-3 px-5 py-3`}>
+                <span className="text-lg font-bold capitalize text-slate-200">{e.emotion}</span>
+                <span className="ml-auto font-mono text-lg tabular-nums text-slate-400">{e.share}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>,
+    );
+  }
+
+  // ── 6. Salute del tema: un solo numero, con la sua tendenza sotto
+  if (p.health.score > 0) {
+    add(
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SlideTitle icon={<HeartPulse className="size-7 text-emerald-400" />} note="volume, sentiment, reach and diversity in one index">
+          Health index
+        </SlideTitle>
+        <div className="grid min-h-0 flex-1 items-center gap-8 lg:grid-cols-5">
+          <div className="min-h-0 lg:col-span-2">
+            <HealthRing score={p.health.score} grade={p.health.grade} spark={p.health.spark} />
+          </div>
+          <div className="tv-3d flex flex-col gap-3 lg:col-span-3">
+            {p.health.components.slice(0, 4).map((c) => (
+              <div key={c.key} className={`${card} flex items-center gap-4 px-5 py-3.5`}>
+                <span className="w-40 shrink-0 text-base font-semibold text-slate-200">{c.label}</span>
+                <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-white/5">
+                  <span className="block h-full rounded-full bg-gradient-to-r from-emerald-500 to-sky-400"
+                    style={{ width: `${Math.max(0, Math.min(100, c.value))}%`, transition: 'width 1.4s cubic-bezier(0.22, 1, 0.36, 1)' }} />
+                </span>
+                <span className="w-12 shrink-0 text-right font-mono tabular-nums text-slate-400">{Math.round(c.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>,
+    );
+  }
+
+  // ── 7. Geografia: da dove arriva la conversazione
+  if (p.geo.length > 1) {
+    add(
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SlideTitle icon={<Globe2 className="size-7 text-sky-400" />} note="where the conversation comes from">
+          Around the world
+        </SlideTitle>
+        <div className="min-h-0 flex-1"><GeoBars data={p.geo} /></div>
+      </div>,
+    );
+  }
+
+  // ── 8. Piramide delle voci: quanto pesa chi sta in cima
+  if (p.pyramid.length > 1) {
+    add(
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SlideTitle icon={<Users className="size-7 text-violet-400" />}
+          note={`the top 5% of voices carry ${p.topConcentration}% of the reach`}>
+          Who is doing the talking
+        </SlideTitle>
+        <div className="min-h-0 flex-1"><AuthorPyramidChart tiers={p.pyramid} /></div>
+      </div>,
+    );
+  }
+
+  // ── 9. Quando si parla: la griglia giorno × ora
+  if (p.heat.length > 0 && p.heat.flat().some((v) => v > 0)) {
+    add(
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SlideTitle icon={<Clock className="size-7 text-amber-400" />} note="30 days, by day of week and hour">
+          When they talk
+        </SlideTitle>
+        <div className="min-h-0 flex-1"><HeatGrid grid={p.heat} /></div>
+      </div>,
+    );
+  }
+
+  // ── 10. Narrazioni e alert
   if (p.narratives.length > 0 || p.alerts.length > 0) {
-    slides.push(
+    add(
       <div className="flex flex-1 flex-col">
         <SlideTitle icon={<GitBranch className="size-7 text-sky-400" />}>Narratives and signals</SlideTitle>
         <div className="tv-3d flex flex-1 flex-col justify-center gap-4">
-          {p.alerts.slice(0, 2).map((a, i) => (
+          {p.alerts.slice(0, 1).map((a, i) => (
             <div key={`a${i}`} className="tv-shine flex items-center gap-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-6 py-4">
               <span className="relative flex size-10 shrink-0 items-center justify-center">
                 <span className="absolute inset-0 animate-ping rounded-full bg-red-500/30" />
@@ -355,14 +464,14 @@ function buildSlides(p: Props): React.ReactNode[] {
               <span className="text-lg lg:text-xl">{a.message}</span>
             </div>
           ))}
-          {p.narratives.map((n) => (
+          {p.narratives.slice(0, 3).map((n) => (
             <div key={n.title} className={`${card} flex flex-wrap items-center gap-3 px-6 py-4`}
               style={{ borderLeftWidth: 3, borderLeftColor: n.coordinated ? '#f59e0b' : '#38bdf8' }}>
               <span className="text-lg font-bold lg:text-xl">{n.title}</span>
               {n.stance && <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">{n.stance}</span>}
               {n.coordinated && (
                 <span className="flex animate-pulse items-center gap-1 rounded-full bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-400">
-                  <AlertTriangle className="size-3.5" /> COORDINATA
+                  <AlertTriangle className="size-3.5" /> COORDINATED
                 </span>
               )}
               <span className="ml-auto font-mono text-sm text-slate-500">{n.count} post</span>
@@ -373,10 +482,10 @@ function buildSlides(p: Props): React.ReactNode[] {
     );
   }
 
-  // ── 5. Feed a scorrimento continuo
+  // ── 11. Feed a scorrimento continuo
   if (p.latest.length > 1) {
     const feed = [...p.latest, ...p.latest];
-    slides.push(
+    add(
       <div className="flex min-h-0 flex-1 flex-col">
         <SlideTitle>Latest voices</SlideTitle>
         <div className="relative min-h-0 flex-1 overflow-hidden"
@@ -407,6 +516,7 @@ function buildSlides(p: Props): React.ReactNode[] {
           </div>
         </div>
       </div>,
+      SLIDE_MS_LONG,
     );
   }
 
