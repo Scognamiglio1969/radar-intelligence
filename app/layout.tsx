@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin']
 
 export const metadata: Metadata = {
   title: {
-    default: 'Radar — By Scognamiglio 2026',
+    default: 'Radar — Signal over noise',
     template: '%s — Radar',
   },
   description: 'Social listening and media intelligence',
