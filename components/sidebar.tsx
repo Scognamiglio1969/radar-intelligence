@@ -7,7 +7,7 @@ import {
   Radar, LayoutDashboard, Ear, Newspaper, BarChart3, Users,
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
-  UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb,
+  UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb, MessageSquareQuote, Euro,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
@@ -27,6 +27,8 @@ const NAV: ({ href: string; label: string; icon: typeof Radar } | { section: str
   { href: '/audience', label: 'Audience', icon: Users },
   { href: '/benchmark', label: 'Benchmark', icon: BarChart3 },
   { href: '/content', label: 'Top content', icon: Star },
+  { href: '/messages', label: 'Message pull-through', icon: MessageSquareQuote },
+  { href: '/emv', label: 'Media value', icon: Euro },
   { href: '/insights', label: 'Explore insights', icon: LayoutGrid },
   { section: 'Interpret' },
   { href: '/pov', label: 'Point of View', icon: Lightbulb },

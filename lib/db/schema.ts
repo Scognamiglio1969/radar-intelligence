@@ -24,6 +24,8 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export type KeyMessage = { id: string; text: string; terms: string[] };
+
 export const projects = pgTable('projects', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
@@ -42,6 +44,8 @@ export const projects = pgTable('projects', {
   languages: jsonb('languages').$type<string[]>().notNull().default([]),
   // Codici paese ISO (es. IT, US): filtra le fonti news per area geografica
   countries: jsonb('countries').$type<string[]>().notNull().default([]),
+  /** Messaggi chiave del progetto: si misura quanto vengono ripresi (pull-through). */
+  keyMessages: jsonb('key_messages').$type<KeyMessage[]>().notNull().default([]),
   // Canali Telegram pubblici da sorvegliare (username senza @)
   telegramChannels: jsonb('telegram_channels').$type<string[]>().notNull().default([]),
   // Feed RSS/Atom personalizzati da seguire (URL)

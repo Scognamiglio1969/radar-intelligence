@@ -94,6 +94,7 @@ const DDL = [
   `ALTER TABLE projects ADD COLUMN IF NOT EXISTS semantic_context TEXT`,
   `ALTER TABLE projects ADD COLUMN IF NOT EXISTS rss_feeds JSONB NOT NULL DEFAULT '[]'`,
   `ALTER TABLE projects ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'listening'`,
+  `ALTER TABLE projects ADD COLUMN IF NOT EXISTS key_messages JSONB NOT NULL DEFAULT '[]'`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS relevance INTEGER`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS relevance_reason TEXT`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS translations JSONB`,
