@@ -212,6 +212,18 @@ export async function addEntity(formData: FormData) {
   revalidatePath('/benchmark');
 }
 
+export async function updateEntity(formData: FormData) {
+  const db = await getDb();
+  const id = Number(formData.get('id'));
+  const name = String(formData.get('name') ?? '').trim();
+  const keywords = parseKeywords(String(formData.get('keywords') ?? ''));
+  if (!id || !name) return;
+  await db.update(benchmarkEntities).set({ name, keywords: keywords.length ? keywords : [name] })
+    .where(eq(benchmarkEntities.id, id));
+  revalidatePath('/settings');
+  revalidatePath('/benchmark');
+}
+
 export async function setOwnBrand(formData: FormData) {
   const db = await getDb();
   const id = Number(formData.get('id'));

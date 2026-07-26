@@ -9,9 +9,10 @@ import { getBenchmarkEntities, getCurrentProject, getProjects } from '@/lib/data
 import { PageHeader, EmptyState } from '@/components/ui';
 import { getT } from '@/lib/i18n';
 import type { projects as projectsTable } from '@/lib/db/schema';
+import { EditableEntity } from '@/components/editable-entity';
 import {
   addEntity, createProject, createImportProject, createShareLink, deleteEntity, deleteProject,
-  revokeShareLink, saveAndExpandProject, setOwnBrand, updateProject, updateImportProject,
+  revokeShareLink, saveAndExpandProject, setOwnBrand, updateEntity, updateProject, updateImportProject,
 } from './actions';
 
 type Project = typeof projectsTable.$inferSelect;
@@ -192,27 +193,10 @@ export default async function SettingsPage({ searchParams }: {
                 </p>
                 <div className="flex flex-col gap-2">
                   {entities.map((e) => (
-                    <div key={e.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${e.isOwnBrand === 1 ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-white/5'}`}>
-                      <span className="font-medium">{e.name}</span>
-                      {e.isOwnBrand === 1 && (
-                        <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">Your brand</span>
-                      )}
-                      <span className="truncate text-xs text-slate-500">{e.keywords.join(', ')}</span>
-                      <form action={setOwnBrand} className="ml-auto" title={e.isOwnBrand === 1 ? 'Unset as your brand' : 'Set as your brand'}>
-                        <input type="hidden" name="id" value={e.id} />
-                        <input type="hidden" name="projectId" value={selected.id} />
-                        <input type="hidden" name="makeBrand" value={e.isOwnBrand === 1 ? '0' : '1'} />
-                        <button type="submit" className={e.isOwnBrand === 1 ? 'text-amber-400 hover:text-amber-300' : 'text-slate-600 hover:text-amber-400'} aria-label={e.isOwnBrand === 1 ? `Unset ${e.name} as your brand` : `Set ${e.name} as your brand`}>
-                          <Star className="size-4" fill={e.isOwnBrand === 1 ? 'currentColor' : 'none'} />
-                        </button>
-                      </form>
-                      <form action={deleteEntity} title={`Delete ${e.name}`}>
-                        <input type="hidden" name="id" value={e.id} />
-                        <button type="submit" className="text-slate-600 hover:text-red-400" aria-label={`Delete ${e.name}`}>
-                          <Trash2 className="size-4" />
-                        </button>
-                      </form>
-                    </div>
+                    <EditableEntity
+                      key={e.id} entity={e} projectId={selected.id} inputCls={inputCls}
+                      updateEntity={updateEntity} setOwnBrand={setOwnBrand} deleteEntity={deleteEntity}
+                    />
                   ))}
                   {entities.length === 0 && (
                     <p className="text-xs text-slate-600">No entities: add one to use Benchmark.</p>
