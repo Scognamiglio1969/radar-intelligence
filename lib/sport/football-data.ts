@@ -47,22 +47,33 @@ function ymd(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'UTC' });
 }
 
-/** Squadre di una competizione il cui nome contiene il termine cercato. */
-export async function searchTeams(competition: string, query: string): Promise<TeamHit[]> {
+export type TeamSearchDebug = { keyPresent: boolean; totalTeams: number; matched: number; sample: string[] };
+
+/**
+ * Squadre di una competizione il cui nome contiene il termine cercato.
+ * Restituisce anche `debug`: TEMPORANEO, per capire da uno screenshot (senza
+ * accesso ai log del server) perché in produzione la ricerca risultava vuota.
+ */
+export async function searchTeams(competition: string, query: string): Promise<{ teams: TeamHit[]; debug: TeamSearchDebug }> {
   const key = cfg('FOOTBALL_DATA_API_KEY');
-  if (!key || query.trim().length < 2) return [];
+  const noKeyDebug: TeamSearchDebug = { keyPresent: false, totalTeams: 0, matched: 0, sample: [] };
+  if (!key || query.trim().length < 2) return { teams: [], debug: noKeyDebug };
   const data = await fetchJson<{ teams?: FdTeam[] }>(
     `https://api.football-data.org/v4/competitions/${encodeURIComponent(competition)}/teams`,
     { headers: { 'X-Auth-Token': key } },
   );
   const q = query.trim().toLowerCase();
-  const filtered = (data.teams ?? [])
+  const all = data.teams ?? [];
+  const filtered = all
     .filter((t) => t.name.toLowerCase().includes(q) || (t.shortName ?? '').toLowerCase().includes(q) || (t.tla ?? '').toLowerCase() === q);
-  // TEMP diagnostica: capire perché in produzione la ricerca risultava vuota.
-  console.log(`[sport] searchTeams comp=${competition} q="${query}" totalTeams=${(data.teams ?? []).length} matched=${filtered.length}`);
-  return filtered
+  const teams = filtered
     .slice(0, 8)
     .map((t) => ({ id: String(t.id), name: t.name, shortName: t.shortName ?? t.name, crest: t.crest ?? null }));
+  const debug: TeamSearchDebug = {
+    keyPresent: true, totalTeams: all.length, matched: filtered.length,
+    sample: all.slice(0, 5).map((t) => t.name),
+  };
+  return { teams, debug };
 }
 
 /** Partite recenti e prossime di una squadra (competizioni miste, come le gioca davvero). */
