@@ -18,10 +18,11 @@ import { newsapi } from './newsapi';
 import { stackExchange } from './stackexchange';
 import { github } from './github';
 import { discord } from './discord';
+import { secEdgar } from './sec-edgar';
 
 export const CONNECTORS: Connector[] = [
   // Gratuite (alcune richiedono una chiave gratuita: reddit, youtube, discord)
-  googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss, linkedinWeb, stackExchange, github, discord,
+  googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss, linkedinWeb, stackExchange, github, discord, secEdgar,
   // Premium (si attivano con le chiavi API a pagamento)
   xTwitter, instagram, facebook, tiktok, linkedin, newsapi,
 ];
@@ -35,7 +36,7 @@ export const CONNECTORS: Connector[] = [
  */
 export type MentionKind = 'article' | 'post';
 export const SOURCE_KIND: Record<string, MentionKind> = {
-  googlenews: 'article', gdelt: 'article', newsapi: 'article', rss: 'article', upload: 'article',
+  googlenews: 'article', gdelt: 'article', newsapi: 'article', rss: 'article', upload: 'article', 'sec-edgar': 'article',
   reddit: 'post', bluesky: 'post', mastodon: 'post', hackernews: 'post', youtube: 'post',
   x: 'post', telegram: 'post', instagram: 'post', facebook: 'post', tiktok: 'post',
   linkedin: 'post', linkedin_web: 'post', stackexchange: 'post', github: 'post', discord: 'post',
@@ -48,7 +49,7 @@ export const kindOf = (source: string): MentionKind => SOURCE_KIND[source] ?? 'p
  * organizzare la pagina Fonti: con 22 connettori un unico elenco piatto per
  * livello (gratis/gratis con chiave/a pagamento) è illeggibile.
  */
-export type SourceCategory = 'general' | 'tech' | 'social' | 'video';
+export type SourceCategory = 'general' | 'tech' | 'social' | 'video' | 'finance';
 export const SOURCE_CATEGORY: Record<string, SourceCategory> = {
   googlenews: 'general', gdelt: 'general', newsapi: 'general', rss: 'general',
   hackernews: 'tech', stackexchange: 'tech', github: 'tech',
@@ -56,10 +57,12 @@ export const SOURCE_CATEGORY: Record<string, SourceCategory> = {
   instagram: 'social', facebook: 'social', tiktok: 'social', telegram: 'social',
   discord: 'social', linkedin: 'social', linkedin_web: 'social',
   youtube: 'video',
+  'sec-edgar': 'finance',
 };
-export const CATEGORY_ORDER: SourceCategory[] = ['general', 'tech', 'social', 'video'];
+export const CATEGORY_ORDER: SourceCategory[] = ['general', 'finance', 'tech', 'social', 'video'];
 export const CATEGORY_LABEL: Record<SourceCategory, string> = {
-  general: 'General & news', tech: 'Tech & developer', social: 'Social & messaging', video: 'Video',
+  general: 'General & news', finance: 'Financial & corporate', tech: 'Tech & developer',
+  social: 'Social & messaging', video: 'Video',
 };
 
 /**
@@ -106,6 +109,10 @@ export const SOURCE_META: Record<string, { label: string; color: string; note?: 
   discord: {
     label: 'Discord', color: '#5865f2',
     note: 'Messages from the channels of a server you administer, via an official bot (watchlist model, like Facebook) — not search across other people’s servers, which Discord does not offer. Requires a free bot token and the Message Content Intent enabled for it.',
+  },
+  'sec-edgar': {
+    label: 'SEC EDGAR', color: '#2c5aa0',
+    note: 'Official SEC filings (8-K material events, 10-K/10-Q reports, DEF 14A proxy statements) by any US-listed company matching your terms — free, no key, US government data. Filing text is not included in the search results, so entries are built from the company, filing type and exhibit description, with a link to the full document.',
   },
   upload: {
     label: 'Imported file', color: '#94a3b8',
