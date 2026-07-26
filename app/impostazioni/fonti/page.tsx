@@ -1,7 +1,9 @@
 import { Info } from 'lucide-react';
 import { getMeta } from '@/lib/db';
-import { CONNECTORS } from '@/lib/connectors';
-import { getConnectorCredStatuses, hydrateConnectorCredentials } from '@/lib/connector-credentials';
+import {
+  CONNECTORS, SOURCE_CATEGORY, CATEGORY_ORDER, CATEGORY_LABEL, type SourceCategory,
+} from '@/lib/connectors';
+import { getConnectorCredStatuses, hydrateConnectorCredentials, type ConnectorCredStatus } from '@/lib/connector-credentials';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { ConnectorKeys } from '@/components/connector-keys';
 import { PageHeader, fmtDate } from '@/components/ui';
@@ -53,48 +55,71 @@ export default async function FontiPage() {
         <section className="panel px-5 py-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-300">Source status</h2>
 
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-emerald-400/80">Free</p>
-          <div className="flex flex-col gap-2">
-            {CONNECTORS.filter((c) => c.tier === 'free').map((c) => <SourceRow key={c.id} c={c} st={sourceStatus?.[c.id]} />)}
-          </div>
-
-          <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-widest text-sky-400/80">
-            Free · requires a free key
-          </p>
-          <p className="mb-2 text-[11px] text-slate-600">
-            Free, but you need to register a free API key with the service. Enter it here: the source turns on right away.
-          </p>
-          <div className="flex flex-col gap-3">
-            {CONNECTORS.filter((c) => c.tier === 'freekey').map((c) => (
-              <div key={c.id}>
-                <SourceRow c={c} st={sourceStatus?.[c.id]} />
-                {canEditKeys && credStatuses[c.id] && (
-                  <ConnectorKeys connectorId={c.id} fields={credStatuses[c.id].fields} />
-                )}
-              </div>
-            ))}
-          </div>
-
-          <p className="mb-2 mt-4 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-amber-400/80">
-            Premium — paid
-          </p>
-          <p className="mb-2 text-[11px] text-slate-600">
-            Connectors are ready: enter your API keys here, without touching code. They turn on right away and apply to the whole account.
-            Their cost is billed by each provider — see the <span className="text-slate-400">Budget</span> tab.
-          </p>
-          <div className="flex flex-col gap-3">
-            {CONNECTORS.filter((c) => c.tier === 'premium').map((c) => (
-              <div key={c.id}>
-                <SourceRow c={c} st={sourceStatus?.[c.id]} />
-                {canEditKeys && credStatuses[c.id] && (
-                  <ConnectorKeys connectorId={c.id} fields={credStatuses[c.id].fields} />
-                )}
-              </div>
-            ))}
-          </div>
+          <TierSection
+            heading="Free" headingClass="text-emerald-400/80"
+            connectors={CONNECTORS.filter((c) => c.tier === 'free')}
+            sourceStatus={sourceStatus} credStatuses={credStatuses} canEditKeys={canEditKeys} showKeys={false}
+          />
+          <TierSection
+            heading="Free · requires a free key" headingClass="text-sky-400/80"
+            description="Free, but you need to register a free API key with the service. Enter it here: the source turns on right away."
+            connectors={CONNECTORS.filter((c) => c.tier === 'freekey')}
+            sourceStatus={sourceStatus} credStatuses={credStatuses} canEditKeys={canEditKeys} showKeys
+          />
+          <TierSection
+            heading="Premium — paid" headingClass="text-amber-400/80"
+            description={<>Connectors are ready: enter your API keys here, without touching code. They turn on right away and apply to the whole account.
+              Their cost is billed by each provider — see the <span className="text-slate-400">Budget</span> tab.</>}
+            connectors={CONNECTORS.filter((c) => c.tier === 'premium')}
+            sourceStatus={sourceStatus} credStatuses={credStatuses} canEditKeys={canEditKeys} showKeys
+          />
         </section>
       </div>
     </>
+  );
+}
+
+/**
+ * Un livello (gratis / gratis con chiave / a pagamento), suddiviso per
+ * categoria tematica al suo interno. Le tre sezioni della pagina erano
+ * identiche a parte lo "showKeys": tenerle come un unico componente evita
+ * di ripetere tre volte la stessa logica di raggruppamento.
+ */
+function TierSection({ heading, headingClass, description, connectors, sourceStatus, credStatuses, canEditKeys, showKeys }: {
+  heading: string; headingClass: string; description?: React.ReactNode;
+  connectors: (typeof CONNECTORS)[number][];
+  sourceStatus?: SourceStatus | null; credStatuses: Record<string, ConnectorCredStatus>;
+  canEditKeys: boolean; showKeys: boolean;
+}) {
+  if (connectors.length === 0) return null;
+  const byCategory = CATEGORY_ORDER
+    .map((cat) => ({ cat, items: connectors.filter((c) => (SOURCE_CATEGORY[c.id] as SourceCategory | undefined) === cat) }))
+    .filter((g) => g.items.length > 0);
+
+  return (
+    <div className="mt-4 first:mt-0">
+      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${headingClass}`}>{heading}</p>
+      {description && <p className="mb-2 text-[11px] text-slate-600">{description}</p>}
+      <div className="flex flex-col gap-3">
+        {byCategory.map(({ cat, items }) => (
+          <div key={cat}>
+            {byCategory.length > 1 && (
+              <p className="mb-1.5 text-[10px] font-medium text-slate-600">{CATEGORY_LABEL[cat]}</p>
+            )}
+            <div className="flex flex-col gap-2">
+              {items.map((c) => (
+                <div key={c.id}>
+                  <SourceRow c={c} st={sourceStatus?.[c.id]} />
+                  {showKeys && canEditKeys && credStatuses[c.id] && (
+                    <ConnectorKeys connectorId={c.id} fields={credStatuses[c.id].fields} />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

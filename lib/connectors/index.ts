@@ -44,6 +44,25 @@ export const SOURCE_KIND: Record<string, MentionKind> = {
 export const kindOf = (source: string): MentionKind => SOURCE_KIND[source] ?? 'post';
 
 /**
+ * Categoria tematica di una fonte — non ha effetto sui dati, serve solo a
+ * organizzare la pagina Fonti: con 22 connettori un unico elenco piatto per
+ * livello (gratis/gratis con chiave/a pagamento) è illeggibile.
+ */
+export type SourceCategory = 'general' | 'tech' | 'social' | 'video';
+export const SOURCE_CATEGORY: Record<string, SourceCategory> = {
+  googlenews: 'general', gdelt: 'general', newsapi: 'general', rss: 'general',
+  hackernews: 'tech', stackexchange: 'tech', github: 'tech',
+  reddit: 'social', bluesky: 'social', mastodon: 'social', x: 'social',
+  instagram: 'social', facebook: 'social', tiktok: 'social', telegram: 'social',
+  discord: 'social', linkedin: 'social', linkedin_web: 'social',
+  youtube: 'video',
+};
+export const CATEGORY_ORDER: SourceCategory[] = ['general', 'tech', 'social', 'video'];
+export const CATEGORY_LABEL: Record<SourceCategory, string> = {
+  general: 'General & news', tech: 'Tech & developer', social: 'Social & messaging', video: 'Video',
+};
+
+/**
  * Fonti valutate a CPM giornalistico nel valore media. Derivate dalla mappa qui
  * sopra per non avere due classificazioni divergenti — con l'eccezione degli
  * upload, la cui provenienza è ignota: contarli come stampa gonfierebbe il
