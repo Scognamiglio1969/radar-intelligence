@@ -28,6 +28,9 @@ const SOURCE_INFO: Record<string, string> = {
   linkedin: 'Posts from your company page via the official LinkedIn API (full text, real metrics). LinkedIn does not allow public third-party search, so this covers ONLY your organization — for everyone else’s public posts see "LinkedIn (web)".',
   linkedin_web: 'Public LinkedIn posts and articles by ANY author, found through the Tavily search index (official API, 1,000 free searches/month). A different acquisition model from "LinkedIn (page)": you get partial excerpts with a link to the original, but no engagement metrics. Legal: it queries Tavily, never LinkedIn’s servers.',
   newsapi: 'Aggregator of ~150,000 outlets with full-text boolean search. Collects articles by advanced query: a premium alternative to GDELT/Google News. Requires an API key.',
+  stackexchange: 'Questions (by title, not full text) from Stack Overflow plus 5 other Stack Exchange communities: money, workplace, travel, parenting, general computing (Super User). Works immediately, no key — the shared anonymous quota is low, so set STACK_EXCHANGE_KEY (free, from stackapps.com) as an environment variable if you need more volume.',
+  github: 'Issues and pull requests matching your terms in their title, across all of public GitHub — with the real issue text, not just the title. Automated bot issues (changelog trackers, scheduled digests) are filtered out. Works immediately, no key — GitHub’s unauthenticated search limit is tight (10 requests/minute), so set GITHUB_TOKEN (a free personal access token) as an environment variable if you need more volume.',
+  discord: 'Messages from the channels of a Discord server you administer, via your own bot (watchlist model, like Facebook) — Discord does not offer search across other servers. Requires a free bot invited to your server, with the Message Content Intent enabled for it in the Developer Portal.',
 };
 
 export default async function FontiPage() {

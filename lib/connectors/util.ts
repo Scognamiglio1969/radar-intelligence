@@ -32,6 +32,11 @@ export function stripHtml(html: string): string {
     .replace(/<[^>]+>/g, ' ')
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, ' ')
+    // Entità numeriche generiche (&#176; = °, &#8217; = '...): l'elenco fisso
+    // sopra copre solo le più comuni. Trovato su un titolo Stack Exchange
+    // ("27 &#176;C") rimasto non decodificato — qualunque fonte può emetterne.
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
     .replace(/\s+/g, ' ')
     .trim();
 }

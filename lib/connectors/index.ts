@@ -15,11 +15,14 @@ import { tiktok } from './tiktok';
 import { linkedin } from './linkedin';
 import { linkedinWeb } from './linkedin-web';
 import { newsapi } from './newsapi';
+import { stackExchange } from './stackexchange';
+import { github } from './github';
+import { discord } from './discord';
 
 export const CONNECTORS: Connector[] = [
-  // Gratuite
-  googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss, linkedinWeb,
-  // Premium (si attivano con le chiavi API)
+  // Gratuite (alcune richiedono una chiave gratuita: reddit, youtube, discord)
+  googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss, linkedinWeb, stackExchange, github, discord,
+  // Premium (si attivano con le chiavi API a pagamento)
   xTwitter, instagram, facebook, tiktok, linkedin, newsapi,
 ];
 
@@ -35,7 +38,7 @@ export const SOURCE_KIND: Record<string, MentionKind> = {
   googlenews: 'article', gdelt: 'article', newsapi: 'article', rss: 'article', upload: 'article',
   reddit: 'post', bluesky: 'post', mastodon: 'post', hackernews: 'post', youtube: 'post',
   x: 'post', telegram: 'post', instagram: 'post', facebook: 'post', tiktok: 'post',
-  linkedin: 'post', linkedin_web: 'post',
+  linkedin: 'post', linkedin_web: 'post', stackexchange: 'post', github: 'post', discord: 'post',
 };
 /** Fonte sconosciuta: si presume post, la classe più prudente per il valore media. */
 export const kindOf = (source: string): MentionKind => SOURCE_KIND[source] ?? 'post';
@@ -73,6 +76,18 @@ export const SOURCE_META: Record<string, { label: string; color: string; note?: 
     note: 'Public LinkedIn posts and articles by anyone, found through the Tavily search index (official API): partial excerpts, no engagement metrics. A different acquisition model from "LinkedIn (page)".',
   },
   newsapi: { label: 'NewsAPI', color: '#14b8a6' },
+  stackexchange: {
+    label: 'Stack Exchange', color: '#f48024',
+    note: 'Questions matching your terms in their title, across Stack Overflow and 5 other Stack Exchange communities (money, workplace, travel, parenting, general computing). Works with no key, at a shared low quota; add a free key to raise it.',
+  },
+  github: {
+    label: 'GitHub', color: '#e2e8f0',
+    note: 'Issues and pull requests matching your terms in their title, across all of public GitHub, with the full issue text and its reaction/comment counts. Automated bot-authored issues (changelog trackers, digests) are filtered out. Works with no key, at a low rate limit; add a free token to raise it.',
+  },
+  discord: {
+    label: 'Discord', color: '#5865f2',
+    note: 'Messages from the channels of a server you administer, via an official bot (watchlist model, like Facebook) — not search across other people’s servers, which Discord does not offer. Requires a free bot token and the Message Content Intent enabled for it.',
+  },
   upload: {
     label: 'Imported file', color: '#94a3b8',
     note: 'Rows imported from your Excel/CSV files: content, authors and dates are exactly what the file contains — nothing is collected from the web.',

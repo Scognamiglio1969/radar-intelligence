@@ -59,6 +59,10 @@ export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   googleplaces: [
     { env: 'GOOGLE_PLACES_API_KEY', label: 'API Key', hint: 'free-tier key from Google Cloud Console (Places API)', secret: true },
   ],
+  discord: [
+    { env: 'DISCORD_BOT_TOKEN', label: 'Bot Token', hint: 'from discord.com/developers — invite the bot to your server first', secret: true },
+    { env: 'DISCORD_CHANNEL_IDS', label: 'Channel IDs', hint: 'one or more, comma-separated (right-click a channel → Copy Channel ID)', secret: false },
+  ],
 };
 
 const META_KEY = 'connector_credentials_v1';
