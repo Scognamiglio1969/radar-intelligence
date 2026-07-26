@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import {
-  Activity, Boxes, Gauge, Globe2, Grid3x3, HeartPulse, LayoutGrid, Orbit,
+  Activity, Boxes, Gauge, Globe2, Grid3x3, HeartPulse, LayoutGrid, Orbit, Scale,
   ScatterChart, ShieldAlert, Sparkles, Triangle, TrendingDown, Waypoints, Network, Workflow,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
@@ -50,6 +50,13 @@ const GROUPS: {
     items: [
       { href: '/insights/geo', label: 'Languages & geography', icon: Globe2, question: 'Which languages and areas are talking, and with what tone?' },
       { href: '/insights/heatmap', label: 'Hourly heatmap', icon: Grid3x3, question: 'Which days and hours does the conversation actually live?' },
+    ],
+  },
+  {
+    title: 'Your channels',
+    hint: 'How your own posts do, against everything said about you',
+    items: [
+      { href: '/insights/owned', label: 'Owned vs Earned', icon: Scale, question: 'Are your own posts working, or is the conversation happening entirely without you?' },
     ],
   },
   {
