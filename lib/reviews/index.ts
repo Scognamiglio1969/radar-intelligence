@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db';
 import { reviewSources, reviews } from '@/lib/db/schema';
 import { fetchAppStoreReviews } from './appstore';
 import { fetchGooglePlacesReviews, googlePlacesEnabled } from './googleplaces';
+import { fetchYelpReviews, yelpEnabled } from './yelp';
 
 const TZ = 'Europe/Rome';
 
@@ -24,6 +25,7 @@ export async function ingestReviews(projectId: number): Promise<{ tried: number;
     try {
       if (src.type === 'appstore') raw = await fetchAppStoreReviews(src.identifier, src.country ?? 'us');
       else if (src.type === 'googleplaces') raw = await fetchGooglePlacesReviews(src.identifier);
+      else if (src.type === 'yelp') raw = await fetchYelpReviews(src.identifier);
     } catch (e) {
       console.error(`[reviews] fetch fallita per la fonte #${src.id} (${src.type} · ${src.identifier}):`, e);
     }
@@ -55,6 +57,7 @@ export type ReviewRow = {
 
 export type ReviewStats = {
   googlePlacesEnabled: boolean;
+  yelpEnabled: boolean;
   sources: ReviewSourceRow[];
   total: number;
   avgRating: number | null;
@@ -121,6 +124,7 @@ export async function reviewStats(projectId: number, weeks = 12): Promise<Review
 
   return {
     googlePlacesEnabled: googlePlacesEnabled(),
+    yelpEnabled: yelpEnabled(),
     sources,
     total: Number(totals?.total ?? 0),
     avgRating: totals?.avg === null || totals?.avg === undefined ? null : Math.round(Number(totals.avg) * 100) / 100,

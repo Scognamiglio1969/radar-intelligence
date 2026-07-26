@@ -69,6 +69,9 @@ export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   alphavantage: [
     { env: 'ALPHA_VANTAGE_API_KEY', label: 'API Key', hint: 'free, from alphavantage.co/support/#api-key (email only, no password)', secret: true },
   ],
+  yelp: [
+    { env: 'YELP_API_KEY', label: 'API Key', hint: 'free, from fusion.yelp.com/api-keys (a Yelp business account)', secret: true },
+  ],
 };
 
 const META_KEY = 'connector_credentials_v1';

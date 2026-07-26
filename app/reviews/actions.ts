@@ -8,7 +8,7 @@ import { getCurrentProject } from '@/lib/data';
 import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import { ingestReviews } from '@/lib/reviews';
 
-const TYPES = new Set(['appstore', 'googleplaces']);
+const TYPES = new Set(['appstore', 'googleplaces', 'yelp']);
 
 /** Aggiunge una fonte e la interroga subito: aggiungerla non deve significare
  *  aspettare il ciclo notturno per vedere se funziona. */

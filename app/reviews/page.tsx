@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
-import { Star, Trash2, ExternalLink, ShoppingBag, MapPin, FileUp } from 'lucide-react';
+import { Star, Trash2, ExternalLink, ShoppingBag, MapPin, FileUp, Utensils } from 'lucide-react';
 import { getCurrentProject } from '@/lib/data';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { reviewStats } from '@/lib/reviews';
@@ -11,6 +11,7 @@ import { ConnectorKeys } from '@/components/connector-keys';
 import { GenerateRefresh } from '@/components/generate-refresh';
 import { RatingStars, RatingDistribution, RatingTrend } from '@/components/review-charts';
 import { ReviewImportWizard } from '@/components/review-import-wizard';
+import { YelpBusinessSearch } from '@/components/yelp-business-search';
 import { addReviewSourceAction, removeReviewSourceAction } from './actions';
 
 export const metadata = { title: 'Reviews' };
@@ -18,6 +19,7 @@ export const metadata = { title: 'Reviews' };
 const TYPE_META: Record<string, { label: string; icon: typeof ShoppingBag }> = {
   appstore: { label: 'App Store', icon: ShoppingBag },
   googleplaces: { label: 'Google Places', icon: MapPin },
+  yelp: { label: 'Yelp', icon: Utensils },
   upload: { label: 'Imported file', icon: FileUp },
 };
 
@@ -79,6 +81,9 @@ export default async function ReviewsPage() {
                     {s.type === 'googleplaces' && !stats.googlePlacesEnabled && (
                       <span className="text-amber-400">needs API key ↓</span>
                     )}
+                    {s.type === 'yelp' && !stats.yelpEnabled && (
+                      <span className="text-amber-400">needs API key ↓</span>
+                    )}
                     <span className="hidden sm:inline">{s.lastFetchedAt ? `checked ${fmtDate(s.lastFetchedAt)}` : 'not checked yet'}</span>
                   </span>
                   <form action={removeReviewSourceAction}>
@@ -94,7 +99,7 @@ export default async function ReviewsPage() {
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <form action={addReviewSourceAction} className="flex flex-col gap-2 rounded-lg border border-[var(--border)] px-4 py-3">
             <p className="text-xs font-semibold text-slate-300">
               <ShoppingBag className="mr-1 inline size-3.5" /> Apple App Store
@@ -133,6 +138,24 @@ export default async function ReviewsPage() {
             )}
             <p className="text-[11px] text-slate-600">
               Google returns at most 5 reviews per place (its own limit, not ours) — the most relevant ones, not necessarily the most recent.
+            </p>
+          </form>
+
+          <form action={addReviewSourceAction} className="flex flex-col gap-2 rounded-lg border border-[var(--border)] px-4 py-3">
+            <p className="text-xs font-semibold text-slate-300">
+              <Utensils className="mr-1 inline size-3.5" /> Yelp
+              <span className="ml-1.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">free tier · needs key</span>
+            </p>
+            <input type="hidden" name="type" value="yelp" />
+            <YelpBusinessSearch />
+            <button type="submit" className="mt-1 self-start rounded-lg bg-sky-500/90 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-400">
+              Add business
+            </button>
+            {canEditKeys && credStatuses.yelp && (
+              <ConnectorKeys connectorId="yelp" fields={credStatuses.yelp.fields} />
+            )}
+            <p className="text-[11px] text-slate-600">
+              Yelp returns at most 3 review excerpts per business (its own limit, not ours), truncated — not the full text.
             </p>
           </form>
         </div>
