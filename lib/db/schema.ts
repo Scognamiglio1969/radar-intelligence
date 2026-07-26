@@ -250,3 +250,52 @@ export const reviews = pgTable('reviews', {
   publishedAt: timestamp('published_at', { withTimezone: true }).notNull(),
   fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Sport — altra sezione autonoma, stesso principio delle Recensioni: un
+// risultato sportivo non è una menzione, è un fatto con la sua data fissa,
+// serve a incrociarlo con quello che l'ascolto già misura (sentiment) e,
+// quando la società è quotata, con il prezzo dell'azione — non a inseguirlo
+// con una ricerca per parole chiave.
+// ---------------------------------------------------------------------------
+
+// Una squadra seguita da un progetto: la competizione serve solo per mostrare
+// calendario/classifica nel contesto giusto, la ricerca vera è per team id
+// (una squadra gioca più competizioni, es. campionato + coppa europea).
+export const sportSources = pgTable('sport_sources', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  competition: text('competition').notNull(), // codice football-data.org: SA, PL, CL, BL1, PD, FL1
+  teamId: text('team_id').notNull(), // id squadra football-data.org
+  teamName: text('team_name').notNull(),
+  ticker: text('ticker'), // simbolo di borsa (es. JUVE.MI) - solo se quotata, opzionale
+  lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sportMatches = pgTable('sport_matches', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  sourceId: integer('source_id').notNull(),
+  externalId: text('external_id').notNull(), // id partita football-data.org
+  competition: text('competition').notNull(),
+  homeTeam: text('home_team').notNull(),
+  awayTeam: text('away_team').notNull(),
+  homeScore: integer('home_score'), // null finché non giocata
+  awayScore: integer('away_score'),
+  status: text('status').notNull(), // SCHEDULED | LIVE | FINISHED | POSTPONED | ...
+  utcDate: timestamp('utc_date', { withTimezone: true }).notNull(),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Chiusure giornaliere: una riga per ticker per giorno, non per fonte — più
+// progetti che seguono la stessa società condividono lo storico invece di
+// duplicare le stesse chiamate (la quota gratuita è troppo stretta per sprecarla).
+export const stockPrices = pgTable('stock_prices', {
+  id: serial('id').primaryKey(),
+  ticker: text('ticker').notNull(),
+  date: date('date').notNull(),
+  close: real('close').notNull(),
+  changePct: real('change_pct'), // variazione vs la chiusura del giorno di borsa precedente
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+});

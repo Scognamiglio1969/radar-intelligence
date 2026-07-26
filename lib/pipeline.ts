@@ -4,6 +4,7 @@ import { mentions, projects } from '@/lib/db/schema';
 import { ingestProject } from '@/lib/ingest';
 import { enrichArticles } from '@/lib/article-enrich';
 import { ingestReviews } from '@/lib/reviews';
+import { ingestSport } from '@/lib/sport';
 import {
   analyzePendingMentions, clusterNewsStories, generateDailyBrief, scoreTopContent,
 } from '@/lib/claude';
@@ -77,6 +78,14 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
         return { tried: 0, fetched: 0 };
       });
       if (revs.tried) console.log(`[pipeline] recensioni: ${revs.fetched} lette da ${revs.tried} fonti`);
+
+      // Sport: altra sezione autonoma, stesso principio — risultati e prezzo
+      // di borsa sono fatti con una data fissa, non menzioni da interpretare.
+      const sport = await ingestSport(project.id).catch((e) => {
+        console.error(`[pipeline] sport fallito per "${project.name}":`, e);
+        return { tried: 0, matches: 0, prices: 0 };
+      });
+      if (sport.tried) console.log(`[pipeline] sport: ${sport.matches} partite, ${sport.prices} quotazioni`);
 
       // Se il proprietario è "dormiente" (membro senza AI), si raccolgono i dati
       // ma si saltano tutte le analisi Claude (nessun costo API).

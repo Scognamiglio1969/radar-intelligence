@@ -238,6 +238,41 @@ const DDL = [
     UNIQUE (source_id, external_id)
   )`,
   `CREATE INDEX IF NOT EXISTS reviews_proj_pub ON reviews (project_id, published_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS sport_sources (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    competition TEXT NOT NULL,
+    team_id TEXT NOT NULL,
+    team_name TEXT NOT NULL,
+    ticker TEXT,
+    last_fetched_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS sport_matches (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    source_id INTEGER NOT NULL REFERENCES sport_sources(id) ON DELETE CASCADE,
+    external_id TEXT NOT NULL,
+    competition TEXT NOT NULL,
+    home_team TEXT NOT NULL,
+    away_team TEXT NOT NULL,
+    home_score INTEGER,
+    away_score INTEGER,
+    status TEXT NOT NULL,
+    utc_date TIMESTAMPTZ NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (source_id, external_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS sport_matches_proj_date ON sport_matches (project_id, utc_date DESC)`,
+  `CREATE TABLE IF NOT EXISTS stock_prices (
+    id SERIAL PRIMARY KEY,
+    ticker TEXT NOT NULL,
+    date DATE NOT NULL,
+    close REAL NOT NULL,
+    change_pct REAL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (ticker, date)
+  )`,
 ];
 
 async function ensureSchema(db: DB) {

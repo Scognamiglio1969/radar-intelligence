@@ -366,6 +366,55 @@ Overall tone is mildly positive, led by developer communities on Reddit and Blue
   }
   await db.insert(schema.reviews).values(reviewRows);
 
+  // ---- Sport (self-contained section, not tied to keyword listening) ----
+  // Un club a caso, non a tema col progetto "Artificial Intelligence": serve
+  // solo a mostrare i meccanismi della pagina (calendario, incrocio col
+  // sentiment, prezzo di borsa), non a raccontare una storia coerente.
+  const [sportSource] = await db.insert(schema.sportSources).values({
+    projectId: pid, competition: 'SA', teamId: 'demo-team-109', teamName: 'Juventus',
+    ticker: 'JUVE.MI', lastFetchedAt: new Date(),
+  }).returning();
+
+  const OPPONENTS = ['Inter', 'Milan', 'Napoli', 'Roma', 'Atalanta', 'Fiorentina', 'Lazio', 'Bologna'];
+  const RESULTS: [number, number][] = [[2, 0], [1, 1], [0, 1], [3, 1], [1, 0], [2, 2], [0, 2], [1, 0]];
+  const matchRows: (typeof schema.sportMatches.$inferInsert)[] = [];
+  for (let i = 0; i < 8; i++) {
+    const ageDays = 8 + i * 11; // una partita ogni ~11 giorni, la più vecchia a ~96 giorni
+    const isHome = i % 2 === 0;
+    const [forScore, againstScore] = RESULTS[i];
+    matchRows.push({
+      projectId: pid, sourceId: sportSource.id, externalId: `demo-match-${i}`,
+      competition: 'SA',
+      homeTeam: isHome ? 'Juventus' : OPPONENTS[i],
+      awayTeam: isHome ? OPPONENTS[i] : 'Juventus',
+      homeScore: isHome ? forScore : againstScore,
+      awayScore: isHome ? againstScore : forScore,
+      status: 'FINISHED',
+      utcDate: new Date(now - ageDays * 86400_000),
+    });
+  }
+  // Prossime due partite, non ancora giocate.
+  matchRows.push(
+    { projectId: pid, sourceId: sportSource.id, externalId: 'demo-match-next-1', competition: 'SA', homeTeam: 'Juventus', awayTeam: 'Torino', homeScore: null, awayScore: null, status: 'SCHEDULED', utcDate: new Date(now + 6 * 86400_000) },
+    { projectId: pid, sourceId: sportSource.id, externalId: 'demo-match-next-2', competition: 'CL', homeTeam: 'Real Madrid', awayTeam: 'Juventus', homeScore: null, awayScore: null, status: 'SCHEDULED', utcDate: new Date(now + 20 * 86400_000) },
+  );
+  await db.insert(schema.sportMatches).values(matchRows);
+
+  // Chiusure giornaliere sintetiche (~100 giorni, solo lun-ven): una piccola
+  // camminata casuale, con un piccolo salto coerente col risultato nei giorni
+  // di partita — così la barra "stock" nella pagina non è mai piatta a caso.
+  const priceRows: (typeof schema.stockPrices.$inferInsert)[] = [];
+  let price = 3.2;
+  for (let d = 100; d >= 0; d--) {
+    const day = new Date(now - d * 86400_000);
+    if (day.getDay() === 0 || day.getDay() === 6) continue; // niente borsa nel weekend
+    const dateKey = day.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
+    const drift = (rnd() - 0.5) * 0.04;
+    price = Math.max(1.5, price * (1 + drift));
+    priceRows.push({ ticker: 'JUVE.MI', date: dateKey, close: Math.round(price * 1000) / 1000, changePct: Math.round(drift * 10000) / 100 });
+  }
+  await db.insert(schema.stockPrices).values(priceRows).onConflictDoNothing();
+
   // ---- Source status (green dots on the Sources page) ----
   const status: Record<string, { ok: boolean; count: number; at: string; lastOkAt: string }> = {};
   const nowIso = new Date().toISOString();

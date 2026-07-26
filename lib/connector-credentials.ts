@@ -63,6 +63,12 @@ export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
     { env: 'DISCORD_BOT_TOKEN', label: 'Bot Token', hint: 'from discord.com/developers — invite the bot to your server first', secret: true },
     { env: 'DISCORD_CHANNEL_IDS', label: 'Channel IDs', hint: 'one or more, comma-separated (right-click a channel → Copy Channel ID)', secret: false },
   ],
+  'football-data': [
+    { env: 'FOOTBALL_DATA_API_KEY', label: 'API Key', hint: 'free, from football-data.org/client/register', secret: true },
+  ],
+  alphavantage: [
+    { env: 'ALPHA_VANTAGE_API_KEY', label: 'API Key', hint: 'free, from alphavantage.co/support/#api-key (email only, no password)', secret: true },
+  ],
 };
 
 const META_KEY = 'connector_credentials_v1';
