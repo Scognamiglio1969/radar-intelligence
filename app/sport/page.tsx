@@ -8,6 +8,7 @@ import { getT } from '@/lib/i18n';
 import { ConnectorKeys } from '@/components/connector-keys';
 import { GenerateRefresh } from '@/components/generate-refresh';
 import { ResultBadge, ShiftBar } from '@/components/sport-charts';
+import { TeamSearch } from '@/components/team-search';
 import { addSportSourceAction, removeSportSourceAction } from './actions';
 
 export const metadata = { title: 'Sport' };
@@ -44,8 +45,13 @@ export default async function SportPage() {
       </div>
 
       {/* ── Fonti configurate ─────────────────────────────────────────── */}
-      <section className="panel mb-4 px-5 py-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-300">{t('page.sport.teams', 'Teams followed')}</h2>
+      {/* Chiuso di default quando c'è già almeno una squadra: una volta
+          configurato, la pagina si apre sulle analisi, non sul form. */}
+      <details className="panel mb-4 px-5 py-5" open={stats.sources.length === 0}>
+        <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-300 [&::-webkit-details-marker]:hidden">
+          {t('page.sport.teams', 'Teams followed')}
+          {stats.sources.length > 0 && <span className="text-xs font-normal text-slate-600">({stats.sources.length}, click to edit)</span>}
+        </summary>
 
         {stats.sources.length > 0 && (
           <div className="mb-4 flex flex-col gap-2">
@@ -78,26 +84,24 @@ export default async function SportPage() {
             <Trophy className="mr-1 inline size-3.5" /> Add a team
             <span className="ml-1.5 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">free key · football-data.org</span>
           </p>
-          <select name="competition" defaultValue="SA" required
-            className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-slate-100 outline-none">
-            {COMPETITIONS.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
-          </select>
-          <input name="teamId" placeholder="Team ID (from football-data.org)" required
-            className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-500/50" />
-          <input name="teamName" placeholder="Team name (exactly as football-data.org shows it)" required
-            className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-500/50" />
+          <TeamSearch competitions={COMPETITIONS} />
           <input name="ticker" placeholder="Stock ticker, if listed (e.g. JUVE.MI) — optional"
             className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-500/50" />
           <button type="submit" className="self-start rounded-lg bg-sky-500/90 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-400 sm:col-span-2">
             Add team
           </button>
           <p className="text-[11px] text-slate-600 sm:col-span-2">
-            Find the Team ID and its exact name on football-data.org (e.g. search “Juventus” — the ID and name shown there are what to enter here).
+            Search picks up the team&rsquo;s exact name automatically — no more typing it by hand.
           </p>
-          {canEditKeys && credStatuses['football-data'] && (
-            <div className="sm:col-span-2"><ConnectorKeys connectorId="football-data" fields={credStatuses['football-data'].fields} /></div>
-          )}
         </form>
+
+        {/* Fuori dal <form> di sopra: i tag <form> non possono annidarsi,
+            e ConnectorKeys ne renderizza uno proprio per salvare la chiave. */}
+        {canEditKeys && credStatuses['football-data'] && (
+          <div className="mt-3 rounded-lg border border-[var(--border)] px-4 py-3">
+            <ConnectorKeys connectorId="football-data" fields={credStatuses['football-data'].fields} />
+          </div>
+        )}
 
         {canEditKeys && credStatuses.alphavantage && (
           <div className="mt-3 rounded-lg border border-[var(--border)] px-4 py-3">
@@ -111,7 +115,7 @@ export default async function SportPage() {
             <ConnectorKeys connectorId="alphavantage" fields={credStatuses.alphavantage.fields} />
           </div>
         )}
-      </section>
+      </details>
 
       {stats.sources.length === 0 ? (
         <div className="panel flex flex-col items-center gap-2 px-6 py-14 text-center">
