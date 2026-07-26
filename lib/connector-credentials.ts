@@ -56,6 +56,9 @@ export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   newsapi: [
     { env: 'NEWSAPI_KEY', label: 'API Key', hint: 'newsapi.org', secret: true },
   ],
+  googleplaces: [
+    { env: 'GOOGLE_PLACES_API_KEY', label: 'API Key', hint: 'free-tier key from Google Cloud Console (Places API)', secret: true },
+  ],
 };
 
 const META_KEY = 'connector_credentials_v1';

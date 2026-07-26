@@ -306,6 +306,66 @@ Overall tone is mildly positive, led by developer communities on Reddit and Blue
     ],
   }).onConflictDoNothing();
 
+  // ---- Reviews (self-contained section, not tied to keyword listening) ----
+  const [appSource] = await db.insert(schema.reviewSources).values({
+    projectId: pid, type: 'appstore', identifier: '0000000000',
+    label: 'AI Copilot — Daily Assistant (demo)', country: 'us', lastFetchedAt: new Date(),
+  }).returning();
+  const [placeSource] = await db.insert(schema.reviewSources).values({
+    projectId: pid, type: 'googleplaces', identifier: 'demo-place-id',
+    label: 'AI Copilot HQ (demo)', lastFetchedAt: new Date(),
+  }).returning();
+
+  const REVIEW_TEXT: Record<number, string[]> = {
+    5: [
+      'Genuinely saves me hours every week. The suggestions are spot on.',
+      'Best productivity app I have installed this year. Worth every penny.',
+      'Support answered in minutes and actually fixed my issue. Rare these days.',
+      'The latest update made everything faster. Very happy.',
+    ],
+    4: [
+      'Really solid overall, a couple of rough edges but nothing major.',
+      'Does what it promises. Wish the free tier included more.',
+      'Great tool, occasionally slow to sync across devices.',
+    ],
+    3: [
+      'It is fine. Does the job but nothing that stands out.',
+      'Works as expected, the onboarding could be clearer.',
+    ],
+    2: [
+      'Crashes about once a day since the last update.',
+      'Too expensive for what it currently offers.',
+    ],
+    1: [
+      'Lost an hour of work to a crash. Please fix this.',
+      'Cancelled after the price hike, no longer worth it.',
+      'Support never replied to my ticket after a week.',
+    ],
+  };
+  const REVIEW_NAMES = ['J. Park', 'Sofia M.', 'thebuilder22', 'Rahul K.', 'Anya', 'M. Feldman', 'devuser', 'Chiara B.'];
+  const reviewRows: (typeof schema.reviews.$inferInsert)[] = [];
+  let ridc = 0;
+  for (let i = 0; i < 42; i++) {
+    const ageDays = rnd() * 90;
+    // Lieve miglioramento nel tempo: gli ultimi 30 giorni pesano un po' più
+    // positivo dei precedenti, cosi il grafico settimanale mostra una tendenza vera.
+    const recentBoost = ageDays < 30 ? 0.12 : 0;
+    const roll = rnd() + recentBoost;
+    const rating = roll > 0.85 ? 5 : roll > 0.55 ? 4 : roll > 0.4 ? 3 : roll > 0.25 ? 2 : 1;
+    const pool = REVIEW_TEXT[rating];
+    const isApp = rnd() < 0.65;
+    reviewRows.push({
+      projectId: pid,
+      sourceId: isApp ? appSource.id : placeSource.id,
+      externalId: `demo-review-${ridc++}`,
+      rating,
+      content: pick(pool),
+      author: pick(REVIEW_NAMES),
+      publishedAt: new Date(now - ageDays * 86400_000),
+    });
+  }
+  await db.insert(schema.reviews).values(reviewRows);
+
   // ---- Source status (green dots on the Sources page) ----
   const status: Record<string, { ok: boolean; count: number; at: string; lastOkAt: string }> = {};
   const nowIso = new Date().toISOString();

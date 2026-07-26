@@ -213,6 +213,31 @@ const DDL = [
     key TEXT PRIMARY KEY,
     value JSONB
   )`,
+  `CREATE TABLE IF NOT EXISTS review_sources (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    identifier TEXT NOT NULL,
+    label TEXT NOT NULL,
+    country TEXT,
+    last_fetched_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS reviews (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    source_id INTEGER NOT NULL REFERENCES review_sources(id) ON DELETE CASCADE,
+    external_id TEXT NOT NULL,
+    rating INTEGER NOT NULL,
+    title TEXT,
+    content TEXT NOT NULL DEFAULT '',
+    author TEXT,
+    url TEXT,
+    published_at TIMESTAMPTZ NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (source_id, external_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS reviews_proj_pub ON reviews (project_id, published_at DESC)`,
 ];
 
 async function ensureSchema(db: DB) {

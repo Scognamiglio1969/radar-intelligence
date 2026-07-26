@@ -215,3 +215,38 @@ export const timelineEvents = pgTable('timeline_events', {
   importance: integer('importance').notNull().default(1),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Recensioni — sezione autonoma, volutamente separata da `mentions` e dalla
+// pagina Fonti: una recensione non nasce da una ricerca per parole chiave ma
+// da un identificatore fisso (un app id, un place id), e porta un dato che il
+// resto dell'app non ha — il voto — che È il sentiment, senza bisogno di AI.
+// ---------------------------------------------------------------------------
+
+// Una fonte configurata dall'utente: un'app sull'App Store, un luogo su
+// Google, o un lotto importato da file. lastFetchedAt vive qui (non su ogni
+// recensione) perché è lo stato della FONTE, non del singolo voto raccolto.
+export const reviewSources = pgTable('review_sources', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  type: text('type').notNull(), // 'appstore' | 'googleplaces' | 'upload'
+  identifier: text('identifier').notNull(), // app id / place id / nome del file importato
+  label: text('label').notNull(),
+  country: text('country'), // solo appstore: codice a 2 lettere, default 'us'
+  lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const reviews = pgTable('reviews', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  sourceId: integer('source_id').notNull(),
+  externalId: text('external_id').notNull(),
+  rating: integer('rating').notNull(), // 1-5, dato di fatto: mai dedotto
+  title: text('title'),
+  content: text('content').notNull().default(''),
+  author: text('author'),
+  url: text('url'),
+  publishedAt: timestamp('published_at', { withTimezone: true }).notNull(),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+});

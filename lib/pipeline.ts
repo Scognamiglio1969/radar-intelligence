@@ -3,6 +3,7 @@ import { getDb, getMeta, setMeta } from '@/lib/db';
 import { mentions, projects } from '@/lib/db/schema';
 import { ingestProject } from '@/lib/ingest';
 import { enrichArticles } from '@/lib/article-enrich';
+import { ingestReviews } from '@/lib/reviews';
 import {
   analyzePendingMentions, clusterNewsStories, generateDailyBrief, scoreTopContent,
 } from '@/lib/claude';
@@ -67,6 +68,15 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
       if (articles.tried) {
         console.log(`[pipeline] articoli: ${articles.extracted}/${articles.tried} testi estratti`);
       }
+
+      // Recensioni: sezione autonoma, indipendente dalla modalità del progetto
+      // (anche un progetto "upload" può seguire un'app o un locale) e senza
+      // costo AI — il voto è già il sentimento.
+      const revs = await ingestReviews(project.id).catch((e) => {
+        console.error(`[pipeline] recensioni fallite per "${project.name}":`, e);
+        return { tried: 0, fetched: 0 };
+      });
+      if (revs.tried) console.log(`[pipeline] recensioni: ${revs.fetched} lette da ${revs.tried} fonti`);
 
       // Se il proprietario è "dormiente" (membro senza AI), si raccolgono i dati
       // ma si saltano tutte le analisi Claude (nessun costo API).

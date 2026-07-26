@@ -7,7 +7,7 @@ import {
   Radar, LayoutDashboard, Ear, Newspaper, BarChart3, Users,
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
-  UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb, MessageSquareQuote, Euro,
+  UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb, MessageSquareQuote, Euro, Award,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
@@ -44,6 +44,8 @@ const NAV: ({ href: string; label: string; key: string; icon: typeof Radar } | {
   { href: '/tv', label: 'War Room', key: 'nav.tv', icon: MonitorPlay },
   { section: 'Setup', key: 'nav.setup' },
   { href: '/settings', label: 'Projects', key: 'nav.settings', icon: Settings },
+  { section: 'Reviews', key: 'nav.reviewsSection' },
+  { href: '/reviews', label: 'Reviews', key: 'nav.reviews', icon: Award },
 ];
 
 type Props = {
