@@ -106,6 +106,43 @@ export function BenchmarkTrend({ series }: {
   );
 }
 
+/**
+ * Interesse di ricerca (Google Trends) per entità di benchmark: già scalato
+ * fra le entità (0-100, dove 100 è il picco fra tutte insieme), quindi le
+ * linee si leggono come vera quota di ricerca l'una rispetto all'altra —
+ * non serie indipendenti come in BenchmarkTrend.
+ */
+export function SearchInterestTrend({ series }: {
+  series: { name: string; points: { date: string; value: number }[] }[];
+}) {
+  const days = [...new Set(series.flatMap((s) => s.points.map((p) => p.date)))].sort();
+  const rows = days.map((day) => {
+    const row: Record<string, string | number> = {
+      day: new Date(day).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }),
+    };
+    for (const s of series) {
+      const v = s.points.find((p) => p.date === day)?.value;
+      if (v !== undefined) row[s.name] = v;
+    }
+    return row;
+  });
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <LineChart data={rows}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e2a4a" vertical={false} />
+        <XAxis dataKey="day" tick={TICK} axisLine={false} tickLine={false} />
+        <YAxis domain={[0, 100]} tick={TICK} axisLine={false} tickLine={false} width={30} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
+        <Legend formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
+        {series.map((s, i) => (
+          <Line key={s.name} dataKey={s.name} stroke={ENTITY_COLORS[i % ENTITY_COLORS.length]}
+            strokeWidth={2} dot={false} connectNulls />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
 /** Barre orizzontali semplici (senza recharts) per classifiche. */
 export function HBars({ items, color = '#38bdf8' }: {
   items: { label: string; value: number; extra?: string }[]; color?: string;

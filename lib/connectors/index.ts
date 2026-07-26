@@ -19,10 +19,11 @@ import { stackExchange } from './stackexchange';
 import { github } from './github';
 import { discord } from './discord';
 import { secEdgar } from './sec-edgar';
+import { arxiv } from './arxiv';
 
 export const CONNECTORS: Connector[] = [
   // Gratuite (alcune richiedono una chiave gratuita: reddit, youtube, discord)
-  googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss, linkedinWeb, stackExchange, github, discord, secEdgar,
+  googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss, linkedinWeb, stackExchange, github, discord, secEdgar, arxiv,
   // Premium (si attivano con le chiavi API a pagamento)
   xTwitter, instagram, facebook, tiktok, linkedin, newsapi,
 ];
@@ -40,6 +41,7 @@ export const SOURCE_KIND: Record<string, MentionKind> = {
   reddit: 'post', bluesky: 'post', mastodon: 'post', hackernews: 'post', youtube: 'post',
   x: 'post', telegram: 'post', instagram: 'post', facebook: 'post', tiktok: 'post',
   linkedin: 'post', linkedin_web: 'post', stackexchange: 'post', github: 'post', discord: 'post',
+  arxiv: 'article',
 };
 /** Fonte sconosciuta: si presume post, la classe più prudente per il valore media. */
 export const kindOf = (source: string): MentionKind => SOURCE_KIND[source] ?? 'post';
@@ -49,7 +51,7 @@ export const kindOf = (source: string): MentionKind => SOURCE_KIND[source] ?? 'p
  * organizzare la pagina Fonti: con 22 connettori un unico elenco piatto per
  * livello (gratis/gratis con chiave/a pagamento) è illeggibile.
  */
-export type SourceCategory = 'general' | 'tech' | 'social' | 'video' | 'finance';
+export type SourceCategory = 'general' | 'tech' | 'social' | 'video' | 'finance' | 'academic';
 export const SOURCE_CATEGORY: Record<string, SourceCategory> = {
   googlenews: 'general', gdelt: 'general', newsapi: 'general', rss: 'general',
   hackernews: 'tech', stackexchange: 'tech', github: 'tech',
@@ -58,11 +60,12 @@ export const SOURCE_CATEGORY: Record<string, SourceCategory> = {
   discord: 'social', linkedin: 'social', linkedin_web: 'social',
   youtube: 'video',
   'sec-edgar': 'finance',
+  arxiv: 'academic',
 };
-export const CATEGORY_ORDER: SourceCategory[] = ['general', 'finance', 'tech', 'social', 'video'];
+export const CATEGORY_ORDER: SourceCategory[] = ['general', 'finance', 'academic', 'tech', 'social', 'video'];
 export const CATEGORY_LABEL: Record<SourceCategory, string> = {
-  general: 'General & news', finance: 'Financial & corporate', tech: 'Tech & developer',
-  social: 'Social & messaging', video: 'Video',
+  general: 'General & news', finance: 'Financial & corporate', academic: 'Academic',
+  tech: 'Tech & developer', social: 'Social & messaging', video: 'Video',
 };
 
 /**
@@ -113,6 +116,10 @@ export const SOURCE_META: Record<string, { label: string; color: string; note?: 
   'sec-edgar': {
     label: 'SEC EDGAR', color: '#2c5aa0',
     note: 'Official SEC filings (8-K material events, 10-K/10-Q reports, DEF 14A proxy statements) by any US-listed company matching your terms — free, no key, US government data. Filing text is not included in the search results, so entries are built from the company, filing type and exhibit description, with a link to the full document.',
+  },
+  arxiv: {
+    label: 'arXiv', color: '#b31b1b',
+    note: 'Academic papers (CS, physics, math, quantitative biology and more) matching your terms, with the full abstract — official free API, no key. Server-side search does light stemming (verified live: "Claude" also matched an unrelated astronomy survey named "CLAUDS"), so results are re-checked here for a literal match in title or abstract.',
   },
   upload: {
     label: 'Imported file', color: '#94a3b8',

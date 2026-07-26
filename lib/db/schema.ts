@@ -299,3 +299,17 @@ export const stockPrices = pgTable('stock_prices', {
   changePct: real('change_pct'), // variazione vs la chiusura del giorno di borsa precedente
   fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Interesse di ricerca (Google Trends, API non ufficiale): una riga per entità
+// di benchmark per giorno. Legata a benchmark_entities (non a un ticker come
+// stock_prices) perché qui il confronto è nativo — Trends restituisce fino a
+// 5 termini nella STESSA richiesta, già scalati l'uno rispetto all'altro
+// (100 = picco fra tutti), che è esattamente cosa serve per uno "share of
+// search" fra un brand e i suoi competitor.
+export const searchInterest = pgTable('search_interest', {
+  id: serial('id').primaryKey(),
+  entityId: integer('entity_id').notNull(),
+  date: date('date').notNull(),
+  value: integer('value').notNull(), // 0-100, relativo agli altri termini della stessa richiesta
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+});

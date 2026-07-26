@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { benchmarkData, getCurrentProject } from '@/lib/data';
+import { searchInterestData } from '@/lib/search-interest';
 import { PageHeader, EmptyState, fmtNum } from '@/components/ui';
 import { getT } from '@/lib/i18n';
-import { ShareOfVoicePie, BenchmarkTrend, ENTITY_COLORS } from '@/components/charts';
+import { ShareOfVoicePie, BenchmarkTrend, SearchInterestTrend, ENTITY_COLORS } from '@/components/charts';
 
 export const metadata = { title: 'Benchmark' };
 
@@ -10,7 +11,10 @@ export default async function BenchmarkPage() {
   const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
-  const results = await benchmarkData(project.id);
+  const [results, searchInterest] = await Promise.all([
+    benchmarkData(project.id), searchInterestData(project.id),
+  ]);
+  const hasSearchInterest = searchInterest.some((s) => s.points.length > 0);
 
   if (results.length === 0) {
     return (
@@ -43,6 +47,16 @@ export default async function BenchmarkPage() {
           <BenchmarkTrend series={results.map((r) => ({ name: r.entity.name, points: r.byDay }))} />
         </section>
       </div>
+
+      {hasSearchInterest && (
+        <section className="panel mt-4 px-5 py-4">
+          <h2 className="mb-1 text-sm font-semibold text-slate-300">{t('page.benchmark.searchInterest', 'Share of search')}</h2>
+          <p className="mb-3 text-[11px] text-slate-600">
+            How often people search for each entity on Google, scaled against each other (100 = the peak across all of them). Via Google Trends&rsquo; internal API — unofficial, best-effort, checked at most once a day.
+          </p>
+          <SearchInterestTrend series={searchInterest.filter((s) => s.points.length > 0)} />
+        </section>
+      )}
 
       <section className="panel mt-4 overflow-x-auto px-5 py-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-300">Detail</h2>

@@ -34,6 +34,7 @@ const SOURCE_INFO: Record<string, string> = {
   github: 'Issues and pull requests matching your terms in their title, across all of public GitHub — with the real issue text, not just the title. Automated bot issues (changelog trackers, scheduled digests) are filtered out. Works immediately, no key — GitHub’s unauthenticated search limit is tight (10 requests/minute), so set GITHUB_TOKEN (a free personal access token) as an environment variable if you need more volume.',
   discord: 'Messages from the channels of a Discord server you administer, via your own bot (watchlist model, like Facebook) — Discord does not offer search across other servers. Requires a free bot invited to your server, with the Message Content Intent enabled for it in the Developer Portal.',
   'sec-edgar': 'Filings by any US-listed company matching your terms: 8-K material events, 10-K/10-Q reports, DEF 14A proxy statements. Free, no key — official US government data (SEC.gov), covers no other market. The search only returns filing metadata, not the document text, so entries show the company, filing type and exhibit description with a link to read the real thing.',
+  arxiv: 'Academic papers (computer science, physics, math, quantitative biology and more) matching your terms, with the full abstract included — official free API, no key. arXiv’s own search does light stemming, so every result is re-checked here for a literal match before being kept.',
 };
 
 export default async function FontiPage() {

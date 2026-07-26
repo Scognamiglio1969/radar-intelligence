@@ -5,6 +5,7 @@ import { ingestProject } from '@/lib/ingest';
 import { enrichArticles } from '@/lib/article-enrich';
 import { ingestReviews } from '@/lib/reviews';
 import { ingestSport } from '@/lib/sport';
+import { ingestSearchInterest } from '@/lib/search-interest';
 import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import {
   analyzePendingMentions, clusterNewsStories, generateDailyBrief, scoreTopContent,
@@ -91,6 +92,14 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
         return { tried: 0, matches: 0, prices: 0 };
       });
       if (sport.tried) console.log(`[pipeline] sport: ${sport.matches} partite, ${sport.prices} quotazioni`);
+
+      // Interesse di ricerca: arricchisce il Benchmark, non è mai critico —
+      // un endpoint non documentato che fallisce non deve fermare il resto.
+      const interest = await ingestSearchInterest(project.id).catch((e) => {
+        console.error(`[pipeline] interesse di ricerca fallito per "${project.name}":`, e);
+        return { tried: 0, points: 0 };
+      });
+      if (interest.tried) console.log(`[pipeline] interesse di ricerca: ${interest.points} punti`);
 
       // Se il proprietario è "dormiente" (membro senza AI), si raccolgono i dati
       // ma si saltano tutte le analisi Claude (nessun costo API).

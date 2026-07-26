@@ -273,6 +273,14 @@ const DDL = [
     fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (ticker, date)
   )`,
+  `CREATE TABLE IF NOT EXISTS search_interest (
+    id SERIAL PRIMARY KEY,
+    entity_id INTEGER NOT NULL REFERENCES benchmark_entities(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    value INTEGER NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (entity_id, date)
+  )`,
 ];
 
 async function ensureSchema(db: DB) {
