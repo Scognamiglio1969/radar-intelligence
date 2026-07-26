@@ -1,4 +1,4 @@
-import { Trash2, Trophy, TrendingUp, Calendar } from 'lucide-react';
+import { Trash2, Trophy, TrendingUp, Calendar, Activity, MessageSquare } from 'lucide-react';
 import { getCurrentProject } from '@/lib/data';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { sportStats } from '@/lib/sport';
@@ -7,7 +7,9 @@ import { PageHeader, fmtDate, fmtNum } from '@/components/ui';
 import { getT } from '@/lib/i18n';
 import { ConnectorKeys } from '@/components/connector-keys';
 import { GenerateRefresh } from '@/components/generate-refresh';
-import { ResultBadge, ShiftBar } from '@/components/sport-charts';
+import {
+  ResultBadge, ShiftBar, SeasonTimeline, AnatomyCurve, MarginScatter, CorrelationTile,
+} from '@/components/sport-charts';
 import { TeamSearch } from '@/components/team-search';
 import { addSportSourceAction, removeSportSourceAction } from './actions';
 
@@ -128,6 +130,88 @@ export default async function SportPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          {/* ── La stagione a colpo d'occhio ───────────────────────────── */}
+          <section className="panel px-5 py-5">
+            <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-300">
+              <Activity className="size-4 text-sky-400" />
+              {t('page.sport.timeline', 'The season on one axis')}
+              {stats.primaryTeam && <span className="text-xs font-normal text-slate-600">· {stats.primaryTeam}</span>}
+            </h2>
+            <p className="mb-3 text-[11px] text-slate-600">
+              League points, fan mood and — for listed clubs — the share price, on the same timeline. Three different units, so the question isn’t the height of each line but whether they move together.
+            </p>
+            <SeasonTimeline data={stats.timeline} hasStock={stats.timeline.some((p) => p.stockIndex !== null)} />
+          </section>
+
+          {stats.aggregate.length > 0 && (
+            <section className="panel px-5 py-5">
+              <h2 className="mb-1 text-sm font-semibold text-slate-300">{t('page.sport.aggregate', 'Does winning move the needle?')}</h2>
+              <p className="mb-3 text-[11px] text-slate-600">
+                Average shift in fan sentiment (match day + the day after, vs the week before), share price (next trading day vs the one before) and how much people talk at all, grouped by result.
+              </p>
+              <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+                <div className="flex flex-col gap-2.5">
+                  {stats.aggregate.map((a) => (
+                    <div key={a.result} className="flex flex-wrap items-center gap-4 rounded-lg bg-white/[0.03] px-4 py-3">
+                      <ResultBadge result={a.result} />
+                      <span className="w-20 shrink-0 text-xs text-slate-500">{a.n} match{a.n === 1 ? '' : 'es'}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="w-20 shrink-0 text-[11px] text-slate-500">sentiment</span>
+                        <ShiftBar value={a.avgSentimentShift} max={1} />
+                      </div>
+                      {a.avgStockShiftPct !== null && (
+                        <div className="flex items-center gap-2">
+                          <span className="w-14 shrink-0 text-[11px] text-slate-500">stock</span>
+                          <ShiftBar value={a.avgStockShiftPct} max={5} suffix="%" />
+                        </div>
+                      )}
+                      {a.avgVolume > 0 && (
+                        <span className="ml-auto text-[11px] text-slate-500">
+                          <MessageSquare className="mr-1 inline size-3" />{fmtNum(a.avgVolume)} mentions
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-col gap-2 lg:w-48">
+                  <CorrelationTile correlation={stats.correlation} />
+                  {stats.splits.map((s) => (
+                    <div key={s.key} className="rounded-lg bg-white/[0.03] px-4 py-2.5">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-600">{s.key}</p>
+                      <p className="text-sm text-slate-300">
+                        {s.wins}/{s.n} won
+                        {s.avgSentimentShift !== null && (
+                          <span className={`ml-2 text-xs tabular-nums ${s.avgSentimentShift >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                            {s.avgSentimentShift >= 0 ? '+' : ''}{s.avgSentimentShift}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ── Quanto dura l'effetto ──────────────────────────────────── */}
+          <div className="grid gap-4 xl:grid-cols-2">
+            <section className="panel px-5 py-5">
+              <h2 className="mb-1 text-sm font-semibold text-slate-300">{t('page.sport.anatomy', 'How long does it last?')}</h2>
+              <p className="mb-3 text-[11px] text-slate-600">
+                Fan mood day by day around the match, measured against the week before it (the zero line). Euphoria and disappointment rarely fade at the same speed.
+              </p>
+              <AnatomyCurve data={stats.anatomy} />
+            </section>
+
+            <section className="panel px-5 py-5">
+              <h2 className="mb-1 text-sm font-semibold text-slate-300">{t('page.sport.scatter', 'Does the margin matter?')}</h2>
+              <p className="mb-3 text-[11px] text-slate-600">
+                One dot per match: goal difference across, mood shift up. If a thrashing moves people more than a narrow win, the dots climb left to right.
+              </p>
+              <MarginScatter data={stats.scatter} />
+            </section>
+          </div>
+
           {stats.upcoming.length > 0 && (
             <section className="panel px-5 py-5">
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
@@ -144,37 +228,13 @@ export default async function SportPage() {
             </section>
           )}
 
-          {stats.aggregate.length > 0 && (
-            <section className="panel px-5 py-5">
-              <h2 className="mb-1 text-sm font-semibold text-slate-300">{t('page.sport.aggregate', 'Does winning move the needle?')}</h2>
-              <p className="mb-3 text-[11px] text-slate-600">
-                Average shift in fan sentiment (48h after the match vs the week before) and share price (next trading day vs the one before), grouped by result.
-              </p>
-              <div className="flex flex-col gap-2.5">
-                {stats.aggregate.map((a) => (
-                  <div key={a.result} className="flex flex-wrap items-center gap-4 rounded-lg bg-white/[0.03] px-4 py-3">
-                    <ResultBadge result={a.result} />
-                    <span className="w-20 shrink-0 text-xs text-slate-500">{a.n} match{a.n === 1 ? '' : 'es'}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="w-20 shrink-0 text-[11px] text-slate-500">sentiment</span>
-                      <ShiftBar value={a.avgSentimentShift} max={1} />
-                    </div>
-                    {a.avgStockShiftPct !== null && (
-                      <div className="flex items-center gap-2">
-                        <span className="w-14 shrink-0 text-[11px] text-slate-500">stock</span>
-                        <ShiftBar value={a.avgStockShiftPct} max={5} suffix="%" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
           <section className="panel px-5 py-5">
-            <h2 className="mb-3 text-sm font-semibold text-slate-300">{t('page.sport.recent', 'Recent matches')}</h2>
+            <h2 className="mb-1 text-sm font-semibold text-slate-300">{t('page.sport.recent', 'Recent matches')}</h2>
+            <p className="mb-3 text-[11px] text-slate-600">
+              Sentiment comes from this project’s own analyzed mentions — so the crossover only means something if the project is actually listening to this club.
+            </p>
             <div className="flex flex-col gap-2">
-              {stats.recent.map((m) => (
+              {stats.recent.slice(0, 15).map((m) => (
                 <div key={m.id} className="flex flex-wrap items-center gap-4 rounded-lg bg-white/[0.03] px-4 py-3 text-sm">
                   <ResultBadge result={m.result} />
                   <div className="min-w-0">

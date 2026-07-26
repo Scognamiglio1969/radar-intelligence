@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
 
   await hydrateConnectorCredentials();
   try {
-    const { teams, debug } = await searchTeams(competition, q);
-    return NextResponse.json({ teams, debug });
+    const { teams, keyMissing } = await searchTeams(competition, q);
+    return NextResponse.json({ teams, keyMissing });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

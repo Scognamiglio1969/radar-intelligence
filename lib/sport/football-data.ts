@@ -47,33 +47,25 @@ function ymd(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'UTC' });
 }
 
-export type TeamSearchDebug = { keyPresent: boolean; totalTeams: number; matched: number; sample: string[] };
-
 /**
  * Squadre di una competizione il cui nome contiene il termine cercato.
- * Restituisce anche `debug`: TEMPORANEO, per capire da uno screenshot (senza
- * accesso ai log del server) perché in produzione la ricerca risultava vuota.
+ * `keyMissing` distingue "nessun risultato" da "chiave non configurata": senza
+ * questa distinzione una chiave mancante sembrava una squadra inesistente.
  */
-export async function searchTeams(competition: string, query: string): Promise<{ teams: TeamHit[]; debug: TeamSearchDebug }> {
+export async function searchTeams(competition: string, query: string): Promise<{ teams: TeamHit[]; keyMissing: boolean }> {
   const key = cfg('FOOTBALL_DATA_API_KEY');
-  const noKeyDebug: TeamSearchDebug = { keyPresent: false, totalTeams: 0, matched: 0, sample: [] };
-  if (!key || query.trim().length < 2) return { teams: [], debug: noKeyDebug };
+  if (!key) return { teams: [], keyMissing: true };
+  if (query.trim().length < 2) return { teams: [], keyMissing: false };
   const data = await fetchJson<{ teams?: FdTeam[] }>(
     `https://api.football-data.org/v4/competitions/${encodeURIComponent(competition)}/teams`,
     { headers: { 'X-Auth-Token': key } },
   );
   const q = query.trim().toLowerCase();
-  const all = data.teams ?? [];
-  const filtered = all
-    .filter((t) => t.name.toLowerCase().includes(q) || (t.shortName ?? '').toLowerCase().includes(q) || (t.tla ?? '').toLowerCase() === q);
-  const teams = filtered
+  const teams = (data.teams ?? [])
+    .filter((t) => t.name.toLowerCase().includes(q) || (t.shortName ?? '').toLowerCase().includes(q) || (t.tla ?? '').toLowerCase() === q)
     .slice(0, 8)
     .map((t) => ({ id: String(t.id), name: t.name, shortName: t.shortName ?? t.name, crest: t.crest ?? null }));
-  const debug: TeamSearchDebug = {
-    keyPresent: true, totalTeams: all.length, matched: filtered.length,
-    sample: all.slice(0, 5).map((t) => t.name),
-  };
-  return { teams, debug };
+  return { teams, keyMissing: false };
 }
 
 /** Partite recenti e prossime di una squadra (competizioni miste, come le gioca davvero). */

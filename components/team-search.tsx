@@ -27,7 +27,7 @@ export function TeamSearch({ competitions }: { competitions: { code: string; lab
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
-  const [debug, setDebug] = useState<{ keyPresent: boolean; totalTeams: number; matched: number; sample: string[] } | null>(null);
+  const [keyMissing, setKeyMissing] = useState(false);
   const requestSeq = useRef(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -42,7 +42,7 @@ export function TeamSearch({ competitions }: { competitions: { code: string; lab
       if (seq !== requestSeq.current) return; // risposta di una ricerca superata, ignorala
       if (!res.ok) throw new Error(data.error || 'search failed');
       setResults(data.teams ?? []);
-      setDebug(data.debug ?? null);
+      setKeyMissing(Boolean(data.keyMissing));
       setSearched(true);
     } catch (e) {
       if (seq !== requestSeq.current) return;
@@ -98,15 +98,9 @@ export function TeamSearch({ competitions }: { competitions: { code: string; lab
         {loading && <p className="text-[11px] text-slate-600">Searching…</p>}
         {error && <p className="text-[11px] text-red-400">{error}</p>}
         {!loading && !error && searched && !picked && results.length === 0 && (
-          <p className="text-[11px] text-slate-600">
-            No team found in this competition — check spelling or try another league.
-            {debug && (
-              <span className="block text-slate-700">
-                debug: key {debug.keyPresent ? 'ok' : 'MISSING'}, {debug.totalTeams} teams in competition, {debug.matched} matched
-                {debug.sample.length > 0 && ` — e.g. ${debug.sample.join(', ')}`}
-              </span>
-            )}
-          </p>
+          keyMissing
+            ? <p className="text-[11px] text-amber-400">No football-data.org API key saved yet — add it under “Enter API keys” below, then search again.</p>
+            : <p className="text-[11px] text-slate-600">No team found in this competition — check spelling or try another league.</p>
         )}
         {!picked && results.length > 0 && (
           <div className="flex flex-col overflow-hidden rounded-lg border border-[var(--border)]">

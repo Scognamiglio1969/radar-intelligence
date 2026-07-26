@@ -18,7 +18,21 @@ import { tFor, type Locale } from '@/lib/i18n-dict';
 // monitorare → analizzare → interpretare → produrre → configurare.
 // I 16 insight non stanno più in elenco: vivono nell'hub /insights, raggruppati
 // per tema. Così il menu resta leggibile e ogni grafico è spiegato dove sta.
-const NAV: ({ href: string; label: string; key: string; icon: typeof Radar } | { section: string; key: string })[] = [
+//
+// In fondo, staccate da una riga, le sezioni che NON sono un'intenzione ma un
+// mondo di dati a sé: hanno fonti proprie, tabelle proprie e un'analisi che non
+// passa dalle mention. Tenerle nell'elenco principale le faceva sembrare un
+// altro modo di guardare le stesse cose, che non sono.
+const ACCENT: Record<string, string> = {
+  reviews: 'text-emerald-400/80',
+  sport: 'text-amber-400/80',
+};
+
+type NavItem =
+  | { href: string; label: string; key: string; icon: typeof Radar; accent?: keyof typeof ACCENT }
+  | { section: string; key: string };
+
+const NAV: NavItem[] = [
   { section: 'Monitor', key: 'nav.monitor' },
   { href: '/', label: 'Dashboard', key: 'nav.dashboard', icon: LayoutDashboard },
   { href: '/listening', label: 'Listening', key: 'nav.listening', icon: Ear },
@@ -44,10 +58,10 @@ const NAV: ({ href: string; label: string; key: string; icon: typeof Radar } | {
   { href: '/tv', label: 'War Room', key: 'nav.tv', icon: MonitorPlay },
   { section: 'Setup', key: 'nav.setup' },
   { href: '/settings', label: 'Projects', key: 'nav.settings', icon: Settings },
-  { section: 'Reviews', key: 'nav.reviewsSection' },
-  { href: '/reviews', label: 'Reviews', key: 'nav.reviews', icon: Award },
-  { section: 'Sport', key: 'nav.sportSection' },
-  { href: '/sport', label: 'Sport', key: 'nav.sport', icon: Trophy },
+  { section: '', key: '' },
+  { section: 'Beyond mentions', key: 'nav.beyondSection' },
+  { href: '/reviews', label: 'Reviews', key: 'nav.reviews', icon: Award, accent: 'reviews' },
+  { href: '/sport', label: 'Sport', key: 'nav.sport', icon: Trophy, accent: 'sport' },
 ];
 
 type Props = {
@@ -182,6 +196,7 @@ function NavLinks({ pathname, alertCount = 0, t, onNavigate }: {
             : <hr key={i} className="my-2 border-[var(--border)]" />;
         }
         const { href, label, key, icon: Icon } = item;
+        const accent = 'accent' in item ? item.accent : undefined;
         // L'hub resta evidenziato anche quando sei dentro un singolo insight.
         const active = href === '/insights'
           ? pathname.startsWith('/insights')
@@ -197,7 +212,7 @@ function NavLinks({ pathname, alertCount = 0, t, onNavigate }: {
                 : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
             }`}
           >
-            <Icon className="size-4" />
+            <Icon className={`size-4 ${!active && accent ? ACCENT[accent] : ''}`} />
             {t(key, label)}
             {href === '/alerts' && alertCount > 0 && (
               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[11px] font-bold text-white">
