@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/db';
 import { reviewSources } from '@/lib/db/schema';
 import { getCurrentProject } from '@/lib/data';
+import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import { ingestReviews } from '@/lib/reviews';
 
 const TYPES = new Set(['appstore', 'googleplaces']);
@@ -30,7 +31,13 @@ export async function addReviewSourceAction(formData: FormData) {
     country: type === 'appstore' ? (country || 'us') : null,
   }).returning({ id: reviewSources.id });
 
-  if (src) await ingestReviews(project.id).catch((e) => console.error('[reviews] primo fetch fallito:', e));
+  if (src) {
+    // Server action separata dalla pagina che ha idratato le credenziali:
+    // senza rifarlo qui, una fonte Google Places con chiave salvata
+    // fallirebbe silenziosamente al primo fetch.
+    await hydrateConnectorCredentials();
+    await ingestReviews(project.id).catch((e) => console.error('[reviews] primo fetch fallito:', e));
+  }
   revalidatePath('/reviews');
 }
 

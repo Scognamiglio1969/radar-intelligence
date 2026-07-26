@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getDb } from '@/lib/db';
 import { sportSources } from '@/lib/db/schema';
 import { getCurrentProject } from '@/lib/data';
+import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import { ingestSport } from '@/lib/sport';
 
 const COMPETITIONS = new Set(['SA', 'PL', 'CL', 'BL1', 'PD', 'FL1']);
@@ -27,7 +28,13 @@ export async function addSportSourceAction(formData: FormData) {
     projectId: project.id, competition, teamId, teamName, ticker: ticker || null,
   }).returning({ id: sportSources.id });
 
-  if (src) await ingestSport(project.id).catch((e) => console.error('[sport] primo fetch fallito:', e));
+  if (src) {
+    // Stessa causa del fetch silenzioso in /api/sport/refresh: la chiave
+    // football-data salvata dall'utente non è visibile a cfg() finché non
+    // si idratano di nuovo le credenziali in questa invocazione.
+    await hydrateConnectorCredentials();
+    await ingestSport(project.id).catch((e) => console.error('[sport] primo fetch fallito:', e));
+  }
   revalidatePath('/sport');
 }
 

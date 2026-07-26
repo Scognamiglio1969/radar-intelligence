@@ -5,6 +5,7 @@ import { ingestProject } from '@/lib/ingest';
 import { enrichArticles } from '@/lib/article-enrich';
 import { ingestReviews } from '@/lib/reviews';
 import { ingestSport } from '@/lib/sport';
+import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import {
   analyzePendingMentions, clusterNewsStories, generateDailyBrief, scoreTopContent,
 } from '@/lib/claude';
@@ -45,6 +46,10 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
   await setMeta(LOCK_KEY, new Date().toISOString());
 
   try {
+    // Va fatto qui, non solo dentro ingestProject: i progetti "upload" saltano
+    // ingestProject, e senza questo le credenziali (football-data, Google
+    // Places, ecc.) resterebbero invisibili a cfg() per l'intera esecuzione.
+    await hydrateConnectorCredentials();
     const allProjects = await db.select().from(projects);
     const summary: Record<string, unknown>[] = [];
 
