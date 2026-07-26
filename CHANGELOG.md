@@ -1,0 +1,80 @@
+# Changelog
+
+Major, user-visible evolutions of Radar. Not every commit — the small fixes and internal
+refactors live in `git log`. This is the story of what the product became.
+
+## Beyond mentions
+
+The newest pillar: three sections that don't fit the keyword-search-in-a-stream-of-posts
+model at all, each with its own sources and its own kind of analysis.
+
+- **Sport** — for publicly listed clubs, match results (football-data.org) crossed with fan
+  sentiment (your own analyzed mentions) and share price (Alpha Vantage) on one timeline.
+  Ships with an in-app team search (no more guessing an external API's exact team-name
+  spelling), a "how long does the mood boost last" anatomy chart measured day-by-day around
+  each match, and a goal-margin-vs-sentiment scatter with a Pearson correlation that states
+  its own sample size.
+- **Wikipedia edit monitoring** — who edits a followed brand's Wikipedia page, and does it
+  look like a fight? Official MediaWiki API: reverts, anonymous/temporary accounts and a
+  13-week activity chart (reverts stacked in red) surface an edit war before it shows up
+  anywhere else, with per-page revert-rate and anonymous-rate stats.
+- **Reviews** — App Store (free, no key), Google Places and now **Yelp** (all needing a
+  business/place picked via search, never a hand-typed ID) in one ratings view, plus your
+  own imported file. A star rating already *is* the sentiment; no AI needed.
+- **Share of search** — Google Trends interest for every Benchmark entity, fetched together
+  in one request so the values come back already scaled against each other, next to Share
+  of Voice.
+
+New connectors in the same wave: **SEC EDGAR** (US corporate filings), **Stack Exchange**,
+**GitHub**, **Discord**, and **arXiv** (academic papers, re-checked for literal matches
+after live testing found the server's own search does loose stemming).
+
+Two real bugs found and fixed during this work, both worth naming because they explain a
+design decision each: standalone API routes (`/api/*/refresh`, "add source" actions) were
+each their own serverless invocation and never re-loaded a saved connector key from the
+database, so a correctly-saved key would silently produce zero results — every such route
+now re-hydrates credentials itself. And `ConnectorKeys` was once rendered *inside* another
+`<form>` on the Sport page, which is invalid HTML and made "Save keys" behave
+unpredictably — credential forms are now always siblings, never nested.
+
+## Point of View & research crossover
+
+An evidence-backed market thesis generator: 90 days of data turned into 3–5 slide-ready
+blocks (named idea, narrative, supporting figures, counter-signals), with every number
+computed in SQL — never invented by the model — and a validation pass that drops any
+citation that doesn't point to a real post. Crossed with the open **OpenAlex** academic
+index to show where research is running ahead of the market, or where the market is loud
+with no research behind it.
+
+## Owned vs Earned, Message pull-through, Earned Media Value
+
+How your own posts perform against what others say about you; whether the specific
+messages you want to land are actually being picked up, by whom, and in what tone; and a
+conservative estimate of what your coverage would have cost to buy, with every assumption
+(base impressions, CPM, sentiment factor) visible on screen — no arbitrary AVE multiplier,
+negative coverage valued at zero and reported separately as exposure, not value.
+
+## Multi-provider AI, bilingual interface
+
+Any AI feature can run on **Claude, OpenAI or Grok** — picked, keyed and model-tuned from
+the UI, no redeploy, one shared spend cap across providers. The interface (English/Italian)
+and the language the AI writes in are independent axes: you can read the app in Italian and
+still generate an English brief, because the output's audience decides its language, not
+the operator's.
+
+## 16 advanced insights
+
+A visualization hub grouping every advanced chart by the question it answers: a live 3D
+"Conversation Galaxy" (WebGL solar system, NASA-textured planets sized by volume, moons by
+sentiment split), a Share-of-Voice streamgraph, a Source→Topic→Sentiment Sankey with
+multi-select cross-filtering, an influencer network graph, an author-tiering pyramid, a
+crisis anatomy with a forward-looking projection, a real-world geographic choropleth, an
+emotion radar, a semantic constellation, a momentum quadrant, and more.
+
+## Foundations
+
+Next.js 16 on Vercel, Postgres (Neon in production, embedded PGlite for a zero-setup local
+run), Drizzle ORM with schema auto-created on boot, a pluggable connector architecture
+(`lib/connectors/`) where adding a source is one small file, per-source deep-dives, branded
+exports (PDF/PowerPoint/Word/Excel), and a public read-only demo running the same code
+against a synthetic dataset.
