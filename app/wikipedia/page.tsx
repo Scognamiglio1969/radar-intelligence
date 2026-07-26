@@ -1,10 +1,11 @@
-import { Trash2, FileClock, AlertTriangle, UserX, Undo2 } from 'lucide-react';
+import { Trash2, FileClock, AlertTriangle, UserX, Undo2, Activity, Users } from 'lucide-react';
 import { getCurrentProject } from '@/lib/data';
 import { wikiStats, isRevert } from '@/lib/wikipedia';
 import { PageHeader, fmtDate } from '@/components/ui';
 import { getT } from '@/lib/i18n';
 import { GenerateRefresh } from '@/components/generate-refresh';
 import { WikiPageSearch } from '@/components/wiki-page-search';
+import { WeeklyEditsChart } from '@/components/wiki-charts';
 import { addWikiPageAction, removeWikiPageAction } from './actions';
 
 export const metadata = { title: 'Wikipedia' };
@@ -95,12 +96,13 @@ export default async function WikipediaPage() {
           {elevated.length > 0 && (
             <section className="panel border-amber-500/30 px-5 py-4">
               <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-300">
-                <AlertTriangle className="size-4" /> {t('page.wikipedia.elevated', 'Elevated edit activity')}
+                <AlertTriangle className="size-4" /> {t('page.wikipedia.elevated', 'Elevated edit activity — this is happening now')}
               </h2>
               <div className="flex flex-col gap-1 text-sm text-slate-300">
                 {elevated.map((a) => (
                   <p key={a.page}>
-                    <strong>{a.page}</strong>: {a.last7} edits in the last 7 days, vs a baseline of {a.baselineWeekly}/week.
+                    <strong>{a.page}</strong> had {a.last7} edits in the last 7 days — its usual pace is about {a.baselineWeekly}/week.
+                    More than twice the normal rate usually means something changed: news broke, or people are fighting over the page.
                   </p>
                 ))}
               </div>
@@ -108,9 +110,49 @@ export default async function WikipediaPage() {
           )}
 
           <section className="panel px-5 py-5">
-            <h2 className="mb-1 text-sm font-semibold text-slate-300">{t('page.wikipedia.recent', 'Recent edits')}</h2>
+            <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-300">
+              <Activity className="size-4 text-sky-400" /> {t('page.wikipedia.activity', 'Editing activity')}
+              {stats.primaryPage && <span className="text-xs font-normal text-slate-600">· {stats.primaryPage}</span>}
+            </h2>
             <p className="mb-3 text-[11px] text-slate-600">
-              Reverted/undone edits and anonymous or temporary accounts are flagged — the two patterns that show up in a real edit war.
+              Edits per week over the last 13 weeks. The red portion of each bar is edits that got reverted — a page under a real edit war looks like a tall bar that&rsquo;s mostly red, not just a busy one.
+            </p>
+            <WeeklyEditsChart data={stats.weekly} />
+          </section>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            {stats.activity.map((a) => (
+              <section key={a.page} className="panel px-4 py-4">
+                <p className="mb-2 truncate text-xs font-semibold text-slate-300">{a.page}</p>
+                <div className="flex flex-col gap-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-slate-500"><Undo2 className="size-3.5" /> reverted</span>
+                    <span className={a.revertRate !== null && a.revertRate > 20 ? 'font-semibold text-red-400' : 'text-slate-300'}>
+                      {a.revertRate === null ? '—' : `${a.revertRate}%`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-slate-500"><UserX className="size-3.5" /> anonymous</span>
+                    <span className={a.anonRate !== null && a.anonRate > 30 ? 'font-semibold text-amber-400' : 'text-slate-300'}>
+                      {a.anonRate === null ? '—' : `${a.anonRate}%`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-slate-500"><Users className="size-3.5" /> editors</span>
+                    <span className="text-slate-300">{a.distinctEditors}</span>
+                  </div>
+                </div>
+                <p className="mt-2 text-[10px] text-slate-600">last 90 days · {a.edits90} edit{a.edits90 === 1 ? '' : 's'}</p>
+              </section>
+            ))}
+          </div>
+
+          <section className="panel px-5 py-5">
+            <h2 className="mb-1 text-sm font-semibold text-slate-300">{t('page.wikipedia.recent', 'Recent edits')}</h2>
+            <p className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-600">
+              <span className="flex items-center gap-1"><Undo2 className="size-3 text-red-400" /> reverted or undone</span>
+              <span className="flex items-center gap-1"><UserX className="size-3 text-amber-400" /> anonymous or temporary account</span>
+              <span>· the size number is how many characters were added (green) or removed (red)</span>
             </p>
             <div className="flex flex-col gap-1.5">
               {stats.recent.map((e) => {
@@ -128,7 +170,7 @@ export default async function WikipediaPage() {
                     </div>
                     {e.sizeDiff !== null && (
                       <span className={`shrink-0 text-xs tabular-nums ${e.sizeDiff > 0 ? 'text-emerald-400' : e.sizeDiff < 0 ? 'text-red-400' : 'text-slate-500'}`}>
-                        {e.sizeDiff > 0 ? '+' : ''}{e.sizeDiff}B
+                        {e.sizeDiff > 0 ? '+' : ''}{e.sizeDiff}
                       </span>
                     )}
                     <span className="shrink-0 text-[11px] text-slate-500">{fmtDate(e.timestamp)}</span>
