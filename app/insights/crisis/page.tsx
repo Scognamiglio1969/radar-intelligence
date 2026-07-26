@@ -1,24 +1,37 @@
 import { getCurrentProject } from '@/lib/data';
 import { crisisAnatomy } from '@/lib/insights';
+import { conversationForecast } from '@/lib/forecast';
 import { PageHeader, EmptyState, SourceBadge, fmtDate } from '@/components/ui';
 import { getT } from '@/lib/i18n';
-import { RiskGauge } from '@/components/insight-charts';
-import { ExternalLink } from 'lucide-react';
+import { RiskGauge, ConversationForecastChart } from '@/components/insight-charts';
+import { ExternalLink, TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
 
 export const metadata = { title: 'Crisis radar' };
+
+const CONF_STYLE: Record<string, string> = {
+  high: 'bg-emerald-500/15 text-emerald-300',
+  medium: 'bg-amber-500/15 text-amber-300',
+  low: 'bg-slate-500/15 text-slate-400',
+};
+const CONF_HINT: Record<string, string> = {
+  high: 'enough history and a clear enough pace to trust the line',
+  medium: 'the pace is there, but noisy — read the band, not the line',
+  low: 'too little data for the trend to mean much — shown for context only',
+};
 
 export default async function CrisisInsightPage() {
   const t = await getT();
   const project = await getCurrentProject();
   if (!project) return <EmptyState message={t('ui.noProject', 'No project configured.')} />;
   const { risk, level, drivers, peak } = await crisisAnatomy(project.id, 14);
+  const forecast = await conversationForecast(project.id, 30, 7);
 
   return (
     <>
       <PageHeader
         title={t('ins.crisis.title', 'Crisis radar & peak anatomy')}
-        info="A risk gauge plus the anatomy of the biggest volume/sentiment spike in the window — what drove it and the content that weighed most. Data: your analyzed mentions. Period: last 14 days. Source: your collected mentions across all active sources."
-        subtitle="One risk number, plus the autopsy of the biggest spike (last 14 days): what drove the risk up, and — on the peak day — which topics and content weighed most. Your early-warning, single-glance crisis view."
+        info="A risk gauge, the anatomy of the biggest volume/sentiment spike in the window, and a statistical projection of where volume and negativity are heading if the recent pace continues. Data: your analyzed mentions. Period: risk and peak over the last 14 days, projection over the last 30. Source: your collected mentions across all active sources. No AI involved — everything here is arithmetic on your own data."
+        subtitle="One risk number, the autopsy of the biggest spike, and where the trend leads if nothing changes — with an early warning if negativity is climbing fast enough to matter."
       />
       {!peak ? (
         <EmptyState message="Not enough data in the last 14 days to assess risk." />
@@ -80,6 +93,49 @@ export default async function CrisisInsightPage() {
             )}
           </section>
         </div>
+      )}
+
+      {forecast.history.some((h) => h.volume > 0) && (
+        <section className="panel mt-4 px-5 py-5">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold text-slate-300">
+              {t('ins.crisis.forecast.title', 'Where this is heading')}
+            </h2>
+            <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              forecast.volumeTrend === 'rising' ? 'bg-sky-500/15 text-sky-300'
+                : forecast.volumeTrend === 'falling' ? 'bg-orange-500/15 text-orange-300'
+                  : 'bg-slate-500/15 text-slate-400'
+            }`}>
+              {forecast.volumeTrend === 'rising' ? <TrendingUp className="size-3" />
+                : forecast.volumeTrend === 'falling' ? <TrendingDown className="size-3" />
+                  : <Minus className="size-3" />}
+              {forecast.volumeTrend === 'flat'
+                ? 'steady pace'
+                : `${forecast.volumePctPerWeek > 0 ? '+' : ''}${forecast.volumePctPerWeek}%/week`}
+            </span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CONF_STYLE[forecast.confidence]}`}
+              title={CONF_HINT[forecast.confidence]}>
+              {forecast.confidence} confidence
+            </span>
+          </div>
+          <p className="mb-3 text-xs leading-relaxed text-slate-500">
+            {t('ins.crisis.forecast.subtitle',
+              'The recent daily pace, extended forward — not a prediction of events, just the trend if nothing changes. The shaded band is how much the last 30 days actually varied, so a projection outside it would be a real surprise.')}
+          </p>
+
+          {forecast.negShareWarning && (
+            <div className="tv-shine mb-3 flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+              <AlertTriangle className="size-4 shrink-0 text-amber-400" />
+              <p className="text-sm text-amber-200">
+                {t('ins.crisis.forecast.warning', 'Negative share has been climbing steadily.')}{' '}
+                At this pace it would cross <span className="font-semibold">{forecast.negShareWarning.thresholdPct}%</span> around{' '}
+                <span className="font-semibold">{fmtDate(forecast.negShareWarning.etaDay)}</span> — worth watching before it gets there.
+              </p>
+            </div>
+          )}
+
+          <ConversationForecastChart history={forecast.history} projected={forecast.projected} />
+        </section>
       )}
     </>
   );

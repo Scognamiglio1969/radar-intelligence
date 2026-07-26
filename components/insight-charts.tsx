@@ -940,3 +940,58 @@ function TreemapCell(props: {
     </g>
   );
 }
+
+// ── Proiezione della conversazione (storico + fascia di proiezione) ───────
+type ForecastDay = { day: string; volume: number; negShare: number | null };
+type ProjectedDay = { day: string; volume: number; low: number; high: number };
+
+export function ConversationForecastChart({ history, projected }: {
+  history: ForecastDay[]; projected: ProjectedDay[];
+}) {
+  // Un'unica serie temporale: i giorni passati portano "actual", i futuri
+  // "projected" + la fascia. Il punto di raccordo porta ENTRAMBI i valori,
+  // altrimenti la linea tratteggiata partirebbe staccata da quella piena.
+  const rows = [
+    ...history.map((h) => ({ day: h.day, actual: h.volume as number | null, projected: null as number | null, low: null as number | null, high: null as number | null })),
+    ...projected.map((p) => ({ day: p.day, actual: null as number | null, projected: p.volume, low: p.low, high: Math.max(0, p.high - p.low) })),
+  ];
+  if (history.length) {
+    const bridge = rows[history.length - 1];
+    bridge.projected = bridge.actual;
+  }
+  const splitDay = history[history.length - 1]?.day;
+
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <ComposedChart data={rows} margin={{ top: 10, right: 12, bottom: 4, left: 0 }}>
+        <CartesianGrid stroke="#1e2a4a" vertical={false} />
+        <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(5)} minTickGap={28}
+          tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false} />
+        <YAxis width={36} tick={{ fill: '#7c8cab', fontSize: 11 }} tickLine={false} allowDecimals={false} />
+        {splitDay && (
+          <ReferenceLine x={splitDay} stroke="#475569" strokeDasharray="3 3"
+            label={{ value: 'today', position: 'insideTopRight', fill: '#64748b', fontSize: 10 }} />
+        )}
+        <Tooltip contentStyle={TOOLTIP} cursor={{ stroke: '#334155' }}
+          content={({ payload, label }) => {
+            const p = payload?.[0]?.payload as (typeof rows)[number] | undefined;
+            if (!p) return null;
+            const isProjected = p.actual === null;
+            return (
+              <div style={TOOLTIP} className="px-3 py-2">
+                <p className="font-semibold text-slate-100">{new Date(String(label)).toLocaleDateString('en-US')}</p>
+                {isProjected
+                  ? <p className="text-violet-300">projected ~{p.projected} <span className="text-slate-500">(range {p.low}–{(p.low ?? 0) + (p.high ?? 0)})</span></p>
+                  : <p className="text-sky-300">{p.actual} mentions</p>}
+              </div>
+            );
+          }} />
+        {/* fascia: due Area impilate, la prima invisibile fino a "low" */}
+        <Area type="monotone" dataKey="low" stackId="band" stroke="none" fill="transparent" isAnimationActive={false} />
+        <Area type="monotone" dataKey="high" stackId="band" stroke="none" fill="#a78bfa" fillOpacity={0.14} isAnimationActive={false} />
+        <Line type="monotone" dataKey="actual" stroke="#38bdf8" strokeWidth={2.2} dot={false} isAnimationActive={false} connectNulls={false} />
+        <Line type="monotone" dataKey="projected" stroke="#a78bfa" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
