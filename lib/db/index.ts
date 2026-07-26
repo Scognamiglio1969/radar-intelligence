@@ -281,6 +281,30 @@ const DDL = [
     fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (entity_id, date)
   )`,
+  `CREATE TABLE IF NOT EXISTS wiki_pages (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    last_fetched_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS wiki_edits (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    page_id INTEGER NOT NULL REFERENCES wiki_pages(id) ON DELETE CASCADE,
+    rev_id INTEGER NOT NULL,
+    "user" TEXT NOT NULL,
+    is_anon INTEGER NOT NULL DEFAULT 0,
+    is_minor INTEGER NOT NULL DEFAULT 0,
+    comment TEXT NOT NULL DEFAULT '',
+    size INTEGER NOT NULL,
+    size_diff INTEGER,
+    tags JSONB NOT NULL DEFAULT '[]',
+    "timestamp" TIMESTAMPTZ NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (page_id, rev_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS wiki_edits_page_ts ON wiki_edits (page_id, "timestamp" DESC)`,
 ];
 
 async function ensureSchema(db: DB) {

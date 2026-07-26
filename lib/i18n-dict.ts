@@ -53,6 +53,7 @@ const IT: Record<string, string> = {
   'nav.beyondSection': 'Oltre le menzioni',
   'nav.reviews': 'Recensioni',
   'nav.sport': 'Sport',
+  'nav.wikipedia': 'Wikipedia',
   'nav.account': 'Impostazioni',
   'nav.logout': 'Esci',
   'nav.admin': 'Admin',

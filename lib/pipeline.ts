@@ -6,6 +6,7 @@ import { enrichArticles } from '@/lib/article-enrich';
 import { ingestReviews } from '@/lib/reviews';
 import { ingestSport } from '@/lib/sport';
 import { ingestSearchInterest } from '@/lib/search-interest';
+import { ingestWikiEdits } from '@/lib/wikipedia';
 import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import {
   analyzePendingMentions, clusterNewsStories, generateDailyBrief, scoreTopContent,
@@ -100,6 +101,13 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
         return { tried: 0, points: 0 };
       });
       if (interest.tried) console.log(`[pipeline] interesse di ricerca: ${interest.points} punti`);
+
+      // Wikipedia: nessuna chiave, nessun costo — controllato ad ogni ciclo.
+      const wiki = await ingestWikiEdits(project.id).catch((e) => {
+        console.error(`[pipeline] wikipedia fallito per "${project.name}":`, e);
+        return { tried: 0, edits: 0 };
+      });
+      if (wiki.tried) console.log(`[pipeline] wikipedia: ${wiki.edits} revisioni`);
 
       // Se il proprietario è "dormiente" (membro senza AI), si raccolgono i dati
       // ma si saltano tutte le analisi Claude (nessun costo API).

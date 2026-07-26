@@ -313,3 +313,31 @@ export const searchInterest = pgTable('search_interest', {
   value: integer('value').notNull(), // 0-100, relativo agli altri termini della stessa richiesta
   fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Pagina Wikipedia sorvegliata: chi la modifica e quando spesso anticipa una
+// crisi reputazionale (edit war, cancellazioni di sezioni scomode, comparsa
+// di account anonimi). Una riga per pagina seguita — un progetto può
+// seguirne più di una, come le squadre in Sport.
+export const wikiPages = pgTable('wiki_pages', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  title: text('title').notNull(), // titolo esatto della pagina, mai scritto a mano dall'utente
+  lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const wikiEdits = pgTable('wiki_edits', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  pageId: integer('page_id').notNull(),
+  revId: integer('rev_id').notNull(),
+  user: text('user').notNull(),
+  isAnon: integer('is_anon').notNull().default(0),
+  isMinor: integer('is_minor').notNull().default(0),
+  comment: text('comment').notNull().default(''),
+  size: integer('size').notNull(),
+  sizeDiff: integer('size_diff'), // null se non calcolabile (prima revisione nota)
+  tags: jsonb('tags').$type<string[]>().notNull().default([]),
+  timestamp: timestamp('timestamp', { withTimezone: true }).notNull(),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+});

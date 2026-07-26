@@ -7,7 +7,7 @@ import {
   Radar, LayoutDashboard, Ear, Newspaper, BarChart3, Users,
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
-  UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb, MessageSquareQuote, Euro, Award, Trophy,
+  UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb, MessageSquareQuote, Euro, Award, Trophy, FileClock,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
@@ -26,6 +26,7 @@ import { tFor, type Locale } from '@/lib/i18n-dict';
 const ACCENT: Record<string, string> = {
   reviews: 'text-emerald-400/80',
   sport: 'text-amber-400/80',
+  wikipedia: 'text-slate-400',
 };
 
 type NavItem =
@@ -62,6 +63,7 @@ const NAV: NavItem[] = [
   { section: 'Beyond mentions', key: 'nav.beyondSection' },
   { href: '/reviews', label: 'Reviews', key: 'nav.reviews', icon: Award, accent: 'reviews' },
   { href: '/sport', label: 'Sport', key: 'nav.sport', icon: Trophy, accent: 'sport' },
+  { href: '/wikipedia', label: 'Wikipedia', key: 'nav.wikipedia', icon: FileClock, accent: 'wikipedia' },
 ];
 
 type Props = {
