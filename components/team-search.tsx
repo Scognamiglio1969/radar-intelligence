@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Search, Check } from 'lucide-react';
 
 type TeamHit = { id: string; name: string; shortName: string; crest: string | null };
@@ -12,6 +12,12 @@ type TeamHit = { id: string; name: string; shortName: string; crest: string | nu
  * casa/trasferta. Qui il nome esatto arriva sempre dall'API, e anche la
  * competizione fa parte di questo stesso campo per poterla cambiare senza
  * ricaricare la pagina.
+ *
+ * Debounce (350ms) + un contatore di richieste per scartare risposte
+ * "arrivate in ritardo": senza questo, digitare velocemente sparava una
+ * richiesta per lettera (il piano gratuito di football-data.org concede solo
+ * 10 richieste/minuto) e una risposta più vecchia poteva arrivare dopo
+ * quella giusta, sovrascrivendola con risultati sbagliati o vuoti.
  */
 export function TeamSearch({ competitions }: { competitions: { code: string; label: string }[] }) {
   const [competition, setCompetition] = useState(competitions[0]?.code ?? '');
@@ -20,24 +26,37 @@ export function TeamSearch({ competitions }: { competitions: { code: string; lab
   const [picked, setPicked] = useState<TeamHit | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searched, setSearched] = useState(false);
+  const requestSeq = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function runSearch(q: string, comp: string) {
-    setPicked(null);
-    setError(null);
-    if (q.trim().length < 2) { setResults([]); return; }
+    const seq = ++requestSeq.current;
+    if (q.trim().length < 2) { setResults([]); setSearched(false); return; }
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/sport/lookup-team?competition=${encodeURIComponent(comp)}&q=${encodeURIComponent(q)}`);
       const data = await res.json();
+      if (seq !== requestSeq.current) return; // risposta di una ricerca superata, ignorala
       if (!res.ok) throw new Error(data.error || 'search failed');
       setResults(data.teams ?? []);
+      setSearched(true);
     } catch (e) {
+      if (seq !== requestSeq.current) return;
       setError((e as Error).message);
       setResults([]);
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }
+
+  function scheduleSearch(q: string, comp: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => runSearch(q, comp), 350);
+  }
+
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   return (
     <>
@@ -50,7 +69,8 @@ export function TeamSearch({ competitions }: { competitions: { code: string; lab
           setCompetition(e.target.value);
           setPicked(null);
           setResults([]);
-          if (query.trim().length >= 2) runSearch(query, e.target.value);
+          setSearched(false);
+          if (query.trim().length >= 2) scheduleSearch(query, e.target.value);
         }}
         className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-slate-100 outline-none"
       >
@@ -62,7 +82,12 @@ export function TeamSearch({ competitions }: { competitions: { code: string; lab
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-600" />
           <input
             value={picked ? picked.name : query}
-            onChange={(e) => { setQuery(e.target.value); runSearch(e.target.value, competition); }}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPicked(null);
+              setSearched(false);
+              scheduleSearch(e.target.value, competition);
+            }}
             placeholder="Search team (e.g. Juventus)"
             autoComplete="off"
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--panel-2)] py-1.5 pl-8 pr-2.5 text-sm text-slate-100 outline-none focus:border-sky-500/50"
@@ -70,6 +95,9 @@ export function TeamSearch({ competitions }: { competitions: { code: string; lab
         </div>
         {loading && <p className="text-[11px] text-slate-600">Searching…</p>}
         {error && <p className="text-[11px] text-red-400">{error}</p>}
+        {!loading && !error && searched && !picked && results.length === 0 && (
+          <p className="text-[11px] text-slate-600">No team found in this competition — check spelling or try another league.</p>
+        )}
         {!picked && results.length > 0 && (
           <div className="flex flex-col overflow-hidden rounded-lg border border-[var(--border)]">
             {results.map((t) => (
@@ -89,7 +117,7 @@ export function TeamSearch({ competitions }: { competitions: { code: string; lab
         {picked && (
           <p className="flex items-center gap-1.5 text-[11px] text-emerald-400">
             <Check className="size-3.5" /> {picked.name} selected (ID {picked.id})
-            <button type="button" onClick={() => { setPicked(null); setQuery(''); }} className="ml-1 text-slate-600 underline hover:text-slate-400">change</button>
+            <button type="button" onClick={() => { setPicked(null); setQuery(''); setSearched(false); }} className="ml-1 text-slate-600 underline hover:text-slate-400">change</button>
           </p>
         )}
       </div>

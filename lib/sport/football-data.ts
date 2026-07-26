@@ -56,8 +56,11 @@ export async function searchTeams(competition: string, query: string): Promise<T
     { headers: { 'X-Auth-Token': key } },
   );
   const q = query.trim().toLowerCase();
-  return (data.teams ?? [])
-    .filter((t) => t.name.toLowerCase().includes(q) || (t.shortName ?? '').toLowerCase().includes(q) || (t.tla ?? '').toLowerCase() === q)
+  const filtered = (data.teams ?? [])
+    .filter((t) => t.name.toLowerCase().includes(q) || (t.shortName ?? '').toLowerCase().includes(q) || (t.tla ?? '').toLowerCase() === q);
+  // TEMP diagnostica: capire perché in produzione la ricerca risultava vuota.
+  console.log(`[sport] searchTeams comp=${competition} q="${query}" totalTeams=${(data.teams ?? []).length} matched=${filtered.length}`);
+  return filtered
     .slice(0, 8)
     .map((t) => ({ id: String(t.id), name: t.name, shortName: t.shortName ?? t.name, crest: t.crest ?? null }));
 }
