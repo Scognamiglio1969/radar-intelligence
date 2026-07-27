@@ -61,6 +61,14 @@ const CONNECTOR_TERM_CAP: Partial<Record<string, number>> = {
 // Fonti su cui è sicuro spezzare in più chiamate per coprire tutti i
 // termini nello stesso ciclo: gratuite, senza quota stretta.
 const BATCH_FULLY: Set<string> = new Set(['googlenews', 'gdelt', 'reddit', 'bluesky', 'mastodon']);
+// Sottoinsieme usato per la ricerca-concorrente: GDELT escluso apposta.
+// Verificato dal vivo che fallisce sempre con 429 su una richiesta ogni
+// entità (una quota giornaliera già stretta, saturata subito da una dozzina
+// di ricerche) — ogni tentativo fallito comunque aspetta il timeout (15s)
+// prima di arrendersi, e su un progetto con molte entità questo da solo
+// spingeva il tempo totale oltre il limite della funzione serverless (300s).
+// Resta pieno per la query del progetto (BATCH_FULLY), solo qui si toglie.
+const ENTITY_SEARCH_CONNECTORS: Set<string> = new Set(['googlenews', 'reddit', 'bluesky', 'mastodon']);
 
 function chunk<T>(arr: T[], size: number): T[][] {
   if (arr.length === 0) return [];
@@ -83,6 +91,54 @@ async function rotateTerms(terms: string[], key: string): Promise<string[]> {
 }
 
 type Job = { connectorId: string; fetch: () => Promise<RawMention[]>; scope: 'project' | 'entity' };
+
+// Con una ricerca per concorrente, un progetto con una dozzina di entità
+// manda facilmente 40-70 richieste alla stessa manciata di fonti generaliste.
+// Verificato dal vivo: interrogate UNA ALLA VOLTA, tutte e 12 le entità di un
+// progetto reale restituivano risultati concreti (49-496 ciascuna). Ma in
+// produzione, sparate tutte insieme con Promise.allSettled, solo 3 su 12
+// portavano dati — la stessa manciata di fonti gratuite riceveva decine di
+// richieste nello stesso istante e la maggior parte veniva respinta (GDELT
+// falliva già da sola con 429; le altre reggono bene una alla volta ma non a
+// raffica). La correzione non è tornare a farle in sequenza (troppo lento con
+// molte entità) ma limitare quante richieste PER LA STESSA FONTE partono
+// insieme — fonti diverse restano comunque parallele fra loro.
+const CONCURRENCY_PER_CONNECTOR = 2;
+// Non basta limitare QUANTE partono insieme se poi si susseguono senza
+// pausa: un limite tipico "N richieste al minuto" si esaurisce comunque in
+// pochi secondi a raffica continua. Verificato dal vivo un pattern a finestra
+// — le entità dal 5° al 9° posto fallivano sistematicamente mentre le prime
+// 4 e le ultime 3 andavano a buon fine, coerente con una quota che si
+// esaurisce a metà lista e si libera di nuovo prima della fine. Una piccola
+// pausa fra un round e il successivo mantiene il RITMO delle richieste sotto
+// la soglia, non solo il numero in volo in un dato istante.
+const ROUND_DELAY_MS = 400;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function runJobs(jobs: Job[]): Promise<{ job: Job; mentions: RawMention[]; error?: unknown }[]> {
+  const byConnector = new Map<string, Job[]>();
+  for (const j of jobs) {
+    if (!byConnector.has(j.connectorId)) byConnector.set(j.connectorId, []);
+    byConnector.get(j.connectorId)!.push(j);
+  }
+  const perConnector = await Promise.all(
+    [...byConnector.values()].map(async (group) => {
+      const out: { job: Job; mentions: RawMention[]; error?: unknown }[] = [];
+      for (let i = 0; i < group.length; i += CONCURRENCY_PER_CONNECTOR) {
+        if (i > 0) await sleep(ROUND_DELAY_MS);
+        const batch = group.slice(i, i + CONCURRENCY_PER_CONNECTOR);
+        const settled = await Promise.allSettled(batch.map((j) => j.fetch()));
+        settled.forEach((s, k) => {
+          out.push(s.status === 'fulfilled'
+            ? { job: batch[k], mentions: s.value }
+            : { job: batch[k], mentions: [], error: s.reason });
+        });
+      }
+      return out;
+    }),
+  );
+  return perConnector.flat();
+}
 
 export async function ingestProject(project: typeof projects.$inferSelect) {
   const db = await getDb();
@@ -132,7 +188,7 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
   for (const entity of entities) {
     if (entity.keywords.length === 0) continue;
     for (const c of enabled) {
-      if (!BATCH_FULLY.has(c.id)) continue; // niente ricerca-concorrente sulle fonti a quota stretta o a pagamento
+      if (!ENTITY_SEARCH_CONNECTORS.has(c.id)) continue; // niente ricerca-concorrente su GDELT, quota stretta o a pagamento
       for (const batch of chunk(entity.keywords, CONNECTOR_TERM_CAP[c.id] ?? Infinity)) {
         const entityQuery: ListeningQuery = { ...q, anyTerms: batch, allTerms: [] };
         jobs.push({ connectorId: c.id, scope: 'entity', fetch: () => c.fetchMentions(entityQuery) });
@@ -140,28 +196,23 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
     }
   }
 
-  const results = await Promise.allSettled(
-    jobs.map(async (job) => {
-      const list = await job.fetch();
-      return { ...job, mentions: list };
-    }),
-  );
+  const results = await runJobs(jobs);
 
   // Più job possono condividere lo stesso connectorId (una volta per il
   // progetto, una volta per ogni concorrente): si aggregano in un'unica riga
   // di stato per fonte — "ok" se almeno un tentativo è andato a buon fine,
   // il conteggio è la somma di tutti.
   const agg = new Map<string, { ok: boolean; count: number; error?: string }>();
-  for (let i = 0; i < results.length; i++) {
-    const job = jobs[i];
-    const r = results[i];
+  for (const r of results) {
+    const job = r.job;
     const prevAgg = agg.get(job.connectorId) ?? { ok: false, count: 0 };
-    if (r.status === 'rejected') {
-      agg.set(job.connectorId, { ...prevAgg, error: String(r.reason?.message ?? r.reason) });
+    if (r.error !== undefined) {
+      const err = r.error as { message?: string } | undefined;
+      agg.set(job.connectorId, { ...prevAgg, error: String(err?.message ?? r.error) });
       continue;
     }
     const now = Date.now();
-    const rows = r.value.mentions
+    const rows = r.mentions
       .filter((m) => matchesBoolean(m, job.scope))
       // Scarta date invalide o future (feed a volte sballati) e più vecchie di 90 giorni
       .filter((m) => !Number.isNaN(m.publishedAt.getTime())
