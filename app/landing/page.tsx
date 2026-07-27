@@ -2,7 +2,7 @@ import Link from 'next/link';
 import {
   Ear, Star, Flame, FileText, MonitorPlay, GitBranch, MessageSquareText,
   PenLine, Share2, Radar as RadarIcon, ArrowRight, Sparkles, Globe2,
-  Database, Wallet, Check, X as XMark, Minus, ScatterChart,
+  Database, Wallet, Check, X as XMark, Minus, ScatterChart, Trophy,
 } from 'lucide-react';
 import { ParticleField } from '@/components/particle-field';
 import { Brand } from '@/components/brand';
@@ -15,7 +15,7 @@ const FEATURES = [
   {
     icon: Ear, color: 'text-sky-400',
     title: 'Multi-channel listening',
-    text: '9 free public sources: worldwide news via GDELT (100,000+ outlets in 65+ languages) and Google News, plus Reddit, Bluesky, Mastodon, YouTube, Telegram and unlimited RSS feeds. Plus 6 ready premium connectors: X, Instagram, Facebook, TikTok, LinkedIn and NewsAPI (150,000 outlets).',
+    text: '15 free public sources: worldwide news via GDELT (100,000+ outlets in 65+ languages) and Google News, SEC filings, arXiv papers, Stack Exchange, GitHub, plus Reddit, Bluesky, Mastodon, YouTube, Discord, Telegram and unlimited RSS feeds. Plus 6 ready premium connectors: X, Instagram, Facebook, TikTok, LinkedIn and NewsAPI (150,000 outlets).',
   },
   {
     icon: Star, color: 'text-amber-400',
@@ -51,6 +51,11 @@ const FEATURES = [
     icon: ScatterChart, color: 'text-fuchsia-400',
     title: 'Advanced insights',
     text: 'Topics × Sentiment map, hourly heatmap, sentiment waterfall, conversation clusters and a cause-effect chart: visual analyses standard tools don’t offer.',
+  },
+  {
+    icon: Trophy, color: 'text-amber-400',
+    title: 'Beyond mentions',
+    text: 'Three signals no listening tool tracks: for listed clubs, match results crossed with fan sentiment and share price; who edits a brand’s Wikipedia page and whether it looks like a fight; and App Store, Google Places & Yelp ratings in one place. Plus Share of search — Google Trends interest next to Share of Voice.',
   },
   {
     icon: PenLine, color: 'text-pink-400',
@@ -127,8 +132,17 @@ const COMPARISON: { cat: string; rows: CompareRow[] }[] = [
       ['Actor & stakeholder map', 'parz', 'si'],
       ['Natural-language weekly comparison', 'no', 'si'],
       ['Benchmark & share of voice', 'si', 'si'],
+      ['Share of search (Google Trends vs competitors)', 'no', 'si'],
       ['Push notifications', 'si', 'si', 'email & app', 'Telegram'],
       ['Audience demographics (age, gender)', 'si', 'no', , 'not derivable from accessible sources'],
+    ],
+  },
+  {
+    cat: 'Beyond mentions',
+    rows: [
+      ['Sport: match results × fan sentiment × share price', 'no', 'si', , 'for publicly listed clubs'],
+      ['Wikipedia edit monitoring (edit wars, anonymous activity)', 'no', 'si'],
+      ['Review ratings (App Store, Google Places, Yelp)', 'parz', 'si', 'separate tools', 'one section, no AI needed'],
     ],
   },
   {
@@ -234,7 +248,7 @@ export default async function LandingPage() {
         {/* numbers */}
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            [<Database key="i" className="mx-auto size-5 text-sky-400" />, '15', 'sources · 9 free + 6 premium'],
+            [<Database key="i" className="mx-auto size-5 text-sky-400" />, '21', 'sources · 15 free + 6 premium'],
             [<Globe2 key="i" className="mx-auto size-5 text-violet-400" />, '30+', 'languages analyzed'],
             [<Sparkles key="i" className="mx-auto size-5 text-amber-400" />, '20', 'intelligence modules'],
             [<Wallet key="i" className="mx-auto size-5 text-emerald-400" />, '<1%', 'of the cost of enterprise tools'],
