@@ -28,8 +28,10 @@ async function ownerAiEnabled(db: Awaited<ReturnType<typeof getDb>>, ownerId: nu
   return Boolean(owner && (owner.role === 'admin' || owner.ai === 1));
 }
 
-const LOCK_KEY = 'pipeline_lock';
 const LOCK_TTL_MS = 5 * 60_000;
+/** Lock separato per progetto: aggiornare un progetto non deve bloccare gli altri.
+ *  (Il cron, che li fa tutti, usa la chiave globale storica.) */
+const lockKey = (projectId?: number) => (projectId ? `pipeline_lock_p${projectId}` : 'pipeline_lock');
 
 /**
  * Pipeline completa: ingestion → analisi Claude → alert.
@@ -37,22 +39,34 @@ const LOCK_TTL_MS = 5 * 60_000;
  *   (usato sia dal cron sia dal "Refresh now" manuale, così l'aggiornamento è completo).
  * - digest=true: invia il digest Telegram del mattino (solo cron; il refresh manuale NON
  *   deve spammare notifiche a ogni click).
+ * - projectId: aggiorna SOLO quel progetto. Il pulsante "Refresh now" lo passa
+ *   sempre. Senza, si aggiornano tutti i progetti in sequenza: giusto per il
+ *   cron notturno, sbagliato per un click — su un'istanza con più progetti (e
+ *   con le ricerche per concorrente del Benchmark) la somma dei tempi supera
+ *   il limite di durata della funzione serverless, che viene uccisa a metà.
+ *   Il risultato era il peggiore possibile: nessun errore visibile, il
+ *   progetto che stavi guardando non veniva mai raggiunto, e il lock restava
+ *   appeso (il `finally` non gira su un processo ucciso) facendo rispondere
+ *   "aggiornamento già in corso" ai tentativi successivi.
  */
-export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {}) {
+export async function runPipeline(opts: { full?: boolean; digest?: boolean; projectId?: number } = {}) {
   const db = await getDb();
 
-  const lock = await getMeta<string>(LOCK_KEY);
+  const key = lockKey(opts.projectId);
+  const lock = await getMeta<string>(key);
   if (lock && Date.now() - new Date(lock).getTime() < LOCK_TTL_MS) {
     return { skipped: true, reason: 'pipeline already running' };
   }
-  await setMeta(LOCK_KEY, new Date().toISOString());
+  await setMeta(key, new Date().toISOString());
 
   try {
     // Va fatto qui, non solo dentro ingestProject: i progetti "upload" saltano
     // ingestProject, e senza questo le credenziali (football-data, Google
     // Places, ecc.) resterebbero invisibili a cfg() per l'intera esecuzione.
     await hydrateConnectorCredentials();
-    const allProjects = await db.select().from(projects);
+    const allProjects = opts.projectId
+      ? await db.select().from(projects).where(eq(projects.id, opts.projectId))
+      : await db.select().from(projects);
     const summary: Record<string, unknown>[] = [];
 
     for (const project of allProjects) {
@@ -181,7 +195,7 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean } = {
 
     return { skipped: false, summary };
   } finally {
-    await setMeta(LOCK_KEY, null);
+    await setMeta(key, null);
   }
 }
 

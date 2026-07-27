@@ -3,7 +3,8 @@ import { benchmarkData, getCurrentProject } from '@/lib/data';
 import { searchInterestData } from '@/lib/search-interest';
 import { PageHeader, EmptyState, fmtNum } from '@/components/ui';
 import { getT } from '@/lib/i18n';
-import { ShareOfVoicePie, BenchmarkTrend, SearchInterestTrend, ENTITY_COLORS } from '@/components/charts';
+import { ShareOfVoicePie, BenchmarkTrend, SearchInterestTrend } from '@/components/charts';
+import { entityColor } from '@/lib/entity-colors';
 
 export const metadata = { title: 'Benchmark' };
 
@@ -37,14 +38,14 @@ export default async function BenchmarkPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="panel px-5 py-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-300">Share of voice</h2>
-          {total > 0
-            ? <ShareOfVoicePie data={results.map((r) => ({ name: r.entity.name, value: r.total }))} />
-            : <p className="py-16 text-center text-sm text-slate-500">No mentions associated with the entities.</p>}
+          {/* Il colore segue l'ENTITÀ (la sua posizione stabile in elenco),
+              non il suo rango: se cambia la classifica, chi resta non cambia colore. */}
+          <ShareOfVoicePie data={results.map((r, i) => ({ name: r.entity.name, value: r.total, color: entityColor(i) }))} />
         </section>
 
         <section className="panel px-5 py-4 lg:col-span-2">
           <h2 className="mb-3 text-sm font-semibold text-slate-300">Volume trend</h2>
-          <BenchmarkTrend series={results.map((r) => ({ name: r.entity.name, points: r.byDay }))} />
+          <BenchmarkTrend series={results.map((r, i) => ({ name: r.entity.name, points: r.byDay, color: entityColor(i) }))} />
         </section>
       </div>
 
@@ -74,7 +75,7 @@ export default async function BenchmarkPage() {
             {results.map((r, i) => (
               <tr key={r.entity.id} className="border-b border-[var(--border)]/50 last:border-0">
                 <td className="py-2.5 font-medium">
-                  <span className="mr-2 inline-block size-2 rounded-full" style={{ backgroundColor: ENTITY_COLORS[i % ENTITY_COLORS.length] }} />
+                  <span className="mr-2 inline-block size-2 rounded-full" style={{ backgroundColor: entityColor(i) }} />
                   {r.entity.name}
                 </td>
                 <td className="py-2.5 text-xs text-slate-500">{r.entity.keywords.join(', ')}</td>

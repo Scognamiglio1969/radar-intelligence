@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, RefreshCw } from 'lucide-react';
+import { CheckCircle2, RefreshCw, AlertTriangle } from 'lucide-react';
 
 type Summary = { inserted?: number; analyzed?: number }[];
 
@@ -10,6 +10,7 @@ export function RefreshButton() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
 
@@ -27,17 +28,32 @@ export function RefreshButton() {
     }, 400);
     try {
       const res = await fetch('/api/refresh', { method: 'POST' });
+      // Un timeout della funzione serverless non risponde JSON ma una pagina
+      // di errore della piattaforma: senza questo controllo res.json() esplode
+      // e l'utente vedeva solo un generico "riprova", senza sapere che
+      // l'aggiornamento era stato ucciso a metà.
+      if (!res.ok) {
+        setProgress(100);
+        setFailed(true);
+        setToast(res.status === 504
+          ? 'The update ran out of time and was stopped. Some sources may not have been checked.'
+          : `Update failed (HTTP ${res.status}).`);
+        return;
+      }
       const data = await res.json() as { skipped?: boolean; summary?: Summary };
       setProgress(100);
       if (data.skipped) {
-        setToast('An update was already running: try again in a minute.');
+        setFailed(true);
+        setToast('An update for this project is already running: try again in a minute.');
       } else {
         const inserted = (data.summary ?? []).reduce((s, r) => s + (r.inserted ?? 0), 0);
         const analyzed = (data.summary ?? []).reduce((s, r) => s + (r.analyzed ?? 0), 0);
+        setFailed(false);
         setToast(`Update complete: ${inserted} new mentions, ${analyzed} analyzed by AI.`);
       }
       router.refresh();
     } catch {
+      setFailed(true);
       setToast('Update failed, please retry.');
     } finally {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -74,10 +90,15 @@ export function RefreshButton() {
         </div>
       )}
 
-      {/* Toast di esito */}
+      {/* Toast di esito — un fallimento non deve avere l'aria di un successo:
+          prima anche "Update failed" usciva col bordo verde e la spunta. */}
       {toast && !busy && (
-        <div className="fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full border border-emerald-500/30 bg-[#0c1226]/95 px-4 py-2.5 text-xs text-slate-200 shadow-xl backdrop-blur">
-          <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
+        <div className={`fixed bottom-5 left-1/2 z-[70] flex max-w-[90vw] -translate-x-1/2 items-center gap-2 rounded-full border bg-[#0c1226]/95 px-4 py-2.5 text-xs text-slate-200 shadow-xl backdrop-blur ${
+          failed ? 'border-amber-500/40' : 'border-emerald-500/30'
+        }`}>
+          {failed
+            ? <AlertTriangle className="size-4 shrink-0 text-amber-400" />
+            : <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />}
           {toast}
         </div>
       )}

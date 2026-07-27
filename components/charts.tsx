@@ -5,6 +5,9 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts';
 import { SOURCE_META } from '@/lib/connectors';
+import { ENTITY_COLORS, OVERFLOW_COLOR, entityColor } from '@/lib/entity-colors';
+
+export { ENTITY_COLORS, OVERFLOW_COLOR, entityColor };
 
 const TICK = { fill: '#7c8cab', fontSize: 11 };
 const TOOLTIP_STYLE = {
@@ -60,33 +63,76 @@ export function SentimentPie({ data }: { data: { sentiment: string; n: number }[
   );
 }
 
-export const ENTITY_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#f472b6', '#22d3ee'];
+const MAX_SLICES = 7; // 7 + "Other" = 8 tinte, il massimo distinguibile
 
-export function ShareOfVoicePie({ data }: { data: { name: string; value: number }[] }) {
+export function ShareOfVoicePie({ data }: { data: { name: string; value: number; color?: string }[] }) {
+  // Un'entità a zero non ha una fetta da mostrare ma occupava comunque una
+  // riga di legenda: con 12 entità quasi tutte a zero la legenda cresceva
+  // fino a coprire la ciambella.
+  const present = data.filter((d) => d.value > 0).sort((a, b) => b.value - a.value);
+  if (present.length === 0) {
+    return <p className="py-16 text-center text-sm text-slate-500">No mentions associated with the entities yet.</p>;
+  }
+
+  const head = present.slice(0, MAX_SLICES);
+  const tail = present.slice(MAX_SLICES);
+  const slices = tail.length > 0
+    ? [...head, { name: `Other (${tail.length})`, value: tail.reduce((s, d) => s + d.value, 0), color: OVERFLOW_COLOR }]
+    : head;
+  const total = slices.reduce((s, d) => s + d.value, 0);
+
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <PieChart>
-        <Pie data={data} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
-          {data.map((d, i) => (
-            <Cell key={d.name} fill={ENTITY_COLORS[i % ENTITY_COLORS.length]} stroke="none" />
-          ))}
-        </Pie>
-        <Tooltip contentStyle={TOOLTIP_STYLE} />
-        <Legend formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
-      </PieChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col gap-3">
+      <ResponsiveContainer width="100%" height={200}>
+        <PieChart>
+          <Pie data={slices} dataKey="value" nameKey="name" innerRadius={52} outerRadius={86} paddingAngle={2}>
+            {slices.map((d, i) => (
+              // stroke del colore della superficie = il distacco di 2px fra fette
+              <Cell key={d.name} fill={d.color ?? entityColor(i)} stroke="#10172e" strokeWidth={2} />
+            ))}
+          </Pie>
+          <Tooltip contentStyle={TOOLTIP_STYLE}
+            formatter={(v, n) => {
+              const num = Number(v) || 0;
+              return [`${num} · ${((num / total) * 100).toFixed(1)}%`, String(n)];
+            }} />
+        </PieChart>
+      </ResponsiveContainer>
+      {/* Legenda in HTML sotto il grafico invece che dentro l'area del
+          grafico: quella di recharts rubava spazio alla ciambella e con molte
+          voci ci finiva sopra. */}
+      <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1.5">
+        {slices.map((d, i) => (
+          <li key={d.name} className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className="size-2 shrink-0 rounded-full" style={{ background: d.color ?? entityColor(i) }} />
+            {d.name}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 export function BenchmarkTrend({ series }: {
-  series: { name: string; points: { day: string; n: number }[] }[];
+  series: { name: string; points: { day: string; n: number }[]; color?: string }[];
 }) {
-  const days = [...new Set(series.flatMap((s) => s.points.map((p) => p.day)))].sort();
+  // Come per la ciambella: chi non ha mai una mention non merita una linea
+  // piatta a zero e una voce di legenda, e oltre 8 serie le tinte finirebbero.
+  const active = series
+    .map((s) => ({ ...s, total: s.points.reduce((t, p) => t + p.n, 0) }))
+    .filter((s) => s.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, ENTITY_COLORS.length);
+  if (active.length === 0) {
+    return <p className="py-16 text-center text-sm text-slate-500">No volume to compare yet.</p>;
+  }
+
+  const days = [...new Set(active.flatMap((s) => s.points.map((p) => p.day)))].sort();
   const rows = days.map((day) => {
     const row: Record<string, string | number> = {
       day: new Date(day).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }),
     };
-    for (const s of series) row[s.name] = s.points.find((p) => p.day === day)?.n ?? 0;
+    for (const s of active) row[s.name] = s.points.find((p) => p.day === day)?.n ?? 0;
     return row;
   });
   return (
@@ -97,8 +143,8 @@ export function BenchmarkTrend({ series }: {
         <YAxis tick={TICK} axisLine={false} tickLine={false} width={36} />
         <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Legend formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
-        {series.map((s, i) => (
-          <Line key={s.name} dataKey={s.name} stroke={ENTITY_COLORS[i % ENTITY_COLORS.length]}
+        {active.map((s, i) => (
+          <Line key={s.name} dataKey={s.name} stroke={s.color ?? entityColor(i)}
             strokeWidth={2} dot={false} />
         ))}
       </LineChart>
@@ -135,7 +181,7 @@ export function SearchInterestTrend({ series }: {
         <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Legend formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
         {series.map((s, i) => (
-          <Line key={s.name} dataKey={s.name} stroke={ENTITY_COLORS[i % ENTITY_COLORS.length]}
+          <Line key={s.name} dataKey={s.name} stroke={entityColor(i)}
             strokeWidth={2} dot={false} connectNulls />
         ))}
       </LineChart>
