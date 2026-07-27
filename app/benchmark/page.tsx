@@ -4,7 +4,7 @@ import { searchInterestData } from '@/lib/search-interest';
 import { PageHeader, EmptyState, fmtNum } from '@/components/ui';
 import { getT } from '@/lib/i18n';
 import { ShareOfVoicePie, BenchmarkTrend, SearchInterestTrend } from '@/components/charts';
-import { entityColor } from '@/lib/entity-colors';
+import { entityColor, OVERFLOW_COLOR } from '@/lib/entity-colors';
 
 export const metadata = { title: 'Benchmark' };
 
@@ -28,6 +28,17 @@ export default async function BenchmarkPage() {
 
   const total = results.reduce((s, r) => s + r.total, 0);
 
+  // La palette si assegna alle sole entità che compaiono davvero nei grafici.
+  // Assegnandola su TUTTE le entità configurate, un progetto con dodici
+  // concorrenti mandava dall'ottava in poi nel grigio di riserva: bastava che
+  // tre di quelle avessero dati per ritrovarsi tre serie dello stesso grigio.
+  // L'ordine resta quello di creazione (stabile), non la classifica: se cambia
+  // il ranking, chi resta non cambia colore.
+  const colorById = new Map(
+    results.filter((r) => r.total > 0).map((r, i) => [r.entity.id, entityColor(i)]),
+  );
+  const colorOf = (id: number) => colorById.get(id) ?? OVERFLOW_COLOR;
+
   return (
     <>
       <PageHeader
@@ -40,12 +51,12 @@ export default async function BenchmarkPage() {
           <h2 className="mb-3 text-sm font-semibold text-slate-300">Share of voice</h2>
           {/* Il colore segue l'ENTITÀ (la sua posizione stabile in elenco),
               non il suo rango: se cambia la classifica, chi resta non cambia colore. */}
-          <ShareOfVoicePie data={results.map((r, i) => ({ name: r.entity.name, value: r.total, color: entityColor(i) }))} />
+          <ShareOfVoicePie data={results.map((r) => ({ name: r.entity.name, value: r.total, color: colorOf(r.entity.id) }))} />
         </section>
 
         <section className="panel px-5 py-4 lg:col-span-2">
           <h2 className="mb-3 text-sm font-semibold text-slate-300">Volume trend</h2>
-          <BenchmarkTrend series={results.map((r, i) => ({ name: r.entity.name, points: r.byDay, color: entityColor(i) }))} />
+          <BenchmarkTrend series={results.map((r) => ({ name: r.entity.name, points: r.byDay, color: colorOf(r.entity.id) }))} />
         </section>
       </div>
 
@@ -75,7 +86,7 @@ export default async function BenchmarkPage() {
             {results.map((r, i) => (
               <tr key={r.entity.id} className="border-b border-[var(--border)]/50 last:border-0">
                 <td className="py-2.5 font-medium">
-                  <span className="mr-2 inline-block size-2 rounded-full" style={{ backgroundColor: entityColor(i) }} />
+                  <span className="mr-2 inline-block size-2 rounded-full" style={{ backgroundColor: colorOf(r.entity.id) }} />
                   {r.entity.name}
                 </td>
                 <td className="py-2.5 text-xs text-slate-500">{r.entity.keywords.join(', ')}</td>

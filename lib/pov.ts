@@ -489,20 +489,63 @@ export async function buildPointOfView(projectId: number, days = 90): Promise<Po
     })),
   };
 
+  // Il payload va ridotto NEI DATI, non tagliando la stringa serializzata:
+  // `JSON.stringify(payload).slice(0, N)` tronca a metà di una parentesi e
+  // consegna al modello un JSON invalido — che su un progetto ricco (decine di
+  // migliaia di mention, quindi più temi, più incroci, più citazioni) scattava
+  // sempre, mentre su un progetto piccolo non si notava perché il payload
+  // stava già sotto la soglia. Si accorciano prima le parti meno portanti,
+  // finché il tutto entra: la tesi si regge su volumi, temi e incrocio con la
+  // ricerca; i post citabili e i paper servono a corredare, non a decidere.
+  const MAX_CHARS = 14000;
+  const shrink = (): string => {
+    const p = { ...payload };
+    const steps: (() => void)[] = [
+      () => { p.citable_posts = p.citable_posts.slice(0, 18); },
+      () => { p.recent_research = p.recent_research.slice(0, 8); },
+      () => { p.citable_posts = p.citable_posts.slice(0, 10); },
+      () => { p.narratives = p.narratives.slice(0, 3); },
+      () => { p.weekly_arc = p.weekly_arc.slice(-8); },
+      () => { p.topics = p.topics.slice(0, 8); },
+      () => { p.market_vs_research = p.market_vs_research.slice(0, 8); },
+      () => { p.citable_posts = p.citable_posts.slice(0, 6); },
+    ];
+    let out = JSON.stringify(p);
+    for (const step of steps) {
+      if (out.length <= MAX_CHARS) break;
+      step();
+      out = JSON.stringify(p);
+    }
+    if (out.length > MAX_CHARS) {
+      console.warn(`[pov] payload ancora ${out.length} caratteri dopo la riduzione: il modello riceverà meno contesto del previsto`);
+    }
+    return out;
+  };
+
   const text = await callClaude(
     MODELS.sonnet, 'point_of_view', POV_SYSTEM,
-    `Sector monitored: ${project?.name ?? 'n/a'}\n\n${JSON.stringify(payload).slice(0, 14000)}`,
+    `Sector monitored: ${project?.name ?? 'n/a'}\n\n${shrink()}`,
     // Ampio, ma sempre sotto il maxDuration della route: se il modello è lento
     // vogliamo un errore nostro leggibile, non la funzione uccisa dalla piattaforma.
     3000, true, 240_000,
   );
-  if (!text) return { facts, research, cross, pov: null, reason: 'failed' };
+  // Tre modi diversi di fallire che l'utente vedeva come un unico messaggio
+  // ("il modello ci ha messo troppo o non ha prodotto un argomento usabile"):
+  // nessuna risposta, risposta non parsabile, risposta scartata dalla
+  // validazione. Nei log vanno distinti, o non si sa cosa correggere.
+  if (!text) {
+    console.error('[pov] nessuna risposta dal modello (timeout, tetto di spesa o errore API)');
+    return { facts, research, cross, pov: null, reason: 'failed' };
+  }
 
   try {
     const start = text.indexOf('{');
     const parsed = JSON.parse(text.slice(start, text.lastIndexOf('}') + 1));
     const pov = validate(parsed, new Set(facts.citations.map((c) => c.id)), research?.recentWorks.length ?? 0);
-    if (!pov) return { facts, research, cross, pov: null, reason: 'failed' };
+    if (!pov) {
+      console.error(`[pov] risposta ricevuta (${text.length} caratteri) ma scartata dalla validazione`);
+      return { facts, research, cross, pov: null, reason: 'failed' };
+    }
     pov.locale = await getContentLocale();
     await setMeta(key, pov);
     return { facts, research, cross, pov };
