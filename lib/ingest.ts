@@ -90,7 +90,7 @@ async function rotateTerms(terms: string[], key: string): Promise<string[]> {
   return [...terms.slice(pos), ...terms.slice(0, pos)];
 }
 
-type Job = { connectorId: string; fetch: () => Promise<RawMention[]>; scope: 'project' | 'entity' };
+type Job = { connectorId: string; fetch: () => Promise<RawMention[]>; scope: 'project' | 'entity'; label?: string };
 
 // Con una ricerca per concorrente, un progetto con una dozzina di entità
 // manda facilmente 40-70 richieste alla stessa manciata di fonti generaliste.
@@ -129,9 +129,18 @@ async function runJobs(jobs: Job[]): Promise<{ job: Job; mentions: RawMention[];
         const batch = group.slice(i, i + CONCURRENCY_PER_CONNECTOR);
         const settled = await Promise.allSettled(batch.map((j) => j.fetch()));
         settled.forEach((s, k) => {
+          const job = batch[k];
+          // Log per singola chiamata: quanti risultati GREZZI ha restituito
+          // quella fonte per quella ricerca, prima di ogni filtro e della
+          // deduplica. Senza questo, "5 nuove mention" in coda alla pipeline
+          // non distingue "la fonte non ha restituito nulla" da "erano tutte
+          // già in archivio" — due cause opposte con rimedi opposti.
+          const label = `${job.connectorId}/${job.scope}${job.label ? ` "${job.label}"` : ''}`;
+          if (s.status === 'fulfilled') console.log(`[ingest] ${label}: ${s.value.length} grezze`);
+          else console.error(`[ingest] ${label}: ERRORE ${String((s.reason as Error)?.message ?? s.reason).slice(0, 120)}`);
           out.push(s.status === 'fulfilled'
-            ? { job: batch[k], mentions: s.value }
-            : { job: batch[k], mentions: [], error: s.reason });
+            ? { job, mentions: s.value }
+            : { job, mentions: [], error: s.reason });
         });
       }
       return out;
@@ -191,7 +200,7 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
       if (!ENTITY_SEARCH_CONNECTORS.has(c.id)) continue; // niente ricerca-concorrente su GDELT, quota stretta o a pagamento
       for (const batch of chunk(entity.keywords, CONNECTOR_TERM_CAP[c.id] ?? Infinity)) {
         const entityQuery: ListeningQuery = { ...q, anyTerms: batch, allTerms: [] };
-        jobs.push({ connectorId: c.id, scope: 'entity', fetch: () => c.fetchMentions(entityQuery) });
+        jobs.push({ connectorId: c.id, scope: 'entity', label: entity.name, fetch: () => c.fetchMentions(entityQuery) });
       }
     }
   }
