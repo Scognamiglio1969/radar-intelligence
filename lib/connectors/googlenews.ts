@@ -64,8 +64,16 @@ export const googleNews: Connector = {
   tier: 'free',
   enabled: () => true,
   async fetchMentions(q) {
-    const query = booleanQuery(q);
-    if (!query) return [];
+    // `when:` limita la ricerca agli ultimi N giorni. Senza, Google News
+    // ordina per PERTINENZA e non per data: verificato dal vivo che una
+    // ricerca su un nome di azienda restituiva 100 articoli di cui 62 più
+    // vecchi di 90 giorni (fino a 319 giorni), che l'ingestion poi scartava
+    // — si pagava una richiesta per riempire la risposta di roba destinata
+    // al cestino, e restavano pochissime notizie recenti. Con `when:90d` la
+    // stessa ricerca torna solo materiale dentro la finestra utile.
+    // 90 giorni = la stessa finestra di conservazione delle mention.
+    const query = `${booleanQuery(q)} when:90d`.trim();
+    if (query === 'when:90d') return [];
     // Con paesi selezionati usiamo le loro edizioni locali; altrimenti
     // un'edizione per ogni lingua del progetto. Una richiesta per edizione.
     const locales: { loc: Locale; lang?: string }[] = q.countries.length
