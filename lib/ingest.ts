@@ -221,12 +221,20 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
       continue;
     }
     const now = Date.now();
-    const rows = r.mentions
-      .filter((m) => matchesBoolean(m, job.scope))
+    const afterBoolean = r.mentions.filter((m) => matchesBoolean(m, job.scope));
+    const afterDate = afterBoolean
       // Scarta date invalide o future (feed a volte sballati) e più vecchie di 90 giorni
       .filter((m) => !Number.isNaN(m.publishedAt.getTime())
         && m.publishedAt.getTime() < now + 3600_000
-        && m.publishedAt.getTime() > now - 90 * 86400_000)
+        && m.publishedAt.getTime() > now - 90 * 86400_000);
+    // Conteggio per FASE: distingue "scartate dai termini da escludere" da
+    // "scartate perché troppo vecchie" da "già in archivio" — tre cause con
+    // tre rimedi diversi, che il solo totale finale confonde fra loro.
+    if (r.mentions.length !== afterDate.length) {
+      const lbl = `${job.connectorId}/${job.scope}${job.label ? ` "${job.label}"` : ''}`;
+      console.log(`[ingest] ${lbl}: ${r.mentions.length} grezze → ${afterBoolean.length} dopo NOT → ${afterDate.length} dopo data`);
+    }
+    const rows = afterDate
       .map((m) => ({
         projectId: project.id,
         source: m.source,
@@ -253,6 +261,10 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
       if (chunk.length === 0) continue;
       const res = await db.insert(mentions).values(chunk).onConflictDoNothing().returning({ id: mentions.id });
       count += res.length;
+    }
+    if (rows.length > 0 && count !== rows.length) {
+      const lbl = `${job.connectorId}/${job.scope}${job.label ? ` "${job.label}"` : ''}`;
+      console.log(`[ingest] ${lbl}: ${rows.length} valide → ${count} inserite (${rows.length - count} già in archivio)`);
     }
     inserted += count;
     agg.set(job.connectorId, { ok: true, count: prevAgg.count + count });
