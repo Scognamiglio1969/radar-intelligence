@@ -527,7 +527,12 @@ export async function buildPointOfView(projectId: number, days = 90): Promise<Po
     `Sector monitored: ${project?.name ?? 'n/a'}\n\n${shrink()}`,
     // Ampio, ma sempre sotto il maxDuration della route: se il modello è lento
     // vogliamo un errore nostro leggibile, non la funzione uccisa dalla piattaforma.
-    3000, true, 240_000,
+    // 4500 e non 3000: la tesi completa (titolo, introduzione, fino a 6
+    // blocchi con statistiche e citazioni, contro-segnali, implicazioni,
+    // cose da tenere d'occhio) su un settore ricco supera i 3000 token, e il
+    // troncamento a metà JSON rendeva la risposta inutilizzabile — il modello
+    // aveva lavorato, si era pagato il costo, e l'utente vedeva solo un errore.
+    4500, true, 240_000,
   );
   // Tre modi diversi di fallire che l'utente vedeva come un unico messaggio
   // ("il modello ci ha messo troppo o non ha prodotto un argomento usabile"):
@@ -549,7 +554,15 @@ export async function buildPointOfView(projectId: number, days = 90): Promise<Po
     pov.locale = await getContentLocale();
     await setMeta(key, pov);
     return { facts, research, cross, pov };
-  } catch {
+  } catch (e) {
+    // Questo ramo era l'unico dei tre a non lasciare traccia, ed era proprio
+    // quello che scattava: la richiesta rispondeva 400 senza una riga di log,
+    // rendendo il guasto invisibile. La causa tipica è una risposta troncata
+    // dal tetto di token in uscita: il JSON si interrompe a metà e non è più
+    // interpretabile. Si registrano la lunghezza e la coda del testo, che
+    // insieme dicono subito se è un troncamento o un formato inatteso.
+    console.error(`[pov] risposta non interpretabile (${text.length} caratteri): ${(e as Error).message}`);
+    console.error(`[pov] coda della risposta: …${text.slice(-160)}`);
     return { facts, research, cross, pov: null, reason: 'failed' };
   }
 }
