@@ -305,6 +305,31 @@ const DDL = [
     UNIQUE (page_id, rev_id)
   )`,
   `CREATE INDEX IF NOT EXISTS wiki_edits_page_ts ON wiki_edits (page_id, "timestamp" DESC)`,
+  `CREATE TABLE IF NOT EXISTS import_files (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    row_count INTEGER NOT NULL DEFAULT 0,
+    columns JSONB NOT NULL DEFAULT '[]',
+    profiles JSONB NOT NULL DEFAULT '[]',
+    proposal JSONB,
+    mapping JSONB NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'uploaded',
+    report JSONB,
+    raw_purged INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    imported_at TIMESTAMPTZ
+  )`,
+  `CREATE TABLE IF NOT EXISTS import_rows (
+    id SERIAL PRIMARY KEY,
+    file_id INTEGER NOT NULL REFERENCES import_files(id) ON DELETE CASCADE,
+    row_index INTEGER NOT NULL,
+    data JSONB NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS import_rows_file ON import_rows (file_id, row_index)`,
+  `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS import_file_id INTEGER`,
+  `CREATE INDEX IF NOT EXISTS mentions_import_file ON mentions (import_file_id)`,
 ];
 
 async function ensureSchema(db: DB) {

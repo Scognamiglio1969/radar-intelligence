@@ -4,7 +4,7 @@ import { getDb } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { PageHeader, EmptyState } from '@/components/ui';
-import { ImportWizard } from '@/components/import-wizard';
+import { ImportWorkspace } from '@/components/import-workspace';
 
 export const metadata = { title: 'Import data' };
 
@@ -31,13 +31,13 @@ export default async function ImportPage({ searchParams }: {
     <>
       <PageHeader
         title={`Import into “${p.name}”`}
-        subtitle="Upload an Excel or CSV file and map its columns to Radar’s fields. Rows become mentions and get the full analysis engine — sentiment, emotions, topics, every insight and chart."
-        info="Only the text column is required; date, author, source, link and engagement are optional. Re-importing the same file won't create duplicates. Source: the file you upload."
+        subtitle="A distillery for listening exports: drop in as many Excel or CSV files as you like, Radar reads what each column actually contains and turns them into mentions the whole analysis engine understands."
+        info="Files are kept as raw material, not consumed: their rows stay in store untouched, and mentions are DERIVED from the current mapping. Change any field assignment and re-import — no re-upload, and the original is never altered. Each mention remembers which file it came from, so a single file can be reworked or removed without touching the rest of the project. Sentiment already present in the file is imported as-is and skips the AI pass."
       />
       <div className="mb-4">
         <Link href="/settings" className="text-xs text-slate-500 hover:text-slate-300">← back to Projects</Link>
       </div>
-      <ImportWizard project={{ id: p.id, name: p.name }} />
+      <ImportWorkspace project={{ id: p.id, name: p.name }} />
     </>
   );
 }

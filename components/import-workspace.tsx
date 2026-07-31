@@ -1,0 +1,347 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import {
+  UploadCloud, FileSpreadsheet, Check, Loader2, ArrowRight, Sparkles, AlertTriangle,
+  EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive,
+} from 'lucide-react';
+
+type Profile = { name: string; kind: string; filled: number; distinct: number; samples: string[]; avgLength: number };
+type Proposal = { column: string; field: string | null; confidence: 'alta' | 'media' | 'bassa' | null; reason: string };
+type Report = { total: number; inserted: number; skippedEmpty: number; duplicates: number; datesFailed: number; sentimentImported: number };
+type ImportFile = {
+  id: number; filename: string; sizeBytes: number; rowCount: number;
+  columns: string[]; profiles: Profile[]; proposal: Proposal[] | null;
+  mapping: Record<string, string>; status: 'uploaded' | 'mapped' | 'imported';
+  report: Report | null; rawPurged: boolean; createdAt: string; importedAt: string | null;
+};
+
+const FIELDS: { key: string; label: string; hint: string; required?: boolean }[] = [
+  { key: 'content', label: 'Testo', hint: 'ciò che viene analizzato', required: true },
+  { key: 'date', label: 'Data', hint: 'per i grafici temporali' },
+  { key: 'time', label: 'Ora', hint: 'solo se in colonna separata' },
+  { key: 'title', label: 'Titolo', hint: 'headline, se distinta' },
+  { key: 'author', label: 'Autore', hint: 'chi ha scritto' },
+  { key: 'authorHandle', label: 'Handle', hint: '@username' },
+  { key: 'source', label: 'Fonte', hint: 'piattaforma o testata' },
+  { key: 'url', label: 'Link', hint: "URL all'originale" },
+  { key: 'language', label: 'Lingua', hint: 'it, en, "Italiano"…' },
+  { key: 'community', label: 'Community', hint: 'gruppo, pagina, subreddit' },
+  { key: 'sentiment', label: 'Sentiment', hint: 'già calcolato: evita il costo AI' },
+  { key: 'reach', label: 'Reach', hint: 'impression potenziali' },
+  { key: 'likes', label: 'Like', hint: 'reazioni' },
+  { key: 'comments', label: 'Commenti', hint: 'risposte' },
+  { key: 'shares', label: 'Condivisioni', hint: 'retweet, repost' },
+  { key: 'views', label: 'Visualizzazioni', hint: 'views' },
+  { key: 'engagement', label: 'Engagement totale', hint: 'solo se manca il dettaglio' },
+];
+const FIELD_LABEL: Record<string, string> = Object.fromEntries(FIELDS.map((f) => [f.key, f.label]));
+
+const STATUS: Record<ImportFile['status'], { label: string; cls: string }> = {
+  uploaded: { label: 'da mappare', cls: 'bg-amber-500/15 text-amber-300' },
+  mapped: { label: 'mappato', cls: 'bg-sky-500/15 text-sky-300' },
+  imported: { label: 'importato', cls: 'bg-emerald-500/15 text-emerald-300' },
+};
+
+export function ImportWorkspace({ project }: { project: { id: number; name: string } }) {
+  const [files, setFiles] = useState<ImportFile[]>([]);
+  const [open, setOpen] = useState<number | null>(null);
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [analyzeMsg, setAnalyzeMsg] = useState('');
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/import/files?project=${project.id}`);
+    const d = await res.json();
+    if (res.ok) setFiles(d.files ?? []);
+    else setError(d.error ?? 'Errore di caricamento');
+  }, [project.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const upload = async (f: File) => {
+    setBusy('upload'); setError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('projectId', String(project.id));
+      const res = await fetch('/api/import/files', { method: 'POST', body: fd });
+      const d = await res.json();
+      if (!res.ok) { setError(d.error ?? "Errore nell'upload"); return; }
+      await load();
+      setOpen(d.fileId);
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(''); }
+  };
+
+  const act = async (fileId: number, action: string, mapping?: Record<string, string>) => {
+    setBusy(`${action}-${fileId}`); setError('');
+    try {
+      const res = await fetch('/api/import/files', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id, fileId, action, mapping }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setError(d.error ?? 'Operazione fallita'); return; }
+      await load();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(''); }
+  };
+
+  const analyzeNow = async () => {
+    setBusy('analyze'); setAnalyzeMsg('');
+    try {
+      const res = await fetch('/api/import/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id }),
+      });
+      const d = await res.json();
+      setAnalyzeMsg(res.ok
+        ? `Analizzate ${d.analyzed} righe${d.pending ? ` · ${d.pending} ancora in coda` : ''}.`
+        : (d.error ?? 'Analisi fallita'));
+    } catch (e) { setAnalyzeMsg((e as Error).message); }
+    finally { setBusy(''); }
+  };
+
+  const totalImported = files.reduce((s, f) => s + (f.report?.inserted ?? 0), 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <section className="panel px-5 py-4">
+        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-white/[0.02] px-6 py-7 text-center hover:border-sky-500/50">
+          {busy === 'upload'
+            ? <Loader2 className="size-7 animate-spin text-sky-400" />
+            : <UploadCloud className="size-7 text-slate-500" />}
+          <span className="text-sm text-slate-300">
+            {busy === 'upload' ? 'Lettura, profilazione e proposta in corso…' : 'Aggiungi un file .xlsx o .csv'}
+          </span>
+          <span className="text-[11px] text-slate-600">
+            Puoi caricarne quanti vuoi. I file restano come materiale grezzo: puoi rimappare e reimportare senza ricaricarli.
+          </span>
+          <input type="file" accept=".xlsx,.csv" className="hidden" disabled={!!busy}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
+        </label>
+        {files.length > 0 && (
+          <p className="mt-2 flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
+            <span>{files.length} file · {files.reduce((s, f) => s + f.rowCount, 0).toLocaleString('it-IT')} righe grezze</span>
+            {totalImported > 0 && <span className="text-emerald-400">{totalImported.toLocaleString('it-IT')} mention derivate</span>}
+            {totalImported > 0 && (
+              <button onClick={analyzeNow} disabled={!!busy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-sky-200 hover:bg-sky-500/20 disabled:opacity-50">
+                {busy === 'analyze' ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />} Analizza con l&rsquo;AI
+              </button>
+            )}
+            {analyzeMsg && <span className="text-slate-400">{analyzeMsg}</span>}
+          </p>
+        )}
+      </section>
+
+      {error && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">{error}</p>}
+
+      {files.map((f) => (
+        <FileCard
+          key={f.id} file={f} busy={busy}
+          expanded={open === f.id}
+          onToggle={() => setOpen(open === f.id ? null : f.id)}
+          onAct={act}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FileCard({ file, busy, expanded, onToggle, onAct }: {
+  file: ImportFile; busy: string; expanded: boolean;
+  onToggle: () => void;
+  onAct: (fileId: number, action: string, mapping?: Record<string, string>) => Promise<void>;
+}) {
+  const [map, setMap] = useState<Record<string, string>>(file.mapping);
+  // Se il file cambia sotto (ricaricato dopo un'azione) la bozza locale si allinea.
+  useEffect(() => { setMap(file.mapping); }, [file.mapping]);
+
+  const dirty = JSON.stringify(map) !== JSON.stringify(file.mapping);
+  const st = STATUS[file.status];
+  const busyHere = busy.endsWith(`-${file.id}`);
+
+  return (
+    <section className="panel px-5 py-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          {expanded ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
+          <FileSpreadsheet className="size-4 shrink-0 text-slate-500" />
+          <span className="truncate text-sm font-medium text-slate-200">{file.filename}</span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${st.cls}`}>{st.label}</span>
+          <span className="shrink-0 text-[11px] text-slate-600">
+            {file.rowCount.toLocaleString('it-IT')} righe · {file.columns.length} colonne
+            {file.rawPurged && ' · grezzo eliminato'}
+          </span>
+        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {!file.rawPurged && (
+            <button onClick={() => onAct(file.id, 'derive')} disabled={!!busy || !map.content}
+              title={file.status === 'imported' ? 'Rigenera le mention da questo file' : 'Deriva le mention'}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500/90 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-50">
+              {busyHere && busy.startsWith('derive') ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}
+              {file.status === 'imported' ? 'Reimporta' : 'Importa'}
+            </button>
+          )}
+          <button onClick={() => onAct(file.id, 'delete')} disabled={!!busy}
+            title="Elimina il file e le mention che ne derivano"
+            className="rounded-lg p-1.5 text-slate-600 hover:text-red-400 disabled:opacity-50">
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      </div>
+
+      {file.report && (
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px]">
+          <li className="text-emerald-300">{file.report.inserted.toLocaleString('it-IT')} importate</li>
+          {file.report.skippedEmpty > 0 && <li className="text-slate-500">{file.report.skippedEmpty} senza testo</li>}
+          {file.report.duplicates > 0 && <li className="text-slate-500">{file.report.duplicates} duplicati</li>}
+          {file.report.datesFailed > 0 && (
+            <li className="text-amber-300">
+              <AlertTriangle className="mr-1 inline size-3" />
+              {file.report.datesFailed} date illeggibili — quelle righe sono finite a oggi
+            </li>
+          )}
+          {file.report.sentimentImported > 0 && (
+            <li className="text-emerald-300">{file.report.sentimentImported} con sentiment dal file (nessun costo AI)</li>
+          )}
+        </ul>
+      )}
+
+      {expanded && (
+        <div className="mt-4 flex flex-col gap-4 border-t border-[var(--border)] pt-4">
+          {file.proposal && file.proposal.length > 0 && <ProposalPanel proposal={file.proposal} />}
+
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Assegnazione dei campi</p>
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {FIELDS.map((f) => (
+                <label key={f.key} className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-300">
+                    {f.label}{f.required && <span className="text-sky-400"> *</span>}
+                    <span className="text-slate-600"> · {f.hint}</span>
+                  </span>
+                  <select value={map[f.key] ?? ''}
+                    onChange={(e) => setMap((m) => ({ ...m, [f.key]: e.target.value }))}
+                    className={`rounded-lg border bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-slate-100 outline-none ${
+                      f.required && !map[f.key] ? 'border-sky-500/50' : 'border-[var(--border)]'
+                    }`}>
+                    <option value="">— nessuna —</option>
+                    {file.columns.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button onClick={() => onAct(file.id, 'map', map)} disabled={!!busy || !dirty}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40">
+                {busyHere && busy.startsWith('map') ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                Salva assegnazione
+              </button>
+              {dirty && (
+                <span className="text-[11px] text-amber-300">
+                  Modifiche non salvate — dopo il salvataggio usa &ldquo;Reimporta&rdquo; per rigenerare le mention.
+                </span>
+              )}
+              {!file.rawPurged && file.status === 'imported' && (
+                <button onClick={() => onAct(file.id, 'purge')} disabled={!!busy}
+                  title="Elimina le righe grezze per liberare spazio: le mention restano, ma il file non sarà più rimappabile"
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 disabled:opacity-50">
+                  <Archive className="size-3.5" /> Libera spazio grezzo
+                </button>
+              )}
+            </div>
+          </div>
+
+          <ColumnTable profiles={file.profiles} mapping={map} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ProposalPanel({ proposal }: { proposal: Proposal[] }) {
+  const sure = proposal.filter((p) => p.field && p.confidence === 'alta');
+  const unsure = proposal.filter((p) => p.field && p.confidence !== 'alta');
+  const ignored = proposal.filter((p) => !p.field);
+  const Row = ({ p }: { p: Proposal }) => (
+    <li className="flex flex-wrap items-baseline gap-x-2 text-xs">
+      <span className="font-medium text-slate-300">{p.column}</span>
+      {p.field && <><span className="text-slate-600">→</span><span className="text-sky-300">{FIELD_LABEL[p.field] ?? p.field}</span></>}
+      <span className="text-slate-600">{p.reason}</span>
+    </li>
+  );
+  return (
+    <div>
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+        <Wand2 className="size-3.5 text-violet-400" /> Cosa ha capito Radar
+      </p>
+      <p className="mb-2 text-xs text-slate-600">
+        Letto dai <span className="text-slate-400">valori</span> delle colonne, non dai loro nomi: funziona in qualsiasi lingua. Resta tutto modificabile qui sotto.
+      </p>
+      <div className="flex flex-col gap-2">
+        {sure.length > 0 && (
+          <div>
+            <p className="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-emerald-300"><Check className="size-3" /> Riconosciute ({sure.length})</p>
+            <ul className="flex flex-col gap-0.5">{sure.map((p) => <Row key={p.column} p={p} />)}</ul>
+          </div>
+        )}
+        {unsure.length > 0 && (
+          <div>
+            <p className="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-amber-300"><AlertTriangle className="size-3" /> Da controllare ({unsure.length})</p>
+            <ul className="flex flex-col gap-0.5">{unsure.map((p) => <Row key={p.column} p={p} />)}</ul>
+          </div>
+        )}
+        {ignored.length > 0 && (
+          <div>
+            <p className="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-slate-500"><EyeOff className="size-3" /> Non importate ({ignored.length})</p>
+            <p className="text-xs text-slate-600">{ignored.map((p) => p.column).join(' · ')}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Le colonne come sono davvero nel file: tipo osservato, riempimento, esempi. */
+function ColumnTable({ profiles, mapping }: { profiles: Profile[]; mapping: Record<string, string> }) {
+  const assignedTo = (col: string) => Object.entries(mapping).find(([, v]) => v === col)?.[0];
+  return (
+    <details className="rounded-lg border border-[var(--border)] px-3 py-2">
+      <summary className="cursor-pointer list-none text-[11px] font-semibold uppercase tracking-widest text-slate-500 [&::-webkit-details-marker]:hidden">
+        <RefreshCw className="mr-1 inline size-3" /> Colonne del file ({profiles.length})
+      </summary>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-[10px] uppercase tracking-wide text-slate-600">
+              <th className="pb-1 pr-3">Colonna</th>
+              <th className="pb-1 pr-3">Tipo</th>
+              <th className="pb-1 pr-3 text-right">Piena</th>
+              <th className="pb-1 pr-3 text-right">Distinti</th>
+              <th className="pb-1 pr-3">Esempi</th>
+              <th className="pb-1">Assegnata a</th>
+            </tr>
+          </thead>
+          <tbody>
+            {profiles.map((p) => {
+              const field = assignedTo(p.name);
+              return (
+                <tr key={p.name} className="border-t border-[var(--border)]/40">
+                  <td className="py-1 pr-3 font-medium text-slate-300">{p.name}</td>
+                  <td className="py-1 pr-3 text-slate-500">{p.kind}</td>
+                  <td className={`py-1 pr-3 text-right tabular-nums ${p.filled < 60 ? 'text-amber-400' : 'text-slate-500'}`}>{p.filled}%</td>
+                  <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{p.distinct}</td>
+                  <td className="max-w-[22rem] truncate py-1 pr-3 text-slate-600">{p.samples.join(' ¦ ')}</td>
+                  <td className="py-1 text-sky-300">{field ? (FIELD_LABEL[field] ?? field) : <span className="text-slate-700">—</span>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}

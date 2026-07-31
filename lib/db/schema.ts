@@ -108,6 +108,9 @@ export const mentions = pgTable('mentions', {
   quality: jsonb('quality').$type<Quality>(),
   analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
   storyId: integer('story_id'),
+  // Da quale file importato proviene questa mention. Senza questo legame non
+  // si può rimappare o cancellare un file senza toccare il resto del progetto.
+  importFileId: integer('import_file_id'),
 });
 
 export const stories = pgTable('stories', {
@@ -340,4 +343,46 @@ export const wikiEdits = pgTable('wiki_edits', {
   tags: jsonb('tags').$type<string[]>().notNull().default([]),
   timestamp: timestamp('timestamp', { withTimezone: true }).notNull(),
   fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Import di file come materiale GREZZO e riutilizzabile.
+//
+// Il file caricato non viene consumato una volta sola: le sue righe restano in
+// archivio intatte, e le mention si DERIVANO dalla mappatura corrente. Cambiare
+// l'assegnazione di una colonna significa quindi ri-derivare, non ricaricare —
+// ed è per questo che le righe grezze si conservano invece di essere buttate
+// dopo l'inserimento.
+// ---------------------------------------------------------------------------
+export const importFiles = pgTable('import_files', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  filename: text('filename').notNull(),
+  sizeBytes: integer('size_bytes').notNull().default(0),
+  rowCount: integer('row_count').notNull().default(0),
+  columns: jsonb('columns').$type<string[]>().notNull().default([]),
+  /** Profilo osservato di ogni colonna: tipo, riempimento, campioni. */
+  profiles: jsonb('profiles').$type<unknown[]>().notNull().default([]),
+  /** Cosa aveva proposto l'AI: si conserva per poter mostrare le motivazioni
+   *  anche a distanza di tempo, e per distinguere le scelte del modello da
+   *  quelle fatte a mano dall'utente. */
+  proposal: jsonb('proposal').$type<unknown[]>(),
+  /** Mappatura in vigore: campo di Radar -> nome colonna. Modificabile sempre. */
+  mapping: jsonb('mapping').$type<Record<string, string>>().notNull().default({}),
+  /** uploaded = letto e profilato · mapped = mappatura confermata · imported = mention derivate */
+  status: text('status').$type<'uploaded' | 'mapped' | 'imported'>().notNull().default('uploaded'),
+  /** Esito dell'ultima derivazione: quante righe sono entrate e cosa è stato scartato. */
+  report: jsonb('report').$type<Record<string, number>>(),
+  /** Le righe grezze sono state eliminate per liberare spazio (niente più rimappatura). */
+  rawPurged: integer('raw_purged').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  importedAt: timestamp('imported_at', { withTimezone: true }),
+});
+
+/** Le celle originali, esattamente come stavano nel file. Mai modificate. */
+export const importRows = pgTable('import_rows', {
+  id: serial('id').primaryKey(),
+  fileId: integer('file_id').notNull(),
+  rowIndex: integer('row_index').notNull(),
+  data: jsonb('data').$type<Record<string, unknown>>().notNull(),
 });
