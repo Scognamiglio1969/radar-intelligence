@@ -6,7 +6,7 @@ import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { commitSheet, type ColumnMap } from '@/lib/import';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   if (!isAdmin(await getCurrentUser())) return NextResponse.json({ error: 'Admins only' }, { status: 403 });

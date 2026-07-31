@@ -1,4 +1,7 @@
 import ExcelJS from 'exceljs';
+import {
+  cleanText, engagementScore, parseDateTime, parseLanguage, parseNumber, parseSentiment,
+} from '@/lib/import-normalize';
 import { getDb } from '@/lib/db';
 import { mentions } from '@/lib/db/schema';
 
@@ -16,10 +19,35 @@ export type ColumnMap = {
   content: string;                 // OBBLIGATORIO: il testo da analizzare
   title?: string;
   date?: string;
+  /** Ora in colonna separata dalla data: normale negli export di listening. */
+  time?: string;
   author?: string;
+  authorHandle?: string;
   source?: string;
   url?: string;
+  language?: string;
+  community?: string;
+  country?: string;
+  /** Sentiment già calcolato dallo strumento di provenienza. */
+  sentiment?: string;
+  reach?: string;
+  likes?: string;
+  comments?: string;
+  shares?: string;
+  views?: string;
+  /** Engagement già aggregato: usato solo se mancano le colonne separate. */
   engagement?: string;
+};
+
+/** Esito dell'import, con il dettaglio di cosa NON è passato e perché. */
+export type ImportReport = {
+  total: number;
+  inserted: number;
+  skippedEmpty: number;
+  duplicates: number;
+  /** Righe in cui la colonna data c'era ma non è stata interpretata. */
+  datesFailed: number;
+  sentimentImported: number;
 };
 
 function normalizeCell(v: unknown): unknown {
@@ -95,48 +123,88 @@ function hash(s: string): string {
   return (h >>> 0).toString(36);
 }
 
-function parseDate(v: unknown): Date | null {
-  if (v == null || v === '') return null;
-  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
-  const d = new Date(String(v));
-  return isNaN(d.getTime()) ? null : d;
-}
-
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'upload';
 
 /** Mappa le righe del foglio in mention e le inserisce (dedup via external_id). */
-export async function commitSheet(projectId: number, buffer: Buffer, filename: string, map: ColumnMap): Promise<{ inserted: number; skipped: number; total: number }> {
+export async function commitSheet(projectId: number, buffer: Buffer, filename: string, map: ColumnMap): Promise<ImportReport> {
   const { rows } = await parseSheet(buffer, filename);
   const get = (row: Record<string, unknown>, col?: string) => (col ? row[col] : undefined);
+  const has = (col?: string) => Boolean(col && col.trim());
 
   const values = [] as (typeof mentions.$inferInsert)[];
-  let skipped = 0;
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const content = String(get(row, map.content) ?? '').trim();
-    if (!content) { skipped++; continue; }
-    const source = map.source ? slug(String(get(row, map.source) ?? 'upload')) : 'upload';
-    const title = map.title ? String(get(row, map.title) ?? '').trim() || null : null;
-    const author = map.author ? String(get(row, map.author) ?? '').trim() || null : null;
-    const url = map.url ? String(get(row, map.url) ?? '').trim() || null : null;
-    const publishedAt = (map.date && parseDate(get(row, map.date))) || new Date();
-    const engRaw = map.engagement ? Number(String(get(row, map.engagement) ?? '').replace(/[^0-9.-]/g, '')) : 0;
-    const engagementScore = Number.isFinite(engRaw) ? engRaw : 0;
+  const report: ImportReport = {
+    total: rows.length, inserted: 0, skippedEmpty: 0, duplicates: 0,
+    datesFailed: 0, sentimentImported: 0,
+  };
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    const content = cleanText(get(row, map.content));
+    if (!content) { report.skippedEmpty++; continue; }
+
+    // Data: se la colonna c'è ma non si interpreta va CONTATO, non nascosto
+    // dietro un fallback silenzioso a "oggi" — una data sbagliata falsa ogni
+    // grafico temporale, ed è il tipo di errore che si scopre troppo tardi.
+    let publishedAt = parseDateTime(get(row, map.date), has(map.time) ? get(row, map.time) : undefined);
+    if (!publishedAt) {
+      if (has(map.date)) report.datesFailed++;
+      publishedAt = new Date();
+    }
+
+    const engagement = {
+      likes: has(map.likes) ? parseNumber(get(row, map.likes)) : undefined,
+      comments: has(map.comments) ? parseNumber(get(row, map.comments)) : undefined,
+      shares: has(map.shares) ? parseNumber(get(row, map.shares)) : undefined,
+      views: has(map.views) ? parseNumber(get(row, map.views)) : undefined,
+    };
+    const hasBreakdown = Object.values(engagement).some((v) => v !== undefined);
+    // Il totale aggregato si usa solo in mancanza del dettaglio: sommarli
+    // entrambi conterebbe due volte le stesse interazioni.
+    const score = hasBreakdown
+      ? engagementScore(engagement)
+      : (has(map.engagement) ? parseNumber(get(row, map.engagement)) : 0);
+
+    const { sentiment, score: sentScore } = has(map.sentiment)
+      ? parseSentiment(get(row, map.sentiment))
+      : { sentiment: null, score: null };
+    if (sentiment) report.sentimentImported++;
+
+    const author = has(map.author) ? cleanText(get(row, map.author)) || null : null;
+    const externalId = hash(`${content}|${author ?? ''}|${publishedAt.toISOString()}`);
+    // Deduplica anche DENTRO il file, non solo verso il database: gli export
+    // di listening contengono spesso la stessa citazione ripetuta su più righe.
+    if (seen.has(externalId)) { report.duplicates++; continue; }
+    seen.add(externalId);
+
     values.push({
-      projectId, source,
-      externalId: hash(`${content}|${author ?? ''}|${publishedAt.toISOString()}`),
-      url, title, content, author,
+      projectId,
+      source: has(map.source) ? slug(String(get(row, map.source) ?? 'upload')) : 'upload',
+      externalId,
+      url: has(map.url) ? cleanText(get(row, map.url)) || null : null,
+      title: has(map.title) ? cleanText(get(row, map.title)) || null : null,
+      content,
+      author,
+      authorHandle: has(map.authorHandle) ? cleanText(get(row, map.authorHandle)) || null : null,
+      community: has(map.community) ? cleanText(get(row, map.community)) || null : null,
+      language: has(map.language) ? parseLanguage(get(row, map.language)) : null,
       publishedAt,
-      engagementScore,
+      engagement: hasBreakdown ? engagement : undefined,
+      engagementScore: score,
+      reach: has(map.reach) ? Math.round(parseNumber(get(row, map.reach))) || null : null,
+      sentiment,
+      sentimentScore: sentScore,
+      // Il sentiment importato conta come analisi gia fatta: senza questo la
+      // pipeline lo rianalizzerebbe con l'AI, pagando per un dato presente.
+      analyzedAt: sentiment ? new Date() : null,
     });
   }
 
   const db = await getDb();
-  let inserted = 0;
   for (let i = 0; i < values.length; i += 500) {
     const chunk = values.slice(i, i + 500);
     const res = await db.insert(mentions).values(chunk).onConflictDoNothing().returning({ id: mentions.id });
-    inserted += res.length;
+    report.inserted += res.length;
   }
-  return { inserted, skipped, total: rows.length };
+  report.duplicates += values.length - report.inserted;
+  return report;
 }
