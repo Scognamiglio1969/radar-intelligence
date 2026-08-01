@@ -156,3 +156,157 @@ export async function proposeMapping(profiles: ColumnProfile[]): Promise<FieldPr
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Riconoscimento deterministico, senza AI.
+//
+// Serve come base SEMPRE presente: la chiamata al modello è un servizio esterno
+// (può mancare la chiave, scattare il tetto di spesa, andare in timeout) e non
+// deve essere un punto di rottura unico. Se l'AI risponde, raffina questa base;
+// se non risponde, lo strumento resta comunque utile.
+//
+// A differenza del vecchio match per sole espressioni regolari sui nomi
+// (inglese e basta), qui il nome è solo uno degli indizi: contano anche il tipo
+// osservato nei valori, la lunghezza media del testo e quanti valori distinti
+// ci sono — così una colonna "col_3" piena di date viene riconosciuta e un
+// file con intestazioni italiane non fallisce in blocco.
+// ---------------------------------------------------------------------------
+/** Piattaforme riconoscibili nei valori: l'indizio più forte per "source",
+ *  più forte del nome della colonna. È il caso in cui una colonna chiamata
+ *  proprio "Source" contiene Organic/Sponsored mentre la piattaforma vera sta
+ *  in "Social Network": il nome inganna, i valori no. */
+const PLATFORMS = /^(twitter|x|facebook|instagram|tiktok|linkedin|youtube|reddit|telegram|threads|pinterest|snapchat|twitch|mastodon|bluesky|weibo|vk|blog|forum|news|web)$/i;
+
+/** Nome italiano equivalente, per la corrispondenza esatta. */
+const FIELD_ALIASES: Partial<Record<TargetField, string>> = {
+  content: 'testo', title: 'titolo', date: 'data', time: 'ora', author: 'autore',
+  source: 'fonte', url: 'link', language: 'lingua', country: 'paese',
+  likes: 'like', comments: 'commenti', shares: 'condivisioni', views: 'visualizzazioni',
+};
+
+const NAME_HINTS: Partial<Record<TargetField, RegExp>> = {
+  content: /(content|text|testo|message|messaggio|body|post|comment|caption|descri|snippet)/i,
+  title: /(title|titolo|headline|subject|oggetto)/i,
+  date: /(date|data|giorno|created|published|pubblic|timestamp)/i,
+  time: /(time|ora|orario|hour)/i,
+  author: /(author|autore|user|utente|name|nome|profile|profilo)/i,
+  authorHandle: /(handle|username|screen.?name|account|nick)/i,
+  source: /(source|fonte|platform|piattaforma|network|social|channel|canale|site|sito|media)/i,
+  url: /(url|link|permalink|href|indirizzo)/i,
+  language: /(lang|lingua|idioma|locale)/i,
+  community: /(communit|group|gruppo|subreddit|page|pagina|forum)/i,
+  country: /(country|paese|nazione|geo|region)/i,
+  sentiment: /(sentiment|tono|polarity|polarit|opinion)/i,
+  reach: /(reach|impression|potential|follower|audience|copertura)/i,
+  likes: /(like|mi.?piace|favorit|reaction|reazion|upvote)/i,
+  comments: /(comment|comment|repl|rispost)/i,
+  shares: /(share|condivis|retweet|repost|rilanci)/i,
+  views: /(view|visualizz|watch|impression.?video|play)/i,
+  engagement: /(engagement|interazion|interaction|total)/i,
+};
+
+/** Tipo di valore atteso: una colonna di testo non può essere "like". */
+const EXPECTED_KIND: Partial<Record<TargetField, ColumnProfile['kind'][]>> = {
+  date: ['date'], time: ['time'],
+  reach: ['number'], likes: ['number'], comments: ['number'],
+  shares: ['number'], views: ['number'], engagement: ['number'],
+};
+
+function scoreField(field: TargetField, p: ColumnProfile, rowCount: number): number {
+  const expected = EXPECTED_KIND[field];
+  // Tipo incompatibile: la colonna è esclusa a prescindere dal nome, perché
+  // un nome può ingannare (una colonna "Source" che contiene Organic/Sponsored
+  // non è la fonte) mentre il tipo dei valori no.
+  if (expected && !expected.includes(p.kind)) return 0;
+
+  let score = 0;
+  if (NAME_HINTS[field]?.test(p.name)) score += 50;
+  // Corrispondenza ESATTA col nome del campo: una colonna chiamata proprio
+  // "Reach" batte "Followers", che pure contiene un indizio valido. Senza
+  // questo, fra due candidati plausibili vinceva semplicemente il primo.
+  const exact = p.name.trim().toLowerCase();
+  if (exact === field.toLowerCase() || exact === (FIELD_ALIASES[field] ?? '')) score += 45;
+  // Un tasso o una percentuale non è un conteggio: "Engagement Rate %" vale
+  // 15.44, non 15 interazioni, e usarlo come totale falserebbe ogni classifica.
+  if (EXPECTED_KIND[field] && /(rate|%|perc|ratio|media|avg)/i.test(p.name)) score -= 60;
+
+  // Indizi dai VALORI, che pesano quanto il nome.
+  if (field === 'content' && p.kind === 'text' && p.avgLength >= 40) score += 40;
+  if (field === 'title' && p.kind === 'text' && p.avgLength >= 12 && p.avgLength < 90) score += 15;
+  if (field === 'sentiment' && p.distinct <= 6 && p.kind === 'text') score += 35;
+  if (field === 'language' && p.avgLength <= 6 && p.distinct <= 20) score += 30;
+  if (field === 'country' && p.kind === 'text' && p.distinct <= 40 && p.avgLength <= 20) score += 15;
+  if (field === 'url' && p.samples.some((s) => /^https?:\/\//i.test(s))) score += 60;
+  if (field === 'source') {
+    const hits = p.samples.filter((s) => PLATFORMS.test(s.trim())).length;
+    // I valori sono nomi di piattaforme: batte qualunque indizio dal nome.
+    if (hits >= Math.max(1, Math.ceil(p.samples.length / 2))) score += 70;
+    // Colonna che si CHIAMA "source" ma contiene altro: l'indizio del nome va
+    // annullato, altrimenti vince su quella giusta.
+    else if (p.kind === 'text' && p.distinct <= 4 && hits === 0) score -= 45;
+  }
+  if (field === 'authorHandle' && p.samples.some((s) => /^@|^[a-z0-9._]+$/i.test(s)) && p.distinct > rowCount * 0.3) score += 15;
+  if (expected && expected.includes(p.kind)) score += 15;
+  // Una colonna quasi vuota è raramente quella giusta.
+  if (p.filled < 40) score -= 25;
+  return score;
+}
+
+/**
+ * Assegna i campi con una scelta globale (non "primo che passa"): ogni campo
+ * prende la colonna con il punteggio più alto, e ogni colonna può servire un
+ * solo campo — così due candidati non si sovrascrivono a vicenda.
+ */
+export function heuristicMapping(profiles: ColumnProfile[], rowCount: number): FieldProposal[] {
+  const pairs: { field: TargetField; profile: ColumnProfile; score: number }[] = [];
+  for (const field of Object.keys(TARGET_FIELDS) as TargetField[]) {
+    for (const p of profiles) {
+      const score = scoreField(field, p, rowCount);
+      if (score >= 40) pairs.push({ field, profile: p, score });
+    }
+  }
+  pairs.sort((a, b) => b.score - a.score);
+
+  const usedField = new Set<string>();
+  const usedCol = new Set<string>();
+  const chosen = new Map<string, { field: TargetField; score: number }>();
+  for (const { field, profile, score } of pairs) {
+    if (usedField.has(field) || usedCol.has(profile.name)) continue;
+    usedField.add(field); usedCol.add(profile.name);
+    chosen.set(profile.name, { field, score });
+  }
+
+  return profiles.map((p) => {
+    const hit = chosen.get(p.name);
+    if (!hit) return { column: p.name, field: null, confidence: null, reason: 'Nessuna corrispondenza riconosciuta.' };
+    return {
+      column: p.name,
+      field: hit.field,
+      confidence: hit.score >= 80 ? 'alta' : hit.score >= 55 ? 'media' : 'bassa',
+      reason: `Riconosciuta dal nome e dai valori (tipo ${p.kind}, ${p.filled}% piena, ${p.distinct} valori distinti).`,
+    };
+  });
+}
+
+/** Base deterministica + raffinamento AI quando disponibile. */
+export async function buildProposal(
+  profiles: ColumnProfile[], rowCount: number,
+): Promise<{ proposal: FieldProposal[]; usedAi: boolean }> {
+  const base = heuristicMapping(profiles, rowCount);
+  const ai = await proposeMapping(profiles).catch(() => null);
+  if (!ai) return { proposal: base, usedAi: false };
+
+  // L'AI vince dove si esprime; dove tace resta la base — così il modello può
+  // solo migliorare il risultato, mai peggiorarlo azzerando un riconoscimento
+  // che il codice aveva già fatto.
+  const byCol = new Map(base.map((b) => [b.column, b]));
+  const usedField = new Set(ai.filter((a) => a.field).map((a) => a.field as string));
+  const merged: FieldProposal[] = ai.map((a) => {
+    if (a.field) return a;
+    const fallback = byCol.get(a.column);
+    return fallback && fallback.field && !usedField.has(fallback.field)
+      ? (usedField.add(fallback.field), fallback)
+      : a;
+  });
+  return { proposal: merged, usedAi: true };
+}

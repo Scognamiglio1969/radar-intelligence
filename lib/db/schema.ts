@@ -375,6 +375,8 @@ export const importFiles = pgTable('import_files', {
   report: jsonb('report').$type<Record<string, number>>(),
   /** Le righe grezze sono state eliminate per liberare spazio (niente più rimappatura). */
   rawPurged: integer('raw_purged').notNull().default(0),
+  /** 1 se l'AI ha partecipato alla proposta; 0 se è solo riconoscimento deterministico. */
+  usedAi: integer('used_ai').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   importedAt: timestamp('imported_at', { withTimezone: true }),
 });

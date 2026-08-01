@@ -2,7 +2,7 @@ import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { importFiles, importRows, mentions } from '@/lib/db/schema';
 import { parseSheet, type ColumnMap, type ImportReport } from '@/lib/import';
-import { profileColumns, proposeMapping, type ColumnProfile, type FieldProposal } from '@/lib/import-profile';
+import { buildProposal, profileColumns, type ColumnProfile, type FieldProposal } from '@/lib/import-profile';
 import {
   cleanText, engagementScore, parseDateTime, parseLanguage, parseNumber, parseSentiment,
 } from '@/lib/import-normalize';
@@ -35,33 +35,34 @@ export type ImportFileRow = {
   id: number; filename: string; sizeBytes: number; rowCount: number;
   columns: string[]; profiles: ColumnProfile[]; proposal: FieldProposal[] | null;
   mapping: Record<string, string>; status: 'uploaded' | 'mapped' | 'imported';
-  report: Record<string, number> | null; rawPurged: boolean;
+  report: Record<string, number> | null; rawPurged: boolean; usedAi: boolean;
   createdAt: Date; importedAt: Date | null;
 };
 
 /** Legge il foglio, ne conserva le righe grezze e chiede all'AI una proposta. */
 export async function registerFile(
   projectId: number, buffer: Buffer, filename: string,
-): Promise<{ fileId: number; columns: string[]; profiles: ColumnProfile[]; proposal: FieldProposal[] | null; total: number }> {
+): Promise<{ fileId: number; columns: string[]; profiles: ColumnProfile[]; proposal: FieldProposal[]; usedAi: boolean; total: number }> {
   const { columns, rows } = await parseSheet(buffer, filename);
   if (columns.length === 0) throw new Error('Il file non ha colonne leggibili');
 
   const profiles = profileColumns(columns, rows);
-  // La proposta è un di più: se manca la chiave AI o il modello non risponde,
-  // il file resta importabile mappandolo a mano.
-  const proposal = await proposeMapping(profiles).catch(() => null);
+  // Riconoscimento deterministico sempre presente, raffinato dall'AI quando
+  // risponde: la chiamata al modello è un servizio esterno e non deve poter
+  // lasciare l'utente davanti a un file completamente non mappato.
+  const { proposal, usedAi } = await buildProposal(profiles, rows.length);
 
   // Mappatura iniziale dalle sole proposte convincenti: le incerte restano
   // visibili nel pannello ma non entrano in vigore da sole.
   const mapping: Record<string, string> = {};
-  for (const p of proposal ?? []) {
+  for (const p of proposal) {
     if (p.field && p.confidence && p.confidence !== 'bassa') mapping[p.field] = p.column;
   }
 
   const db = await getDb();
   const [file] = await db.insert(importFiles).values({
     projectId, filename, sizeBytes: buffer.length, rowCount: rows.length,
-    columns, profiles, proposal, mapping, status: 'uploaded',
+    columns, profiles, proposal, mapping, usedAi: usedAi ? 1 : 0, status: 'uploaded',
   }).returning({ id: importFiles.id });
 
   for (let i = 0; i < rows.length; i += CHUNK) {
@@ -70,7 +71,7 @@ export async function registerFile(
     );
   }
 
-  return { fileId: file.id, columns, profiles, proposal, total: rows.length };
+  return { fileId: file.id, columns, profiles, proposal, usedAi, total: rows.length };
 }
 
 export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
@@ -83,7 +84,8 @@ export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
     columns: r.columns, profiles: (r.profiles ?? []) as ColumnProfile[],
     proposal: (r.proposal ?? null) as FieldProposal[] | null,
     mapping: r.mapping, status: r.status, report: r.report ?? null,
-    rawPurged: r.rawPurged === 1, createdAt: r.createdAt, importedAt: r.importedAt,
+    rawPurged: r.rawPurged === 1, usedAi: r.usedAi === 1,
+    createdAt: r.createdAt, importedAt: r.importedAt,
   }));
 }
 

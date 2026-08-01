@@ -13,7 +13,8 @@ type ImportFile = {
   id: number; filename: string; sizeBytes: number; rowCount: number;
   columns: string[]; profiles: Profile[]; proposal: Proposal[] | null;
   mapping: Record<string, string>; status: 'uploaded' | 'mapped' | 'imported';
-  report: Report | null; rawPurged: boolean; createdAt: string; importedAt: string | null;
+  report: Report | null; rawPurged: boolean; usedAi: boolean;
+  createdAt: string; importedAt: string | null;
 };
 
 const FIELDS: { key: string; label: string; hint: string; required?: boolean }[] = [
@@ -212,7 +213,7 @@ function FileCard({ file, busy, expanded, onToggle, onAct }: {
 
       {expanded && (
         <div className="mt-4 flex flex-col gap-4 border-t border-[var(--border)] pt-4">
-          {file.proposal && file.proposal.length > 0 && <ProposalPanel proposal={file.proposal} />}
+          {file.proposal && file.proposal.length > 0 && <ProposalPanel proposal={file.proposal} usedAi={file.usedAi} />}
 
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Assegnazione dei campi</p>
@@ -262,7 +263,7 @@ function FileCard({ file, busy, expanded, onToggle, onAct }: {
   );
 }
 
-function ProposalPanel({ proposal }: { proposal: Proposal[] }) {
+function ProposalPanel({ proposal, usedAi }: { proposal: Proposal[]; usedAi: boolean }) {
   const sure = proposal.filter((p) => p.field && p.confidence === 'alta');
   const unsure = proposal.filter((p) => p.field && p.confidence !== 'alta');
   const ignored = proposal.filter((p) => !p.field);
@@ -280,6 +281,9 @@ function ProposalPanel({ proposal }: { proposal: Proposal[] }) {
       </p>
       <p className="mb-2 text-xs text-slate-600">
         Letto dai <span className="text-slate-400">valori</span> delle colonne, non dai loro nomi: funziona in qualsiasi lingua. Resta tutto modificabile qui sotto.
+        {!usedAi && (
+          <span className="text-amber-400"> · Riconoscimento automatico senza AI (chiave assente, tetto di spesa raggiunto o modello non raggiungibile): controlla le assegnazioni.</span>
+        )}
       </p>
       <div className="flex flex-col gap-2">
         {sure.length > 0 && (
