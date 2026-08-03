@@ -3,6 +3,23 @@
 Major, user-visible evolutions of Radar. Not every commit — the small fixes and internal
 refactors live in `git log`. This is the story of what the product became.
 
+## The distillery, finished
+
+The import workspace now shows the whole job at a glance — how many files, how many raw rows
+kept, how many mentions derived, how many dates it couldn't read — and each file carries its
+own progress: **loaded → assigned → verified → imported**.
+
+"Verified" is the step that was missing. **Verifica il risultato** shows the first rows exactly
+as they will be written — date, source, author, text, sentiment, reach, engagement — before
+anything touches the archive, using the *same function* the import uses, so a preview can never
+promise what the import won't deliver. Rows whose date couldn't be read are flagged amber right
+there, instead of being discovered afterwards.
+
+And the point of feeding a project N exports: **download the normalised file**. All the files
+merged into one table with a fixed set of columns, sorted in time, in Excel or CSV, with a
+*Provenance* sheet saying how many rows each file contributed and which were skipped and why.
+Single files can be exported on their own, and everything ready can be imported in one click.
+
 ## Files: computed cells, and the first tests
 
 Listening exports routinely compute engagement inside the sheet. Radar now reads the

@@ -3,9 +3,7 @@ import { getDb } from '@/lib/db';
 import { importFiles, importRows, mentions } from '@/lib/db/schema';
 import { parseSheet, type ColumnMap, type ImportReport, type SheetIssues } from '@/lib/import';
 import { buildProposal, profileColumns, type ColumnProfile, type FieldProposal } from '@/lib/import-profile';
-import {
-  cleanText, engagementScore, parseDateTime, parseLanguage, parseNumber, parseSentiment,
-} from '@/lib/import-normalize';
+import { deriveRows } from '@/lib/import-derive';
 
 // ---------------------------------------------------------------------------
 // Ciclo di vita di un file importato.
@@ -23,13 +21,6 @@ import {
 
 const CHUNK = 400;
 
-/** Hash deterministico (djb2): reimportare lo stesso contenuto non duplica. */
-function hash(s: string): string {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
-}
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'upload';
 
 export type ImportFileRow = {
   id: number; filename: string; sizeBytes: number; rowCount: number;
@@ -123,68 +114,28 @@ export async function deriveMentions(fileId: number, projectId: number): Promise
   const raw = await db.select({ data: importRows.data }).from(importRows)
     .where(eq(importRows.fileId, fileId)).orderBy(asc(importRows.rowIndex));
 
-  const get = (row: Record<string, unknown>, col?: string) => (col ? row[col] : undefined);
-  const has = (col?: string) => Boolean(col && col.trim());
-  const report: ImportReport = {
-    total: raw.length, inserted: 0, skippedEmpty: 0, duplicates: 0,
-    datesFailed: 0, sentimentImported: 0,
-  };
-  const seen = new Set<string>();
-  const values: (typeof mentions.$inferInsert)[] = [];
+  // La trasformazione riga → mention vive in lib/import-derive: la stessa
+  // funzione serve l'anteprima e l'esportazione del normalizzato, così quello
+  // che l'anteprima mostra è esattamente quello che l'import scrive.
+  const { rows: norm, report } = deriveRows(raw.map((r) => r.data as Record<string, unknown>), map, fileId);
 
-  for (const { data } of raw) {
-    const row = data as Record<string, unknown>;
-    const content = cleanText(get(row, map.content));
-    if (!content) { report.skippedEmpty++; continue; }
-
-    let publishedAt = parseDateTime(get(row, map.date), has(map.time) ? get(row, map.time) : undefined);
-    if (!publishedAt) {
-      if (has(map.date)) report.datesFailed++;
-      publishedAt = new Date();
-    }
-
-    const engagement = {
-      likes: has(map.likes) ? parseNumber(get(row, map.likes)) : undefined,
-      comments: has(map.comments) ? parseNumber(get(row, map.comments)) : undefined,
-      shares: has(map.shares) ? parseNumber(get(row, map.shares)) : undefined,
-      views: has(map.views) ? parseNumber(get(row, map.views)) : undefined,
-    };
-    const hasBreakdown = Object.values(engagement).some((v) => v !== undefined);
-    const score = hasBreakdown
-      ? engagementScore(engagement)
-      : (has(map.engagement) ? parseNumber(get(row, map.engagement)) : 0);
-
-    const { sentiment, score: sentScore } = has(map.sentiment)
-      ? parseSentiment(get(row, map.sentiment))
-      : { sentiment: null, score: null };
-    if (sentiment) report.sentimentImported++;
-
-    const author = has(map.author) ? cleanText(get(row, map.author)) || null : null;
-    // L'id include il file: due file diversi possono contenere legittimamente
-    // lo stesso post (finestre temporali sovrapposte) e vanno tenuti distinti
-    // per poter rimuovere un file senza cancellare le righe dell'altro.
-    const externalId = hash(`${fileId}|${content}|${author ?? ''}|${publishedAt.toISOString()}`);
-    if (seen.has(externalId)) { report.duplicates++; continue; }
-    seen.add(externalId);
-
-    values.push({
-      projectId, importFileId: fileId,
-      source: has(map.source) ? slug(String(get(row, map.source) ?? 'upload')) : 'upload',
-      externalId,
-      url: has(map.url) ? cleanText(get(row, map.url)) || null : null,
-      title: has(map.title) ? cleanText(get(row, map.title)) || null : null,
-      content, author,
-      authorHandle: has(map.authorHandle) ? cleanText(get(row, map.authorHandle)) || null : null,
-      community: has(map.community) ? cleanText(get(row, map.community)) || null : null,
-      language: has(map.language) ? parseLanguage(get(row, map.language)) : null,
-      publishedAt,
-      engagement: hasBreakdown ? engagement : undefined,
-      engagementScore: score,
-      reach: has(map.reach) ? Math.round(parseNumber(get(row, map.reach))) || null : null,
-      sentiment, sentimentScore: sentScore,
-      analyzedAt: sentiment ? new Date() : null,
-    });
-  }
+  const values: (typeof mentions.$inferInsert)[] = norm.map((n) => ({
+    projectId, importFileId: fileId,
+    source: n.source, externalId: n.externalId,
+    url: n.url, title: n.title, content: n.content, author: n.author,
+    authorHandle: n.authorHandle, community: n.community, language: n.language,
+    publishedAt: n.publishedAt,
+    engagement: (n.likes ?? n.comments ?? n.shares ?? n.views) !== null
+      ? {
+        likes: n.likes ?? undefined, comments: n.comments ?? undefined,
+        shares: n.shares ?? undefined, views: n.views ?? undefined,
+      }
+      : undefined,
+    engagementScore: n.engagementScore,
+    reach: n.reach,
+    sentiment: n.sentiment, sentimentScore: n.sentimentScore,
+    analyzedAt: n.sentiment ? new Date() : null,
+  }));
 
   for (let i = 0; i < values.length; i += 500) {
     const res = await db.insert(mentions).values(values.slice(i, i + 500))
@@ -234,4 +185,24 @@ export async function importedCount(projectId: number): Promise<number> {
   const [r] = await db.select({ n: sql<number>`count(*)` }).from(mentions)
     .where(and(eq(mentions.projectId, projectId), sql`${mentions.importFileId} is not null`));
   return Number(r?.n ?? 0);
+}
+
+/** La mappatura salvata di un file, per chi deve normalizzare senza ricaricarla. */
+export async function fileMapping(fileId: number, projectId: number): Promise<Record<string, string> | null> {
+  const db = await getDb();
+  const [f] = await db.select({ mapping: importFiles.mapping }).from(importFiles)
+    .where(and(eq(importFiles.id, fileId), eq(importFiles.projectId, projectId)));
+  return f?.mapping ?? null;
+}
+
+/**
+ * Tutte le righe grezze di un file. Serve all'esportazione del normalizzato,
+ * che deve poter rileggere l'originale senza passare dalle mention (le quali
+ * hanno già perso le colonne non mappate).
+ */
+export async function allRawRows(fileId: number): Promise<Record<string, unknown>[]> {
+  const db = await getDb();
+  const rows = await db.select({ data: importRows.data }).from(importRows)
+    .where(eq(importRows.fileId, fileId)).orderBy(asc(importRows.rowIndex));
+  return rows.map((r) => r.data as Record<string, unknown>);
 }
