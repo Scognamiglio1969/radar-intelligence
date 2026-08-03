@@ -377,6 +377,8 @@ export const importFiles = pgTable('import_files', {
   rawPurged: integer('raw_purged').notNull().default(0),
   /** 1 se l'AI ha partecipato alla proposta; 0 se è solo riconoscimento deterministico. */
   usedAi: integer('used_ai').notNull().default(0),
+  /** Cosa si è incontrato leggendo il foglio: formule, errori, formule senza valore. */
+  issues: jsonb('issues').$type<Record<string, number>>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   importedAt: timestamp('imported_at', { withTimezone: true }),
 });

@@ -14,6 +14,7 @@ type ImportFile = {
   columns: string[]; profiles: Profile[]; proposal: Proposal[] | null;
   mapping: Record<string, string>; status: 'uploaded' | 'mapped' | 'imported';
   report: Report | null; rawPurged: boolean; usedAi: boolean;
+  issues: { formulas: number; formulaErrors: number; formulaNoValue: number } | null;
   createdAt: string; importedAt: string | null;
 };
 
@@ -209,6 +210,21 @@ function FileCard({ file, busy, expanded, onToggle, onAct }: {
             <li className="text-emerald-300">{file.report.sentimentImported} con sentiment dal file (nessun costo AI)</li>
           )}
         </ul>
+      )}
+
+      {/* Le formule: cosa è stato letto e cosa non c'era da leggere. */}
+      {file.issues && file.issues.formulas > 0 && (
+        <p className={`mt-2 flex items-start gap-1.5 text-xs ${file.issues.formulaNoValue > 0 || file.issues.formulaErrors > 0
+          ? 'text-amber-300' : 'text-slate-500'}`}>
+          {file.issues.formulaNoValue > 0 || file.issues.formulaErrors > 0
+            ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            : <Check className="mt-0.5 size-3.5 shrink-0" />}
+          <span>
+            {file.issues.formulas} celle calcolate con formule: Radar ne ha preso il risultato, non la formula.
+            {file.issues.formulaErrors > 0 && ` ${file.issues.formulaErrors} davano errore (#DIV/0!, #N/D…) e sono state lasciate vuote.`}
+            {file.issues.formulaNoValue > 0 && ` ${file.issues.formulaNoValue} non avevano il valore salvato nel file: riaprilo in Excel e risalvalo per recuperarle.`}
+          </span>
+        </p>
       )}
 
       {expanded && (

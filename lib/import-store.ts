@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { importFiles, importRows, mentions } from '@/lib/db/schema';
-import { parseSheet, type ColumnMap, type ImportReport } from '@/lib/import';
+import { parseSheet, type ColumnMap, type ImportReport, type SheetIssues } from '@/lib/import';
 import { buildProposal, profileColumns, type ColumnProfile, type FieldProposal } from '@/lib/import-profile';
 import {
   cleanText, engagementScore, parseDateTime, parseLanguage, parseNumber, parseSentiment,
@@ -36,14 +36,18 @@ export type ImportFileRow = {
   columns: string[]; profiles: ColumnProfile[]; proposal: FieldProposal[] | null;
   mapping: Record<string, string>; status: 'uploaded' | 'mapped' | 'imported';
   report: Record<string, number> | null; rawPurged: boolean; usedAi: boolean;
+  issues: Record<string, number> | null;
   createdAt: Date; importedAt: Date | null;
 };
 
 /** Legge il foglio, ne conserva le righe grezze e chiede all'AI una proposta. */
 export async function registerFile(
   projectId: number, buffer: Buffer, filename: string,
-): Promise<{ fileId: number; columns: string[]; profiles: ColumnProfile[]; proposal: FieldProposal[]; usedAi: boolean; total: number }> {
-  const { columns, rows } = await parseSheet(buffer, filename);
+): Promise<{
+  fileId: number; columns: string[]; profiles: ColumnProfile[]; proposal: FieldProposal[];
+  usedAi: boolean; total: number; issues: SheetIssues;
+}> {
+  const { columns, rows, issues } = await parseSheet(buffer, filename);
   if (columns.length === 0) throw new Error('Il file non ha colonne leggibili');
 
   const profiles = profileColumns(columns, rows);
@@ -63,6 +67,7 @@ export async function registerFile(
   const [file] = await db.insert(importFiles).values({
     projectId, filename, sizeBytes: buffer.length, rowCount: rows.length,
     columns, profiles, proposal, mapping, usedAi: usedAi ? 1 : 0, status: 'uploaded',
+    issues,
   }).returning({ id: importFiles.id });
 
   for (let i = 0; i < rows.length; i += CHUNK) {
@@ -71,7 +76,7 @@ export async function registerFile(
     );
   }
 
-  return { fileId: file.id, columns, profiles, proposal, usedAi, total: rows.length };
+  return { fileId: file.id, columns, profiles, proposal, usedAi, total: rows.length, issues };
 }
 
 export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
@@ -84,7 +89,7 @@ export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
     columns: r.columns, profiles: (r.profiles ?? []) as ColumnProfile[],
     proposal: (r.proposal ?? null) as FieldProposal[] | null,
     mapping: r.mapping, status: r.status, report: r.report ?? null,
-    rawPurged: r.rawPurged === 1, usedAi: r.usedAi === 1,
+    rawPurged: r.rawPurged === 1, usedAi: r.usedAi === 1, issues: r.issues ?? null,
     createdAt: r.createdAt, importedAt: r.importedAt,
   }));
 }

@@ -245,6 +245,12 @@ function scoreField(field: TargetField, p: ColumnProfile, rowCount: number): num
     // annullato, altrimenti vince su quella giusta.
     else if (p.kind === 'text' && p.distinct <= 4 && hits === 0) score -= 45;
   }
+  // Un nome di persona o di testata: testo corto, quasi sempre diverso riga
+  // per riga, mai un indirizzo. Senza questo indizio, una colonna chiamata
+  // "Author Name" (invece che esattamente "Author") si fermava a confidenza
+  // bassa e non veniva applicata da sola, pur essendo quella giusta.
+  if (field === 'author' && p.kind === 'text' && p.avgLength > 0 && p.avgLength < 40
+    && p.distinct > rowCount * 0.3 && !p.samples.some((s) => /^https?:\/\//i.test(s))) score += 20;
   if (field === 'authorHandle' && p.samples.some((s) => /^@|^[a-z0-9._]+$/i.test(s)) && p.distinct > rowCount * 0.3) score += 15;
   if (expected && expected.includes(p.kind)) score += 15;
   // Una colonna quasi vuota è raramente quella giusta.

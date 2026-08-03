@@ -12,7 +12,16 @@ import { mentions } from '@/lib/db/schema';
 // tratta esattamente come le mention raccolte dallo scraping.
 // ---------------------------------------------------------------------------
 
-export type ParsedSheet = { columns: string[]; rows: Record<string, unknown>[]; total: number };
+/**
+ * Cosa è stato incontrato leggendo il foglio. Serve a dirlo all'utente: un
+ * file pieno di formule senza valore in cache è indistinguibile, a valle, da
+ * un file con le colonne vuote — e la differenza cambia cosa deve fare.
+ */
+export type SheetIssues = { formulas: number; formulaErrors: number; formulaNoValue: number };
+
+export type ParsedSheet = {
+  columns: string[]; rows: Record<string, unknown>[]; total: number; issues: SheetIssues;
+};
 
 /** Mappa: campo di Radar → nome colonna del file ('' = non mappato). */
 export type ColumnMap = {
@@ -50,19 +59,50 @@ export type ImportReport = {
   sentimentImported: number;
 };
 
-function normalizeCell(v: unknown): unknown {
+/**
+ * Il valore di una cella, non la sua definizione.
+ *
+ * Su una cella con formula conta SOLO il risultato calcolato: molti export di
+ * listening sommano l'engagement dentro al foglio, e leggere "=B2+C2" invece
+ * di 15 significherebbe importare zero. Excel salva sempre il valore in cache
+ * accanto alla formula, ed è quello che si prende.
+ *
+ * Tre casi vanno distinti, perché a valle sono indistinguibili e non lo sono:
+ *  - risultato normale → si usa (ricorsivamente: può essere una data o rich text);
+ *  - risultato di ERRORE (#DIV/0!, #N/A) → è un oggetto, e lasciarlo passare
+ *    faceva finire "[object Object]" nella colonna;
+ *  - formula SENZA valore in cache → il file è stato scritto da uno strumento
+ *    che non calcola. Non c'è niente da recuperare, ma va detto.
+ */
+function normalizeCell(v: unknown, issues?: SheetIssues, depth = 0): unknown {
   if (v == null) return null;
   if (v instanceof Date) return v;
-  if (typeof v === 'object') {
-    const o = v as Record<string, unknown>;
-    if ('text' in o) return o.text;                    // hyperlink / rich text
-    if ('result' in o) return o.result;                // formula
-    if ('richText' in o && Array.isArray(o.richText)) {
-      return (o.richText as { text?: string }[]).map((r) => r.text ?? '').join('');
+  if (typeof v !== 'object') return v;
+  const o = v as Record<string, unknown>;
+
+  if ('formula' in o || 'sharedFormula' in o) {
+    if (issues) issues.formulas++;
+    if (!('result' in o) || o.result === undefined || o.result === null) {
+      if (issues) issues.formulaNoValue++;
+      return null;
     }
-    return null;
+    const r = o.result;
+    if (r && typeof r === 'object' && 'error' in (r as Record<string, unknown>)) {
+      if (issues) issues.formulaErrors++;
+      return null;
+    }
+    // Il risultato può essere a sua volta strutturato (data, rich text): si
+    // rinormalizza, ma senza ricontarlo come formula e senza scendere all'infinito.
+    return depth > 2 ? null : normalizeCell(r, undefined, depth + 1);
   }
-  return v;
+
+  if ('error' in o) return null;                       // cella di errore diretta
+  if ('richText' in o && Array.isArray(o.richText)) {
+    return (o.richText as { text?: string }[]).map((r) => r.text ?? '').join('');
+  }
+  if ('text' in o) return o.text;                      // hyperlink
+  if ('hyperlink' in o) return o.hyperlink;
+  return null;
 }
 
 /** CSV robusto (gestisce virgolette, virgole e newline dentro i campi). */
@@ -88,10 +128,11 @@ export async function parseSheet(buffer: Buffer, filename: string): Promise<Pars
   const isCsv = /\.csv$/i.test(filename);
   let columns: string[] = [];
   const rows: Record<string, unknown>[] = [];
+  const issues: SheetIssues = { formulas: 0, formulaErrors: 0, formulaNoValue: 0 };
 
   if (isCsv) {
     const matrix = parseCsv(buffer.toString('utf8'));
-    if (matrix.length === 0) return { columns: [], rows: [], total: 0 };
+    if (matrix.length === 0) return { columns: [], rows: [], total: 0, issues };
     columns = matrix[0].map((h, i) => (h.trim() || `Column ${i + 1}`));
     for (let r = 1; r < matrix.length; r++) {
       const obj: Record<string, unknown> = {};
@@ -102,17 +143,22 @@ export async function parseSheet(buffer: Buffer, filename: string): Promise<Pars
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);
     const ws = wb.worksheets[0];
-    if (!ws) return { columns: [], rows: [], total: 0 };
-    ws.getRow(1).eachCell((cell, col) => { columns[col - 1] = String(cell.value ?? `Column ${col}`).trim() || `Column ${col}`; });
+    if (!ws) return { columns: [], rows: [], total: 0, issues };
+    // Anche l'intestazione può essere una formula: senza normalizzarla il nome
+    // della colonna diventerebbe "[object Object]".
+    ws.getRow(1).eachCell((cell, col) => {
+      const v = normalizeCell(cell.value);
+      columns[col - 1] = String(v ?? `Column ${col}`).trim() || `Column ${col}`;
+    });
     for (let i = 0; i < columns.length; i++) if (!columns[i]) columns[i] = `Column ${i + 1}`;
     ws.eachRow((r, rowNum) => {
       if (rowNum === 1) return;
       const obj: Record<string, unknown> = {};
-      columns.forEach((h, idx) => { obj[h] = normalizeCell(r.getCell(idx + 1).value); });
+      columns.forEach((h, idx) => { obj[h] = normalizeCell(r.getCell(idx + 1).value, issues); });
       if (columns.some((h) => obj[h] != null && String(obj[h]).trim() !== '')) rows.push(obj);
     });
   }
-  return { columns, rows, total: rows.length };
+  return { columns, rows, total: rows.length, issues };
 }
 
 // Hash deterministico (djb2) per l'external_id: reimportare lo stesso file non

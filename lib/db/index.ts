@@ -329,6 +329,7 @@ const DDL = [
   )`,
   `CREATE INDEX IF NOT EXISTS import_rows_file ON import_rows (file_id, row_index)`,
   `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS used_ai INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS issues JSONB`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS import_file_id INTEGER`,
   `CREATE INDEX IF NOT EXISTS mentions_import_file ON mentions (import_file_id)`,
   `CREATE TABLE IF NOT EXISTS custom_reports (

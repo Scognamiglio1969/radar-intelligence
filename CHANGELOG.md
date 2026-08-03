@@ -3,6 +3,26 @@
 Major, user-visible evolutions of Radar. Not every commit — the small fixes and internal
 refactors live in `git log`. This is the story of what the product became.
 
+## Files: computed cells, and the first tests
+
+Listening exports routinely compute engagement inside the sheet. Radar now reads the
+**cached result** of a formula, not the formula — and distinguishes the three cases that
+looked identical downstream: a normal result (used), an error result like `#DIV/0!` (dropped
+instead of leaking `[object Object]` into the column), and a formula saved without its value
+(left empty, but counted and reported, with the fix: reopen and re-save the file). Formula
+results that are themselves dates or rich text resolve properly, as do shared formulas and
+computed headers.
+
+With them, the project's **first test suite** (`npm test`, no new dependencies — `node --test`
+via tsx), aimed at the part where a mistake is invisible: a date read wrong doesn't fail
+anything, it just moves the charts. 36 tests over sheet parsing (formulas, quoted CSV with
+embedded newlines), normalisation (Excel serials, `1.2K` vs `12.500`, sentiment vocabularies)
+and column recognition. Eight of them run the real multi-file workspace against a throwaway
+Postgres: N files summed, the same post in two files kept distinct, duplicates inside one file
+collapsed, a remapping re-derived without re-uploading, and removing one file leaving the
+others untouched. Writing them surfaced one real limit — an "Author Name" column was
+recognised but at confidence too low to be applied on its own; the values now vouch for it.
+
 ## Reports you compose yourself
 
 The four-format export always shipped a fixed report. Now there is also a **custom report**:
