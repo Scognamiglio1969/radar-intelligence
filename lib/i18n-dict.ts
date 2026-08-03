@@ -48,6 +48,7 @@ const IT: Record<string, string> = {
   'nav.ask': 'Chiedi ai dati',
   'nav.studio': 'Content Studio',
   'nav.brief': 'Brief quotidiano',
+  'nav.report': 'Report personalizzato',
   'nav.tv': 'War Room',
   'nav.settings': 'Progetti',
   'nav.beyondSection': 'Oltre le menzioni',

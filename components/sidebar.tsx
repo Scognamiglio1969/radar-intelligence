@@ -8,6 +8,7 @@ import {
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
   UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb, MessageSquareQuote, Euro, Award, Trophy, FileClock,
+  BookOpen,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
@@ -56,6 +57,7 @@ const NAV: NavItem[] = [
   { section: 'Create', key: 'nav.create' },
   { href: '/studio', label: 'Content Studio', key: 'nav.studio', icon: PenLine },
   { href: '/brief', label: 'Daily brief', key: 'nav.brief', icon: FileText },
+  { href: '/report', label: 'Custom report', key: 'nav.report', icon: BookOpen },
   { href: '/tv', label: 'War Room', key: 'nav.tv', icon: MonitorPlay },
   { section: 'Setup', key: 'nav.setup' },
   { href: '/settings', label: 'Projects', key: 'nav.settings', icon: Settings },

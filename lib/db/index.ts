@@ -331,6 +331,16 @@ const DDL = [
   `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS used_ai INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS import_file_id INTEGER`,
   `CREATE INDEX IF NOT EXISTS mentions_import_file ON mentions (import_file_id)`,
+  `CREATE TABLE IF NOT EXISTS custom_reports (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    days INTEGER NOT NULL DEFAULT 30,
+    pages JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS custom_reports_project ON custom_reports (project_id)`,
 ];
 
 async function ensureSchema(db: DB) {

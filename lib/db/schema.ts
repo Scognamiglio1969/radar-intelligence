@@ -388,3 +388,24 @@ export const importRows = pgTable('import_rows', {
   rowIndex: integer('row_index').notNull(),
   data: jsonb('data').$type<Record<string, unknown>>().notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Report personalizzati.
+//
+// Un report è una SCALETTA, non un documento: conserva quali grafici l'utente
+// ha scelto, in che ordine, e i commenti che ha scritto o fatto scrivere
+// all'AI. I numeri non si salvano mai qui — vengono ricalcolati dall'archivio
+// a ogni esportazione, così lo stesso report riesportato la settimana dopo
+// racconta i dati nuovi invece di fossilizzare quelli vecchi.
+// ---------------------------------------------------------------------------
+export const customReports = pgTable('custom_reports', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  title: text('title').notNull(),
+  /** Finestra temporale su cui vengono ricalcolati i dati (giorni). */
+  days: integer('days').notNull().default(30),
+  /** [{ title, blocks: [{type:'chart',section} | {type:'text',text,ai}] }] */
+  pages: jsonb('pages').$type<unknown[]>().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
