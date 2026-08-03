@@ -511,10 +511,29 @@ export const SECTION_RENDERERS: Record<SectionId, Section> = {
   },
 };
 
+/**
+ * Che lavoro fa un commento nella pagina. Non è decorazione: cambia dove il
+ * blocco viene inserito, cosa viene chiesto al modello e come si presenta
+ * nel PDF stampato.
+ */
+export type CommentRole = 'intro' | 'comment' | 'synthesis' | 'free';
+
+/**
+ * A schermo il ruolo si riconosce da un'icona; sulla carta le icone non
+ * esistono, quindi diventa un'etichetta e un filetto colorato. Il suffisso
+ * "· AI" resta separato dal ruolo: sono due informazioni diverse.
+ */
+export const ROLE_STYLE: Record<CommentRole, { label: string; color: string }> = {
+  intro: { label: 'PRESENTAZIONE', color: '#0284c7' },
+  comment: { label: 'COMMENTO', color: '#7c3aed' },
+  synthesis: { label: 'SINTESI DELLA PAGINA', color: '#0d9488' },
+  free: { label: 'NOTA', color: '#64748b' },
+};
+
 /** Un blocco di report personalizzato: un grafico oppure un commento. */
 export type ReportBlock =
   | { type: 'chart'; section: SectionId }
-  | { type: 'text'; text: string; ai?: boolean };
+  | { type: 'text'; text: string; ai?: boolean; role?: CommentRole };
 
 export type ReportPage = { title?: string; blocks: ReportBlock[] };
 
@@ -574,15 +593,19 @@ export async function buildReportPdf(opts: BuildOptions): Promise<Buffer> {
       for (const block of page.blocks) {
         if (block.type === 'text') {
           if (!block.text.trim()) continue;
-          // Il commento resta distinguibile dal dato: filetto d'accento a
-          // sinistra. È anche il modo in cui un commento generato dall'AI
-          // si vede a colpo d'occhio, come chiede l'art. 50.
-          c.ensure(40);
+          // Il commento resta distinguibile dal dato: etichetta di ruolo e
+          // filetto colorato a sinistra. L'etichetta dice anche quando il
+          // testo è stato generato dall'AI, come chiede l'art. 50.
+          const style = ROLE_STYLE[block.role ?? (block.ai ? 'comment' : 'free')];
+          c.ensure(48);
           const y0 = doc.y;
+          doc.font('Helvetica-Bold').fontSize(6.5).fillColor(style.color)
+            .text(`${style.label}${block.ai ? ' · AI' : ''}`, c.left + 12, y0, { characterSpacing: 1 });
+          doc.moveDown(0.15);
           doc.font('Helvetica').fontSize(10).fillColor(TEXT)
-            .text(sanitize(block.text), c.left + 12, y0 + 2, { width: c.contentW - 12, align: 'justify' });
+            .text(sanitize(block.text), c.left + 12, doc.y, { width: c.contentW - 12, align: 'justify' });
           const y1 = doc.y;
-          doc.rect(c.left, y0, 3, Math.max(10, y1 - y0)).fill(block.ai ? '#a78bfa' : ACCENT);
+          doc.rect(c.left, y0, 3, Math.max(10, y1 - y0)).fill(style.color);
           doc.fillColor(TEXT);
           doc.y = y1;
           doc.moveDown(0.6);

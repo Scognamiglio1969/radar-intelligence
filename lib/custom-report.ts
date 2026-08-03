@@ -4,7 +4,9 @@ import { customReports } from '@/lib/db/schema';
 import { callClaude, MODELS } from '@/lib/claude';
 import { sourceLabel, type ExportData } from '@/lib/export-data';
 import { ALL_SECTION_IDS, EXPORT_SECTIONS, type SectionId } from '@/lib/export-sections';
-import type { ReportBlock, ReportPage } from '@/lib/report-pdf';
+import type { CommentRole, ReportBlock, ReportPage } from '@/lib/report-pdf';
+
+const ROLES: readonly string[] = ['intro', 'comment', 'synthesis', 'free'];
 
 // ---------------------------------------------------------------------------
 // Report personalizzati: scaletta + commenti.
@@ -33,12 +35,15 @@ function sanitizePages(input: unknown): ReportPage[] {
     const p = (raw ?? {}) as { title?: unknown; blocks?: unknown };
     const blocks: ReportBlock[] = Array.isArray(p.blocks)
       ? p.blocks.slice(0, 30).flatMap((b): ReportBlock[] => {
-        const blk = (b ?? {}) as { type?: unknown; section?: unknown; text?: unknown; ai?: unknown };
+        const blk = (b ?? {}) as {
+          type?: unknown; section?: unknown; text?: unknown; ai?: unknown; role?: unknown;
+        };
         if (blk.type === 'chart' && ALL_SECTION_IDS.includes(blk.section as SectionId)) {
           return [{ type: 'chart', section: blk.section as SectionId }];
         }
         if (blk.type === 'text' && typeof blk.text === 'string') {
-          return [{ type: 'text', text: blk.text.slice(0, 4000), ai: blk.ai === true }];
+          const role = ROLES.includes(blk.role as CommentRole) ? blk.role as CommentRole : undefined;
+          return [{ type: 'text', text: blk.text.slice(0, 4000), ai: blk.ai === true, role }];
         }
         return [];
       })
@@ -226,43 +231,86 @@ export function sectionFacts(d: ExportData, id: SectionId): string {
   }
 }
 
-const SYSTEM = `Sei un analista di media intelligence. Ricevi le CIFRE già calcolate di uno o più grafici di un report.
-Per ogni grafico scrivi un commento da inserire nel report, in 2-4 frasi:
+// Un commento che PRESENTA un grafico e uno che lo COMMENTA non sono lo
+// stesso testo spostato: il primo prepara la lettura senza bruciare la
+// conclusione, il secondo la trae. Chiederli con lo stesso prompt produceva
+// due paragrafi che dicevano la stessa cosa due volte.
+const RULES = `Vincoli assoluti:
+- NON inventare cifre, percentuali, date o nomi che non compaiono nei dati ricevuti;
+- niente formule di apertura tipo "questo grafico mostra", entra subito nel merito;
+- niente elenchi puntati, niente markdown: prosa continua.`;
+
+const SYSTEM_BASE = 'Sei un analista di media intelligence. Ricevi le CIFRE già calcolate dei grafici di una pagina di report.';
+
+const SYSTEM: Record<'intro' | 'comment' | 'both' | 'synthesis', string> = {
+  intro: `${SYSTEM_BASE}
+Per ogni grafico scrivi una PRESENTAZIONE di 1-2 frasi, da mettere PRIMA del grafico:
+- di' che cosa il lettore sta per guardare e perché quel grafico è in questa pagina;
+- puoi anticipare l'ordine di grandezza, ma NON la conclusione: quella arriva dopo il grafico.
+${RULES}
+Rispondi SOLO con un oggetto JSON { "id_sezione": { "intro": "..." }, ... } con gli id ricevuti.`,
+
+  comment: `${SYSTEM_BASE}
+Per ogni grafico scrivi un COMMENTO di 2-4 frasi, da mettere DOPO il grafico:
 - parti da ciò che il grafico mostra davvero, citando i numeri che ti sono stati dati;
 - di' che cosa significa per chi legge (implicazione), non limitarti a ripetere la classifica;
 - segnala l'eventuale anomalia o il dato controintuitivo, se c'è.
-Vincoli assoluti:
-- NON inventare cifre, percentuali, date o nomi che non compaiono nei dati ricevuti;
-- niente formule di apertura tipo "questo grafico mostra", entra subito nel merito;
-- niente elenchi puntati, niente markdown: prosa continua.
-Rispondi SOLO con un oggetto JSON { "id_sezione": "commento", ... } usando esattamente gli id ricevuti.`;
+${RULES}
+Rispondi SOLO con un oggetto JSON { "id_sezione": { "comment": "..." }, ... } con gli id ricevuti.`,
+
+  both: `${SYSTEM_BASE}
+Per ogni grafico scrivi DUE testi distinti, che non devono ripetersi a vicenda:
+- "intro": 1-2 frasi da mettere PRIMA del grafico. Dice che cosa si sta per guardare e perché.
+  NON anticipa la conclusione.
+- "comment": 2-4 frasi da mettere DOPO il grafico. Legge i numeri, ne trae l'implicazione per
+  chi legge e segnala l'anomalia se c'è.
+${RULES}
+Rispondi SOLO con un oggetto JSON { "id_sezione": { "intro": "...", "comment": "..." }, ... } con gli id ricevuti.`,
+
+  synthesis: `${SYSTEM_BASE}
+Scrivi UN SOLO testo di 3-5 frasi che chiude la pagina mettendo in RELAZIONE i grafici ricevuti:
+- che cosa dicono INSIEME, che nessuno di loro direbbe da solo;
+- dove si rafforzano e dove si contraddicono;
+- chiudi con la conseguenza pratica per chi legge.
+Non riassumere i grafici uno per uno: quella è già stata fatta.
+${RULES}
+Rispondi SOLO con un oggetto JSON { "synthesis": "..." }.`,
+};
+
+type Parsed = Record<string, unknown>;
 
 /** Estrae il primo oggetto JSON dalla risposta. */
-function parseObject(text: string | null): Record<string, string> | null {
+function parseObject(text: string | null): Parsed | null {
   if (!text) return null;
   const cleaned = text.replace(/```json|```/g, '').trim();
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
   if (start === -1 || end <= start) return null;
   try {
-    const obj = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(obj)) if (typeof v === 'string' && v.trim()) out[k] = v.trim();
-    return out;
+    return JSON.parse(cleaned.slice(start, end + 1)) as Parsed;
   } catch (e) {
     console.warn('[report] commento AI non interpretabile:', (e as Error).message, cleaned.slice(-160));
     return null;
   }
 }
 
+const str = (v: unknown): string | undefined =>
+  (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+
+export type GeneratedComment = { intro?: string; comment?: string };
+export type CommentRequest = 'intro' | 'comment' | 'both' | 'synthesis';
+
 /**
- * Un commento per ciascuna sezione richiesta, in una sola chiamata: dieci
- * grafici commentati costano una richiesta, non dieci.
- * Le sezioni senza dati non vengono nemmeno inviate al modello.
+ * I commenti per i grafici di una pagina, in una sola chiamata: dieci grafici
+ * commentati costano una richiesta, non dieci. Le sezioni senza dati non
+ * vengono nemmeno inviate al modello.
  */
 export async function generateComments(
-  data: ExportData, sections: SectionId[],
-): Promise<{ comments: Record<string, string>; empty: SectionId[]; available: boolean }> {
+  data: ExportData, sections: SectionId[], role: CommentRequest = 'comment',
+): Promise<{
+  comments: Record<string, GeneratedComment>; synthesis?: string;
+  empty: SectionId[]; available: boolean;
+}> {
   const empty: SectionId[] = [];
   const parts: string[] = [];
   for (const id of sections) {
@@ -273,7 +321,22 @@ export async function generateComments(
   if (!parts.length) return { comments: {}, empty, available: true };
 
   const user = `Progetto: ${data.project.name}\nTema seguito: ${data.project.keywords.join(', ')}\n\n${parts.join('\n\n')}`;
-  const text = await callClaude(MODELS.sonnet, 'report-comment', SYSTEM, user, 2000, true);
+  // La sintesi è un testo solo: non serve lo stesso tetto di token dei
+  // commenti, che crescono con il numero di grafici.
+  const maxTokens = role === 'synthesis' ? 700 : 2000;
+  const text = await callClaude(MODELS.sonnet, `report-${role}`, SYSTEM[role], user, maxTokens, true);
   if (text === null) return { comments: {}, empty, available: false };
-  return { comments: parseObject(text) ?? {}, empty, available: true };
+
+  const obj = parseObject(text) ?? {};
+  if (role === 'synthesis') {
+    return { comments: {}, synthesis: str(obj.synthesis), empty, available: true };
+  }
+  const comments: Record<string, GeneratedComment> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (!v || typeof v !== 'object') continue;
+    const o = v as Parsed;
+    const entry: GeneratedComment = { intro: str(o.intro), comment: str(o.comment) };
+    if (entry.intro || entry.comment) comments[k] = entry;
+  }
+  return { comments, empty, available: true };
 }

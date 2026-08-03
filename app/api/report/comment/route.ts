@@ -3,7 +3,7 @@ import { getCurrentProject } from '@/lib/data';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { collectExportData } from '@/lib/export-data';
 import { ALL_SECTION_IDS, type SectionId } from '@/lib/export-sections';
-import { generateComments } from '@/lib/custom-report';
+import { generateComments, type CommentRequest } from '@/lib/custom-report';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,9 +27,12 @@ export async function POST(req: Request) {
     .filter((s: unknown): s is SectionId => ALL_SECTION_IDS.includes(s as SectionId));
   if (!sections.length) return NextResponse.json({ error: 'Nessun grafico selezionato' }, { status: 400 });
 
+  const role: CommentRequest = ['intro', 'comment', 'both', 'synthesis'].includes(body.role)
+    ? body.role : 'comment';
+
   try {
     const data = await collectExportData(project, days);
-    const { comments, empty, available } = await generateComments(data, sections);
+    const { comments, synthesis, empty, available } = await generateComments(data, sections, role);
     if (!available) {
       // `empty` viaggia anche qui: sapere QUALI grafici sono senza dati resta
       // un'informazione utile pure quando il motore AI è spento.
@@ -38,7 +41,7 @@ export async function POST(req: Request) {
         empty,
       }, { status: 503 });
     }
-    return NextResponse.json({ comments, empty });
+    return NextResponse.json({ comments, synthesis, empty });
   } catch (e) {
     console.error('[report] generazione commenti fallita:', e);
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
