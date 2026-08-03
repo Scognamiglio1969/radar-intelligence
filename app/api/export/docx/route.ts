@@ -5,6 +5,7 @@ import {
 } from 'docx';
 import { getCurrentProject } from '@/lib/data';
 import { briefToBlocks, collectExportData, parseExportOptions, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
+import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -318,19 +319,39 @@ export async function GET(req: Request) {
     for (const c of pk.content) children.push(bullet(`[${sourceLabel(c.source)}] ${c.title}`));
   }
 
+  // Note finali: informativa art. 50 in forma estesa.
+  children.push(new Paragraph({
+    spacing: { before: 400, after: 80 },
+    children: [new TextRun({ text: 'NOTE', bold: true, size: 16, color: '94A3B8' })],
+  }));
+  children.push(new Paragraph({
+    spacing: { after: 100 },
+    children: [new TextRun({ text: AI_DISCLOSURE_LONG, size: 15, color: '64748B' })],
+  }));
+
   const doc = new Document({
     creator: 'Radar By Scognamiglio 2026',
+    // Marcatura leggibile da una macchina (AI Act art. 50, par. 2).
+    subject: AI_DISCLOSURE_META.subject,
+    keywords: AI_DISCLOSURE_META.keywords,
+    description: AI_DISCLOSURE_META.description,
     styles: { default: { document: { run: { font: 'Calibri', size: 21 } } } },
     sections: [{
       footers: {
         default: new Footer({
-          children: [new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ text: `Radar By Scognamiglio 2026 — ${project.name} — pag. `, size: 16, color: '94A3B8' }),
-              new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '94A3B8' }),
-            ],
-          })],
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [new TextRun({ text: AI_DISCLOSURE_SHORT, size: 13, color: '94A3B8' })],
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ text: `Radar By Scognamiglio 2026 — ${project.name} — pag. `, size: 16, color: '94A3B8' }),
+                new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '94A3B8' }),
+              ],
+            }),
+          ],
         }),
       },
       children,

@@ -5,6 +5,7 @@ import {
   collectExportData, parseExportOptions, slugify, sourceLabel, todayStamp, briefToBlocks,
 } from '@/lib/export-data';
 import { SOURCE_META } from '@/lib/connectors';
+import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,13 @@ const ENTITY = ['#0284c7', '#7c3aed', '#059669', '#d97706', '#dc2626', '#db2777'
 // pdfkit con font standard (Helvetica) codifica in WinAnsi: rimuovo i caratteri
 // fuori da Latin-1 (emoji, CJK, arabo) per evitare crash di rendering.
 function sanitize(s: string | null | undefined): string {
-  return (s ?? '').replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ]/g, '').replace(/\s+/g, ' ').trim();
+  return (s ?? '')
+    // La punteggiatura tipografica sta fuori da Latin-1: senza questa
+    // traslitterazione verrebbe cancellata e "dell’intelligenza" diventerebbe
+    // "dellintelligenza". Va fatta PRIMA del filtro, non dopo.
+    .replace(/[‘’‛]/g, "'").replace(/[“”]/g, '"')
+    .replace(/[–—]/g, '-').replace(/…/g, '...')
+    .replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 export async function GET(req: Request) {
@@ -34,7 +41,13 @@ export async function GET(req: Request) {
     size: 'A4',
     bufferPages: true,
     margins: { top: 56, bottom: 64, left: 56, right: 56 },
-    info: { Title: `Radar — ${sanitize(project.name)}`, Author: 'Radar By Scognamiglio 2026' },
+    info: {
+      Title: `Radar — ${sanitize(project.name)}`,
+      Author: 'Radar By Scognamiglio 2026',
+      // Marcatura leggibile da una macchina (AI Act art. 50, par. 2).
+      Subject: sanitize(AI_DISCLOSURE_META.subject),
+      Keywords: sanitize(AI_DISCLOSURE_META.keywords),
+    },
   });
   const chunks: Buffer[] = [];
   doc.on('data', (c) => chunks.push(c as Buffer));
@@ -448,6 +461,14 @@ export async function GET(req: Request) {
     );
   }
 
+  // ---- Note (informativa AI Act) ----
+  ensure(120);
+  doc.moveDown(1);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text('NOTE', left, doc.y, { characterSpacing: 1.5 });
+  doc.moveDown(0.3);
+  doc.font('Helvetica').fontSize(8).fillColor(MUTED)
+    .text(sanitize(AI_DISCLOSURE_LONG), left, doc.y, { width: contentW, align: 'justify' });
+
   // ---- Piè di pagina con numeri di pagina ----
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
@@ -456,7 +477,10 @@ export async function GET(req: Request) {
     // credere a pdfkit di dover impaginare, generando pagine vuote.
     doc.page.margins.bottom = 0;
     const fy = doc.page.height - 40;
-    doc.font('Helvetica').fontSize(8).fillColor(MUTED);
+    // Informativa art. 50 ripetuta su ogni pagina: leggibile, non nascosta.
+    doc.font('Helvetica').fontSize(6.5).fillColor(MUTED)
+      .text(sanitize(AI_DISCLOSURE_SHORT), left, fy - 11, { width: contentW, lineBreak: false });
+    doc.fontSize(8);
     doc.text(`Radar · By Scognamiglio 2026 — ${sanitize(project.name)}`, left, fy, { width: contentW * 0.7, lineBreak: false });
     doc.text(`pag. ${i + 1} / ${range.count}`, right - 120, fy, { width: 120, align: 'right', lineBreak: false });
   }

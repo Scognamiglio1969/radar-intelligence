@@ -3,6 +3,7 @@ import PptxGenJS from 'pptxgenjs';
 import { getCurrentProject } from '@/lib/data';
 import { briefToBlocks, collectExportData, parseExportOptions, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
 import { SOURCE_META } from '@/lib/connectors';
+import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -28,11 +29,20 @@ export async function GET(req: Request) {
   pptx.defineLayout({ name: 'WIDE', width: 13.33, height: 7.5 });
   pptx.layout = 'WIDE';
   pptx.author = 'Radar By Scognamiglio 2026';
+  // Marcatura leggibile da una macchina (AI Act art. 50, par. 2).
+  pptx.subject = AI_DISCLOSURE_META.subject;
+  pptx.title = `Radar — ${project.name}`;
   pptx.defineSlideMaster({
     title: 'DARK',
     background: { color: BG },
     objects: [
       { text: { text: 'Radar · By Scognamiglio 2026', options: { x: 0.4, y: 7.05, fontSize: 10, color: MUTED } } },
+      {
+        text: {
+          text: AI_DISCLOSURE_SHORT,
+          options: { x: 0.4, y: 7.25, w: 11.4, h: 0.22, fontSize: 7, color: MUTED },
+        },
+      },
       {
         text: {
           text: new Date().toLocaleDateString('en-US'),
@@ -42,10 +52,18 @@ export async function GET(req: Request) {
     ],
   });
 
+  // Ogni slide nasce con l'informativa nelle NOTE del relatore, oltre alla
+  // riga nel piè di pagina del master: chi apre il file la trova comunque.
+  const newSlide = () => {
+    const s = pptx.addSlide({ masterName: 'DARK' });
+    s.addNotes(AI_DISCLOSURE_LONG);
+    return s;
+  };
+
   const titleOpts = { x: 0.5, y: 0.35, w: 12.3, h: 0.7, fontSize: 26, bold: true, color: TEXT } as const;
 
   // ── 1. Copertina
-  const s1 = pptx.addSlide({ masterName: 'DARK' });
+  const s1 = newSlide();
   s1.addText('RADAR', { x: 0.5, y: 2.1, w: 12.3, h: 0.5, fontSize: 20, color: ACCENT, align: 'center', charSpacing: 8 });
   s1.addText('BY SCOGNAMIGLIO 2026', { x: 0.5, y: 2.55, w: 12.3, h: 0.3, fontSize: 10, color: MUTED, align: 'center', charSpacing: 4 });
   s1.addText(project.name, { x: 0.5, y: 2.8, w: 12.3, h: 1.1, fontSize: 48, bold: true, color: TEXT, align: 'center' });
@@ -60,7 +78,7 @@ export async function GET(req: Request) {
   const sentimentLabel = kpi.avgSentiment === null ? 'analyzing'
     : kpi.avgSentiment > 0.15 ? 'positive' : kpi.avgSentiment < -0.15 ? 'negative' : 'neutral';
   if (has('kpi')) {
-  const s2 = pptx.addSlide({ masterName: 'DARK' });
+  const s2 = newSlide();
   s2.addText('At a glance', titleOpts);
   const kpis: [string, string][] = [
     ['Mentions (7 days)', kpi.total7.toLocaleString('en-US')],
@@ -88,7 +106,7 @@ export async function GET(req: Request) {
     const gcol = (v: number) => v >= 80 ? '34D399' : v >= 65 ? '38BDF8' : v >= 50 ? 'FBBF24' : 'F87171';
     const h = data.health;
     const primary = h.brand ? h.brand.health : h.theme;
-    const sh = pptx.addSlide({ masterName: 'DARK' });
+    const sh = newSlide();
     sh.addText(h.brand ? `Brand Health Index — ${h.brand.name}` : 'Market Health Index', titleOpts);
     sh.addShape('roundRect', { x: 0.5, y: 1.6, w: 4.2, h: 4.6, fill: { color: PANEL }, line: { color: '1E2A4A' }, rectRadius: 0.1 });
     sh.addText(String(primary.score), { x: 0.5, y: 2.3, w: 4.2, h: 1.6, fontSize: 92, bold: true, color: gcol(primary.score), align: 'center' });
@@ -106,7 +124,7 @@ export async function GET(req: Request) {
       valAxisMinVal: 0, valAxisMaxVal: 100, valGridLine: { color: '1E2A4A' }, catGridLine: { style: 'none' },
     });
     if (h.compare.length > 1) {
-      const sc = pptx.addSlide({ masterName: 'DARK' });
+      const sc = newSlide();
       sc.addText('Health ranking — your brand vs competitors', titleOpts);
       sc.addChart('bar', [{
         name: 'Health score',
@@ -124,7 +142,7 @@ export async function GET(req: Request) {
   // ── Crisis radar & peak anatomy
   if (has('crisis') && data.crisis.peak) {
     const rc = data.crisis.risk >= 75 ? 'F87171' : data.crisis.risk >= 50 ? 'FB923C' : data.crisis.risk >= 25 ? 'FBBF24' : '34D399';
-    const cr = pptx.addSlide({ masterName: 'DARK' });
+    const cr = newSlide();
     cr.addText('Crisis radar & peak anatomy', titleOpts);
     cr.addShape('roundRect', { x: 0.5, y: 1.6, w: 4.2, h: 4.6, fill: { color: PANEL }, line: { color: '1E2A4A' }, rectRadius: 0.1 });
     cr.addText(String(data.crisis.risk), { x: 0.5, y: 2.3, w: 4.2, h: 1.6, fontSize: 92, bold: true, color: rc, align: 'center' });
@@ -141,7 +159,7 @@ export async function GET(req: Request) {
 
   // ── Emerging trends
   if (has('trends') && data.trends.length) {
-    const st = pptx.addSlide({ masterName: 'DARK' });
+    const st = newSlide();
     st.addText('Radar — emerging trends', titleOpts);
     st.addText(
       data.trends.slice(0, 6).map((t) => ({
@@ -156,7 +174,7 @@ export async function GET(req: Request) {
   const days = [...new Set(data.dashboard.volumeByDay.map((r) => r.day))].sort();
   const sources = [...new Set(data.dashboard.volumeByDay.map((r) => r.source))];
   if (has('volume') && days.length) {
-    const s3 = pptx.addSlide({ masterName: 'DARK' });
+    const s3 = newSlide();
     s3.addText('Volume by source (14 days)', titleOpts);
     s3.addChart('bar', sources.map((src) => ({
       name: sourceLabel(src),
@@ -172,7 +190,7 @@ export async function GET(req: Request) {
 
   // ── 4. Sentiment (torta nativa)
   if (has('sentiment') && data.dashboard.sentimentDist.length) {
-    const s4 = pptx.addSlide({ masterName: 'DARK' });
+    const s4 = newSlide();
     s4.addText('Sentiment (7 days)', titleOpts);
     s4.addChart('doughnut', [{
       name: 'Sentiment',
@@ -187,7 +205,7 @@ export async function GET(req: Request) {
 
   // ── 4·constellation. Semantic constellation
   if (has('constellation') && data.constellation.nodes.length) {
-    const sc = pptx.addSlide({ masterName: 'DARK' });
+    const sc = newSlide();
     sc.addText('Semantic constellation — key terms & co-occurrence', titleOpts);
     const top = data.constellation.nodes.slice(0, 14);
     sc.addChart('bar', [{
@@ -214,7 +232,7 @@ export async function GET(req: Request) {
 
   // ── 4·pyramid. Author influence pyramid
   if (has('pyramid') && data.pyramid.tiers.length) {
-    const sp = pptx.addSlide({ masterName: 'DARK' });
+    const sp = newSlide();
     sp.addText('Author influence pyramid — reach concentration', titleOpts);
     const tcol: Record<string, string> = { mega: 'FBBF24', macro: 'A78BFA', micro: '38BDF8', longtail: '64748B' };
     sp.addChart('bar', [{
@@ -231,7 +249,7 @@ export async function GET(req: Request) {
 
   // ── 4·network. Influencer network (top autori)
   if (has('network') && data.network.nodes.length) {
-    const sn = pptx.addSlide({ masterName: 'DARK' });
+    const sn = newSlide();
     sn.addText('Influencer network — top voices by community', titleOpts);
     const top = [...data.network.nodes].sort((a, b) => b.engagement - a.engagement).slice(0, 16);
     sn.addTable([
@@ -248,7 +266,7 @@ export async function GET(req: Request) {
   // ── 4·flow. Conversation flow (tabella flussi principali)
   if (has('flow') && data.flow.links.length) {
     const lbl = new Map(data.flow.nodes.map((n) => [n.key, n.label]));
-    const sf = pptx.addSlide({ masterName: 'DARK' });
+    const sf = newSlide();
     sf.addText('Conversation flow — Source → Topic → Sentiment', titleOpts);
     const top = [...data.flow.links].sort((a, b) => b.value - a.value).slice(0, 18);
     sf.addTable([
@@ -263,7 +281,7 @@ export async function GET(req: Request) {
 
   // ── 4·momentum. Momentum quadrant
   if (has('momentum') && data.momentum.length) {
-    const sq = pptx.addSlide({ masterName: 'DARK' });
+    const sq = newSlide();
     sq.addText('Momentum quadrant — topics by volume × acceleration', titleOpts);
     const qcol: Record<string, string> = { 'Rising stars': '34D399', 'Emerging': '38BDF8', 'Steady': 'A78BFA', 'Declining': 'F87171' };
     const rows = [...data.momentum].sort((a, b) => b.volume - a.volume).slice(0, 20);
@@ -282,7 +300,7 @@ export async function GET(req: Request) {
 
   // ── 4a. Emotion radar
   if (has('emotions') && data.emotions.length) {
-    const se = pptx.addSlide({ masterName: 'DARK' });
+    const se = newSlide();
     se.addText('Emotion radar — emotional fingerprint (30 days)', titleOpts);
     se.addChart('radar', [{
       name: 'Share %',
@@ -298,7 +316,7 @@ export async function GET(req: Request) {
 
   // ── 4b. Geographic map (per area/lingua)
   if (has('geo') && data.geo.length) {
-    const s4b = pptx.addSlide({ masterName: 'DARK' });
+    const s4b = newSlide();
     s4b.addText('Geographic map — conversation by area (language-inferred)', titleOpts);
     const geo = data.geo.slice(0, 12);
     s4b.addChart('bar', [{
@@ -322,7 +340,7 @@ export async function GET(req: Request) {
 
   // ── 4·sov. Share of Voice over time (area impilata)
   if (has('sov') && data.sov.entities.length && data.sov.days.length) {
-    const ss = pptx.addSlide({ masterName: 'DARK' });
+    const ss = newSlide();
     ss.addText('Share of Voice over time (30 days)', titleOpts);
     const labels = data.sov.days.map((d) => String(d.day).slice(5));
     ss.addChart('area', data.sov.entities.map((e) => ({
@@ -340,7 +358,7 @@ export async function GET(req: Request) {
   // ── 5. Share of voice
   const totalBench = data.benchmark.reduce((s, r) => s + r.total, 0);
   if (has('benchmark') && totalBench > 0) {
-    const s5 = pptx.addSlide({ masterName: 'DARK' });
+    const s5 = newSlide();
     s5.addText('Benchmark — share of voice (14 days)', titleOpts);
     s5.addChart('pie', [{
       name: 'Share of voice',
@@ -366,7 +384,7 @@ export async function GET(req: Request) {
 
   // ── 6. Audience
   if (has('audience') && data.audience.communities.length) {
-    const s6 = pptx.addSlide({ masterName: 'DARK' });
+    const s6 = newSlide();
     s6.addText('Audience — where the conversation happens', titleOpts);
     s6.addChart('bar', [{
       name: 'Mentions',
@@ -391,7 +409,7 @@ export async function GET(req: Request) {
 
   // ── 7. Contenuti top
   if (has('content') && data.ratings.length) {
-    const s7 = pptx.addSlide({ masterName: 'DARK' });
+    const s7 = newSlide();
     s7.addText('Top content by engagement', titleOpts);
     s7.addTable([
       ['Content', 'Source', 'Engagement', 'AI score', 'Risk'].map((t) => ({
@@ -414,7 +432,7 @@ export async function GET(req: Request) {
       trend: ACCENT, innovation: 'A78BFA', concept: '22D3EE', risk: 'F87171', opportunity: '34D399',
     };
     // Slide di apertura con la tesi
-    const st0 = pptx.addSlide({ masterName: 'DARK' });
+    const st0 = newSlide();
     st0.addText('Point of View', { x: 0.5, y: 2.4, w: 12.3, h: 0.5, fontSize: 16, color: ACCENT, align: 'center', charSpacing: 4 });
     st0.addText(pv.headline, { x: 1.2, y: 2.4, w: 10.9, h: 1.6, fontSize: 30, bold: true, color: TEXT, align: 'center' });
     if ((pv.intro ?? []).length) {
@@ -423,7 +441,7 @@ export async function GET(req: Request) {
     }
 
     for (const [i, b] of pv.blocks.entries()) {
-      const s = pptx.addSlide({ masterName: 'DARK' });
+      const s = newSlide();
       const kc = KIND_COLOR[b.kind] ?? ACCENT;
       s.addText(b.kind.toUpperCase(), { x: 0.5, y: 0.35, w: 6, h: 0.3, fontSize: 11, color: kc, charSpacing: 3 });
       s.addText(`${String(i + 1).padStart(2, '0')}`, { x: 11.8, y: 0.35, w: 1, h: 0.4, fontSize: 14, color: MUTED, align: 'right' });
@@ -442,7 +460,7 @@ export async function GET(req: Request) {
 
     // Contro-segnali + implicazioni
     if (pv.counterSignals.length || pv.implications.length) {
-      const sc = pptx.addSlide({ masterName: 'DARK' });
+      const sc = newSlide();
       sc.addText('Counter-signals & implications', titleOpts);
       if (pv.counterSignals.length) {
         sc.addText('What argues against', { x: 0.5, y: 1.3, w: 6, h: 0.35, fontSize: 14, bold: true, color: 'FBBF24' });
@@ -461,7 +479,7 @@ export async function GET(req: Request) {
 
   // ── Narrazioni
   if (has('narratives') && data.narratives.length) {
-    const sn = pptx.addSlide({ masterName: 'DARK' });
+    const sn = newSlide();
     sn.addText('Narratives', titleOpts);
     sn.addText(
       data.narratives.slice(0, 6).map((n) => ({
@@ -474,7 +492,7 @@ export async function GET(req: Request) {
 
   // ── Timeline
   if (has('timeline') && data.timeline.length) {
-    const stl = pptx.addSlide({ masterName: 'DARK' });
+    const stl = newSlide();
     stl.addText('Sector timeline', titleOpts);
     stl.addText(
       data.timeline.slice(0, 12).map((e) => ({
@@ -487,7 +505,7 @@ export async function GET(req: Request) {
 
   // ── Alerts
   if (has('alerts') && data.alerts.length) {
-    const sa = pptx.addSlide({ masterName: 'DARK' });
+    const sa = newSlide();
     sa.addText('Recent alerts', titleOpts);
     sa.addText(
       data.alerts.slice(0, 8).map((a) => {
@@ -503,7 +521,7 @@ export async function GET(req: Request) {
 
   // ── 8. Brief
   if (has('brief') && data.briefs[0]) {
-    const s8 = pptx.addSlide({ masterName: 'DARK' });
+    const s8 = newSlide();
     s8.addText(`Daily brief — ${new Date(data.briefs[0].briefDate).toLocaleDateString('en-US')}`, titleOpts);
     const lines = briefToBlocks(data.briefs[0].content).slice(0, 18).map((b) => ({
       text: b.text,

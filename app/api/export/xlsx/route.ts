@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { getCurrentProject } from '@/lib/data';
 import { collectExportData, parseExportOptions, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
+import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,9 @@ function sheet(wb: ExcelJS.Workbook, name: string, columns: { header: string; ke
   ws.columns = columns.map((c) => ({ ...c, width: c.width ?? 18 }));
   ws.getRow(1).eachCell((cell) => Object.assign(cell, { style: HEADER_STYLE }));
   ws.views = [{ state: 'frozen', ySplit: 1 }];
+  // Piè di pagina di stampa: l'informativa segue il foglio anche quando viene
+  // stampato o convertito in PDF, dove il foglio "Note" non arriva.
+  ws.headerFooter = { oddFooter: `&L&7${AI_DISCLOSURE_SHORT}&R&7&P / &N` };
   return ws;
 }
 
@@ -29,6 +33,10 @@ export async function GET(req: Request) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Radar By Scognamiglio 2026';
   wb.created = new Date();
+  // Marcatura leggibile da una macchina (AI Act art. 50, par. 2).
+  wb.subject = AI_DISCLOSURE_META.subject;
+  wb.keywords = AI_DISCLOSURE_META.keywords;
+  wb.description = AI_DISCLOSURE_META.description;
 
   // 1. Mention
   if (has('mentions')) {
@@ -381,6 +389,17 @@ export async function GET(req: Request) {
 
   // Se nessun foglio è stato aggiunto, evita un file corrotto
   if (wb.worksheets.length === 0) sheet(wb, 'Empty', [{ header: 'No section selected', key: 'x', width: 40 }]);
+
+  // Foglio "Note": l'informativa estesa, sempre presente e sempre l'ultima.
+  const wsNote = wb.addWorksheet('Note');
+  wsNote.getColumn(1).width = 120;
+  const noteTitle = wsNote.addRow(['NOTE']);
+  noteTitle.font = { bold: true, color: { argb: 'FF64748B' } };
+  const noteBody = wsNote.addRow([AI_DISCLOSURE_LONG]);
+  noteBody.height = 72;
+  noteBody.getCell(1).alignment = { wrapText: true, vertical: 'top' };
+  noteBody.getCell(1).font = { color: { argb: 'FF64748B' } };
+  wsNote.headerFooter = { oddFooter: `&L&7${AI_DISCLOSURE_SHORT}` };
 
   const buffer = await wb.xlsx.writeBuffer();
   return new NextResponse(buffer as ArrayBuffer, {
