@@ -409,3 +409,28 @@ export const customReports = pgTable('custom_reports', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Edizioni del report periodico.
+//
+// A differenza del report personalizzato, qui la scaletta SI CONGELA: un
+// numero di luglio deve continuare a dire quello che diceva a luglio, anche
+// riaperto a dicembre. È un archivio di ciò che è stato detto, non un modello
+// da ricalcolare — ed è per questo che `pages` e `provenance` restano com'erano
+// al momento della generazione.
+// ---------------------------------------------------------------------------
+export const periodicReports = pgTable('periodic_reports', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  /** daily · weekly · biweekly · monthly · quarterly · semiannual · annual */
+  cadence: text('cadence').notNull(),
+  periodStart: text('period_start').notNull(),
+  periodEnd: text('period_end').notNull(),
+  pages: jsonb('pages').$type<unknown[]>().notNull().default([]),
+  /** Da dove viene la tesi: quando è stata scritta, su che finestra, su quanti dati. */
+  provenance: jsonb('provenance').$type<Record<string, unknown>>(),
+  /** La TESI usata, congelata: senza, il PDF ristamperebbe quella corrente e
+   *  contraddirebbe la nota di provenienza stampata accanto. */
+  pov: jsonb('pov').$type<unknown>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

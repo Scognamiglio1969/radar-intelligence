@@ -341,6 +341,18 @@ const DDL = [
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`,
   `CREATE INDEX IF NOT EXISTS custom_reports_project ON custom_reports (project_id)`,
+  `CREATE TABLE IF NOT EXISTS periodic_reports (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    cadence TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    pages JSONB NOT NULL DEFAULT '[]',
+    provenance JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS periodic_reports_project ON periodic_reports (project_id, cadence, created_at DESC)`,
+  `ALTER TABLE periodic_reports ADD COLUMN IF NOT EXISTS pov JSONB`,
 ];
 
 async function ensureSchema(db: DB) {

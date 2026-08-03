@@ -18,6 +18,16 @@ export time. AI comments follow the Point of View rule — the model receives fi
 computed by SQL and interprets them, it never produces a number — and editing a comment
 marks it as yours.
 
+Alongside it, a **periodic report** that combines the period's figures, the daily brief and the
+Point of View, at seven cadences from daily to yearly — on demand, or automatically once the
+cadence is switched on. Short cadences *reuse* the current thesis rather than rewriting it (a
+thesis that holds for a week is realistic; regenerating one per cadence per project would be
+the app's largest single cost); from monthly upwards a fresh one is written on that period's
+window. Either way the document states **where the thesis came from**: when it was written,
+on which window, on how many mentions, and whether it was reused. An issue is frozen once
+generated — the thesis is stored inside it — so reopening July's issue in December still shows
+July's reading.
+
 Every exported file (PDF, Word, PowerPoint, Excel) now carries the **AI Act disclosure**
 required from 2 August 2026 by art. 50 of Regulation (EU) 2024/1689: a visible note in the
 footer of every page, slide and sheet plus a "Note" section with the full wording, and the
