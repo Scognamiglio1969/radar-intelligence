@@ -20,7 +20,11 @@
 
 /** Riga breve: piè di pagina di ogni pagina/slide/foglio. */
 export const AI_DISCLOSURE_SHORT =
-  'Realizzato con il supporto dell’intelligenza artificiale — Reg. (UE) 2024/1689 (AI Act), art. 50';
+  // 2024/1689 è il numero dell'atto (anno di adozione), non la data
+  // dell'obbligo: l'art. 50 è applicabile dal 2 agosto 2026. Le due date
+  // convivono nella riga apposta, perché insieme sono meno ambigue.
+  'Realizzato con il supporto dell’intelligenza artificiale — Reg. (UE) 2024/1689 (AI Act), '
+  + 'art. 50, applicabile dal 2 agosto 2026';
 
 /** Nota estesa: pagina delle note, foglio "Note", metadati. */
 export const AI_DISCLOSURE_LONG =
