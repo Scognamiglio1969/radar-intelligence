@@ -87,7 +87,12 @@ export async function registerFile(
   const db = await getDb();
   const [file] = await db.insert(importFiles).values({
     projectId, filename, sizeBytes: buffer.length, rowCount: rows.length,
-    columns, profiles, proposal, mapping, usedAi: usedAi ? 1 : 0, status: 'uploaded',
+    columns, profiles, proposal, mapping, usedAi: usedAi ? 1 : 0,
+    // Se la proposta automatica basta già a leggere il foglio, lo stato lo dice:
+    // "da assegnare" su un foglio che Radar ha capito da solo è una bugia.
+    status: (kind === 'metrics'
+      ? Boolean(metricMap?.date) && ((metricMap?.metrics as string[] | undefined)?.length ?? 0) > 0
+      : Boolean(mapping.content)) ? 'mapped' : 'uploaded',
     issues, sheetName: sheetName ?? null, kind, metricMap, extras,
   }).returning({ id: importFiles.id });
 

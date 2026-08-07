@@ -104,7 +104,7 @@ export type ImportReport = {
 /** Gli errori di Excel scritti come testo: valgono quanto una cella vuota. */
 const ERROR_TEXT = /^#(VALUE|REF|NAME|DIV\/0|N\/A|NULL|NUM|SPILL|CALC|GETTING_DATA)[!?]?$/i;
 
-function normalizeCell(v: unknown, issues?: SheetIssues, depth = 0): unknown {
+function normalizeCell(v: unknown, issues?: SheetIssues, depth = 0, fallback?: unknown): unknown {
   if (v == null) return null;
   if (v instanceof Date) return v;
   if (typeof v === 'string' && ERROR_TEXT.test(v.trim())) return null;
@@ -113,11 +113,16 @@ function normalizeCell(v: unknown, issues?: SheetIssues, depth = 0): unknown {
 
   if ('formula' in o || 'sharedFormula' in o) {
     if (issues) issues.formulas++;
-    if (!('result' in o) || o.result === undefined || o.result === null) {
+    // Il valore calcolato non sta sempre dentro l'oggetto: su una formula
+    // TRASCINATA in basso, la libreria lo omette quando vale zero e lo espone
+    // solo su `cell.result`. Ignorarlo significava buttare celle che nel file
+    // un valore ce l'hanno — 65 su un solo foglio, tutte pari a 0.
+    const raw = ('result' in o && o.result !== undefined && o.result !== null) ? o.result : fallback;
+    if (raw === undefined || raw === null) {
       if (issues) issues.formulaNoValue++;
       return null;
     }
-    const r = o.result;
+    const r = raw;
     if (r && typeof r === 'object' && 'error' in (r as Record<string, unknown>)) {
       if (issues) issues.formulaErrors++;
       return null;
@@ -174,7 +179,8 @@ function grid(ws: ExcelJS.Worksheet, issues?: SheetIssues, maxRows = 200_000): u
     const vals: unknown[] = [];
     let rowHasValue = false;
     row.eachCell({ includeEmpty: true }, (cell, colNum) => {
-      const v = normalizeCell(cell.value, issues);
+      // cell.result porta il valore calcolato anche quando l'oggetto non lo espone.
+      const v = normalizeCell(cell.value, issues, 0, (cell as { result?: unknown }).result);
       vals[colNum - 1] = v;
       if (!isBlank(v)) { rowHasValue = true; if (colNum > lastCol) lastCol = colNum; }
     });

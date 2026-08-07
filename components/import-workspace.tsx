@@ -30,7 +30,19 @@ type ImportFile = {
   columns: string[]; profiles: Profile[]; proposal: Proposal[] | null;
   mapping: Record<string, string>; status: 'uploaded' | 'mapped' | 'imported';
   report: Report | null; rawPurged: boolean; usedAi: boolean; issues: Issues | null;
+  sheetName: string | null;
+  kind: 'mentions' | 'metrics';
+  metricMap: MetricMap | null;
+  extras: Record<string, string>;
   createdAt: string; importedAt: string | null;
+};
+type MetricMap = {
+  date?: string; entity?: string; entityLabel?: string;
+  metrics?: string[]; dims?: string[];
+};
+type SheetInfo = {
+  name: string; hidden: boolean; rows: number; columns: number;
+  headerRow: number; headers: string[]; twoRowHeader: boolean;
 };
 type PreviewRow = {
   publishedAt: string; dateFellBack: boolean; source: string; content: string;
@@ -68,12 +80,19 @@ const STATUS: Record<ImportFile['status'], { label: string; cls: string; step: n
 
 const num = (n: number) => n.toLocaleString('it-IT');
 
+/** Un foglio è pronto quando ha ciò che serve al SUO tipo di lettura. */
+const isReady = (f: ImportFile) => (f.kind === 'metrics'
+  ? Boolean(f.metricMap?.date && (f.metricMap.metrics ?? []).length)
+  : Boolean(f.mapping.content));
+
 export function ImportWorkspace({ project }: { project: { id: number; name: string } }) {
   const [files, setFiles] = useState<ImportFile[]>([]);
   const [open, setOpen] = useState<number | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [analyzeMsg, setAnalyzeMsg] = useState('');
+  /** File caricato in attesa che l'utente scelga quali fogli importare. */
+  const [pending, setPending] = useState<{ file: File; sheets: SheetInfo[] } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/import/files?project=${project.id}`);
@@ -84,27 +103,35 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
 
   useEffect(() => { load(); }, [load]);
 
-  const upload = async (f: File) => {
+  /**
+   * Carica un file. Se contiene più fogli non se ne sceglie uno a caso: si
+   * mostra l'inventario e decide l'utente. Il file resta qui nel browser, così
+   * la scelta non costa un secondo caricamento all'utente.
+   */
+  const upload = async (f: File, sheets?: string[]) => {
     setBusy('upload'); setError('');
     try {
       const fd = new FormData();
       fd.append('file', f);
       fd.append('projectId', String(project.id));
+      if (sheets?.length) fd.append('sheets', sheets.join('\n'));
       const res = await fetch('/api/import/files', { method: 'POST', body: fd });
       const d = await res.json();
       if (!res.ok) { setError(d.error ?? "Errore nell'upload"); return; }
+      if (d.needsChoice) { setPending({ file: f, sheets: d.sheets }); return; }
+      setPending(null);
       await load();
-      setOpen(d.fileId);
+      if (d.fileId) setOpen(d.fileId);
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(''); }
   };
 
-  const act = async (fileId: number, action: string, mapping?: Record<string, string>) => {
+  const act = async (fileId: number, action: string, payload?: Record<string, unknown>) => {
     setBusy(`${action}-${fileId}`); setError('');
     try {
       const res = await fetch('/api/import/files', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: project.id, fileId, action, mapping }),
+        body: JSON.stringify({ projectId: project.id, fileId, action, ...payload }),
       });
       const d = await res.json();
       if (!res.ok) { setError(d.error ?? 'Operazione fallita'); return; }
@@ -115,14 +142,15 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
 
   /** Importa in fila tutti i file che hanno già il testo assegnato. */
   const importAll = async () => {
-    const todo = files.filter((f) => !f.rawPurged && f.mapping.content && f.status !== 'imported');
+    // Pronto significa cose diverse per un foglio di contenuti e uno di misure.
+    const todo = files.filter((f) => !f.rawPurged && f.status !== 'imported' && isReady(f));
     if (!todo.length) return;
     setBusy('all'); setError('');
     try {
       for (const f of todo) {
         const res = await fetch('/api/import/files', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId: project.id, fileId: f.id, action: 'derive' }),
+          body: JSON.stringify({ projectId: project.id, fileId: f.id, action: 'derive', kind: f.kind }),
         });
         if (!res.ok) { setError(`${f.filename}: ${(await res.json()).error ?? 'import fallito'}`); break; }
       }
@@ -151,7 +179,7 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
       rawRows: files.reduce((s, f) => s + f.rowCount, 0),
       mentions: files.reduce((s, f) => s + (f.report?.inserted ?? 0), 0),
       pending: files.filter((f) => f.status !== 'imported').length,
-      ready: files.filter((f) => !f.rawPurged && f.mapping.content && f.status !== 'imported').length,
+      ready: files.filter((f) => !f.rawPurged && f.status !== 'imported' && isReady(f)).length,
       importedCount: imported.length,
       datesFailed: files.reduce((s, f) => s + (f.report?.datesFailed ?? 0), 0),
       withSentiment: files.reduce((s, f) => s + (f.report?.sentimentImported ?? 0), 0),
@@ -228,6 +256,14 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
         </label>
       </section>
 
+      {pending && (
+        <SheetChooser
+          filename={pending.file.name} sheets={pending.sheets} busy={busy === 'upload'}
+          onCancel={() => setPending(null)}
+          onConfirm={(names) => upload(pending.file, names)}
+        />
+      )}
+
       {error && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">{error}</p>}
 
       {files.map((f) => (
@@ -239,6 +275,112 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * La scelta dei fogli.
+ *
+ * Un database vero ne ha venticinque o cinquanta, con forme diverse e metà
+ * nascosti. Importarli tutti d'ufficio riempirebbe il progetto di tabelle di
+ * servizio; importarne uno a caso perderebbe il grosso. Quindi si mostra cosa
+ * c'è dentro — righe, colonne, prime intestazioni — e si sceglie guardando.
+ */
+function SheetChooser({ filename, sheets, busy, onCancel, onConfirm }: {
+  filename: string; sheets: SheetInfo[]; busy: boolean;
+  onCancel: () => void; onConfirm: (names: string[]) => void;
+}) {
+  const withData = useMemo(() => sheets.filter((s) => s.rows > 0), [sheets]);
+  // Preselezione onesta: i fogli visibili con dei dati. I nascosti sono spesso
+  // appunti di lavoro, ma restano a un clic di distanza.
+  const [picked, setPicked] = useState<Set<string>>(
+    () => new Set(withData.filter((s) => !s.hidden).map((s) => s.name)),
+  );
+  const [showEmpty, setShowEmpty] = useState(false);
+  const visible = showEmpty ? sheets : withData;
+  const toggle = (n: string) => setPicked((p) => {
+    const next = new Set(p);
+    if (next.has(n)) next.delete(n); else next.add(n);
+    return next;
+  });
+
+  return (
+    <section className="panel border-sky-500/30 px-5 py-4">
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Layers className="size-4 text-sky-400" />
+        <p className="text-sm font-medium text-slate-200">
+          {filename} contiene {sheets.length} fogli
+        </p>
+        <p className="text-xs text-slate-500">
+          {withData.length} con dati · scegli quali importare
+        </p>
+        <div className="ml-auto flex items-center gap-2 text-[11px]">
+          <button onClick={() => setPicked(new Set(withData.map((s) => s.name)))}
+            className="text-sky-300 hover:underline">tutti</button>
+          <span className="text-slate-700">·</span>
+          <button onClick={() => setPicked(new Set(withData.filter((s) => !s.hidden).map((s) => s.name)))}
+            className="text-sky-300 hover:underline">solo visibili</button>
+          <span className="text-slate-700">·</span>
+          <button onClick={() => setPicked(new Set())} className="text-slate-500 hover:underline">nessuno</button>
+        </div>
+      </div>
+
+      <div className="max-h-[26rem] overflow-y-auto rounded-xl border border-[var(--border)]">
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 bg-[var(--panel-2)]">
+            <tr className="text-left text-[10px] uppercase tracking-wide text-slate-600">
+              <th className="w-8 px-3 py-2"></th>
+              <th className="px-2 py-2">Foglio</th>
+              <th className="px-2 py-2 text-right">Righe</th>
+              <th className="px-2 py-2 text-right">Colonne</th>
+              <th className="px-2 py-2">Prime intestazioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((s) => {
+              const on = picked.has(s.name);
+              const empty = s.rows === 0;
+              return (
+                <tr key={s.name}
+                  onClick={() => !empty && toggle(s.name)}
+                  className={`border-t border-[var(--border)]/40 ${empty ? 'opacity-40' : 'cursor-pointer hover:bg-white/[0.03]'} ${on ? 'bg-sky-500/[0.06]' : ''}`}>
+                  <td className="px-3 py-1.5">
+                    <input type="checkbox" checked={on} disabled={empty} readOnly className="size-3.5 accent-sky-500" />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <span className="font-medium text-slate-200">{s.name}</span>
+                    {s.hidden && <span className="ml-1.5 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-slate-500">nascosto</span>}
+                    {s.twoRowHeader && <span className="ml-1.5 rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] text-violet-300">intestazione doppia</span>}
+                    {s.headerRow > 1 && <span className="ml-1.5 text-[10px] text-slate-600">intestazione a riga {s.headerRow}</span>}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums text-slate-400">{empty ? '—' : num(s.rows)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{s.columns}</td>
+                  <td className="max-w-[24rem] truncate px-2 py-1.5 text-slate-600">{s.headers.slice(0, 6).join(' · ')}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button onClick={() => onConfirm([...picked])} disabled={busy || picked.size === 0}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500/90 px-3.5 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-40">
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}
+          Importa {picked.size} {picked.size === 1 ? 'foglio' : 'fogli'}
+        </button>
+        <button onClick={onCancel} disabled={busy}
+          className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-slate-400 hover:bg-white/5 disabled:opacity-40">
+          Annulla
+        </button>
+        {sheets.length > withData.length && (
+          <button onClick={() => setShowEmpty((v) => !v)} className="text-[11px] text-slate-500 hover:text-slate-300">
+            {showEmpty ? 'nascondi' : 'mostra'} i {sheets.length - withData.length} fogli vuoti
+          </button>
+        )}
+        {busy && <span className="text-[11px] text-slate-500">Lettura e profilazione di ogni foglio: può richiedere qualche minuto.</span>}
+      </div>
+    </section>
   );
 }
 
@@ -277,7 +419,7 @@ function Steps({ step, hasContent }: { step: number; hasContent: boolean }) {
 function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
   file: ImportFile; busy: string; projectId: number; expanded: boolean;
   onToggle: () => void;
-  onAct: (fileId: number, action: string, mapping?: Record<string, string>) => Promise<void>;
+  onAct: (fileId: number, action: string, payload?: Record<string, unknown>) => Promise<void>;
 }) {
   const [map, setMap] = useState<Record<string, string>>(file.mapping);
   const [preview, setPreview] = useState<{ rows: PreviewRow[]; report: Report } | null>(null);
@@ -312,7 +454,8 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
         <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           {expanded ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
           <FileSpreadsheet className="size-4 shrink-0 text-slate-500" />
-          <span className="truncate text-sm font-medium text-slate-200">{file.filename}</span>
+          <span className="truncate text-sm font-medium text-slate-200">{file.sheetName ?? file.filename}</span>
+          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${file.kind === 'metrics' ? 'bg-violet-500/15 text-violet-300' : 'bg-sky-500/15 text-sky-300'}`}>{file.kind === 'metrics' ? 'misure' : 'contenuti'}</span>
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${st.cls}`}>{st.label}</span>
           <span className="shrink-0 text-[11px] text-slate-600">
             {num(file.rowCount)} righe · {file.columns.length} colonne
@@ -328,8 +471,10 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
             </a>
           )}
           {!file.rawPurged && (
-            <button onClick={() => onAct(file.id, 'derive')} disabled={!!busy || !map.content}
-              title={!map.content ? 'Assegna prima la colonna del testo' : file.status === 'imported' ? 'Rigenera le mention da questo file' : 'Deriva le mention'}
+            <button onClick={() => onAct(file.id, 'derive', { kind: file.kind })} disabled={!!busy || !isReady(file)}
+              title={!isReady(file)
+                ? (file.kind === 'metrics' ? 'Scegli prima la data e almeno una colonna di valori' : 'Assegna prima la colonna del testo')
+                : file.status === 'imported' ? 'Rigenera i dati da questo foglio' : 'Deriva i dati'}
               className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500/90 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-50">
               {busyHere && busy.startsWith('derive') ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}
               {file.status === 'imported' ? 'Reimporta' : 'Importa'}
@@ -343,7 +488,7 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
         </div>
       </div>
 
-      <div className="mt-2"><Steps step={st.step} hasContent={Boolean(map.content)} /></div>
+      <div className="mt-2"><Steps step={st.step} hasContent={isReady(file)} /></div>
 
       {file.report && (
         <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px]">
@@ -379,6 +524,12 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
 
       {expanded && (
         <div className="mt-4 flex flex-col gap-4 border-t border-[var(--border)] pt-4">
+          <KindSwitch file={file} busy={busy} onAct={onAct} />
+
+          {file.kind === 'metrics' ? (
+            <MetricEditor file={file} busy={busy} onAct={onAct} />
+          ) : (
+          <>
           {file.proposal && file.proposal.length > 0 && <ProposalPanel proposal={file.proposal} usedAi={file.usedAi} />}
 
           <div>
@@ -408,7 +559,7 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
                 {previewing ? <Loader2 className="size-3.5 animate-spin" /> : <Eye className="size-3.5" />}
                 Verifica il risultato
               </button>
-              <button onClick={() => onAct(file.id, 'map', map)} disabled={!!busy || !dirty}
+              <button onClick={() => onAct(file.id, 'map', { mapping: map })} disabled={!!busy || !dirty}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40">
                 {busyHere && busy.startsWith('map') ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                 Salva assegnazione
@@ -429,12 +580,200 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
             {previewErr && <p className="mt-2 text-xs text-amber-300">{previewErr}</p>}
           </div>
 
+          <ExtrasEditor file={file} busy={busy} onAct={onAct} />
+
           {preview && <PreviewTable preview={preview} />}
+          </>
+          )}
 
           <ColumnTable profiles={file.profiles} mapping={map} />
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Post o misure. Il riconoscimento automatico ci prende quasi sempre, ma un
+ * foglio di storie senza didascalia somiglia a una tabella di numeri pur
+ * essendo fatto di contenuti: l'ultima parola resta a chi guarda.
+ */
+function KindSwitch({ file, busy, onAct }: {
+  file: ImportFile; busy: string;
+  onAct: (fileId: number, action: string, payload?: Record<string, unknown>) => Promise<void>;
+}) {
+  const opts: { k: 'mentions' | 'metrics'; label: string; hint: string }[] = [
+    { k: 'mentions', label: 'Contenuti', hint: 'righe con un testo: post, articoli, commenti' },
+    { k: 'metrics', label: 'Misure', hint: 'serie di numeri nel tempo: follower, impression, medie' },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Questo foglio è</span>
+      {opts.map((o) => (
+        <button key={o.k} title={o.hint} disabled={!!busy}
+          onClick={() => file.kind !== o.k && onAct(file.id, 'kind', { kind: o.k })}
+          className={`rounded-lg border px-3 py-1.5 text-xs disabled:opacity-50 ${file.kind === o.k
+            ? 'border-sky-500/50 bg-sky-500/10 text-sky-200'
+            : 'border-[var(--border)] text-slate-400 hover:bg-white/5'}`}>
+          {o.label}
+        </button>
+      ))}
+      <span className="text-[11px] text-slate-600">
+        {opts.find((o) => o.k === file.kind)?.hint}
+        {file.status === 'imported' && ' · cambiando tipo, quanto già importato da questo foglio viene rifatto'}
+      </span>
+    </div>
+  );
+}
+
+/** La mappatura di un foglio di misure: data, chi, che cosa, e come tagliarlo. */
+function MetricEditor({ file, busy, onAct }: {
+  file: ImportFile; busy: string;
+  onAct: (fileId: number, action: string, payload?: Record<string, unknown>) => Promise<void>;
+}) {
+  const [m, setM] = useState<MetricMap>(file.metricMap ?? {});
+  useEffect(() => { setM(file.metricMap ?? {}); }, [file.metricMap]);
+  const dirty = JSON.stringify(m) !== JSON.stringify(file.metricMap ?? {});
+
+  const numeric = file.profiles.filter((p) => p.kind === 'number').map((p) => p.name);
+  const textual = file.profiles.filter((p) => p.kind === 'text').map((p) => p.name);
+  const toggleIn = (key: 'metrics' | 'dims', col: string) => setM((prev) => {
+    const cur = new Set(prev[key] ?? []);
+    if (cur.has(col)) cur.delete(col); else cur.add(col);
+    return { ...prev, [key]: [...cur] };
+  });
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Come leggere questo foglio</p>
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-slate-300">Data <span className="text-sky-400">*</span><span className="text-slate-600"> · quando</span></span>
+          <select value={m.date ?? ''} onChange={(e) => setM({ ...m, date: e.target.value })}
+            className={`rounded-lg border bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-slate-100 ${m.date ? 'border-[var(--border)]' : 'border-sky-500/50'}`}>
+            <option value="">— nessuna —</option>
+            {file.columns.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-slate-300">Entità<span className="text-slate-600"> · chi</span></span>
+          <select value={m.entity ?? ''} onChange={(e) => setM({ ...m, entity: e.target.value })}
+            className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-slate-100">
+            <option value="">— il foglio stesso —</option>
+            {textual.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        {!m.entity && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-300">Nome dell&rsquo;entità<span className="text-slate-600"> · come chiamarla</span></span>
+            <input value={m.entityLabel ?? ''} onChange={(e) => setM({ ...m, entityLabel: e.target.value })}
+              placeholder={file.sheetName ?? file.filename}
+              className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-slate-100" />
+          </label>
+        )}
+      </div>
+
+      <div>
+        <p className="mb-1 text-xs text-slate-300">
+          Colonne dei valori <span className="text-sky-400">*</span>
+          <span className="text-slate-600"> · ognuna diventa una serie ({(m.metrics ?? []).length} scelte)</span>
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {numeric.map((c) => {
+            const on = (m.metrics ?? []).includes(c);
+            return (
+              <button key={c} onClick={() => toggleIn('metrics', c)}
+                className={`rounded-lg border px-2 py-1 text-[11px] ${on
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+                  : 'border-[var(--border)] text-slate-400 hover:bg-white/5'}`}>{c}</button>
+            );
+          })}
+          {!numeric.length && <span className="text-[11px] text-slate-600">Nessuna colonna numerica in questo foglio.</span>}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1 text-xs text-slate-300">
+          Dimensioni<span className="text-slate-600"> · come tagliare i numeri: canale, pillar, azienda ({(m.dims ?? []).length} scelte)</span>
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {textual.filter((c) => c !== m.entity).map((c) => {
+            const on = (m.dims ?? []).includes(c);
+            return (
+              <button key={c} onClick={() => toggleIn('dims', c)}
+                className={`rounded-lg border px-2 py-1 text-[11px] ${on
+                  ? 'border-violet-500/50 bg-violet-500/10 text-violet-200'
+                  : 'border-[var(--border)] text-slate-400 hover:bg-white/5'}`}>{c}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => onAct(file.id, 'map-metrics', { metricMap: m })} disabled={!!busy || !dirty}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40">
+          <Check className="size-3.5" /> Salva la lettura
+        </button>
+        {dirty && <span className="text-[11px] text-amber-300">Modifiche non salvate — poi usa &ldquo;Reimporta&rdquo;.</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * I campi conservati: le colonne che non sono un campo di Radar e che sarebbero
+ * andate perse. L'etichetta è modificabile perché "CAT. TRASVERSALE" dice
+ * qualcosa solo a chi ha costruito quel file.
+ */
+function ExtrasEditor({ file, busy, onAct }: {
+  file: ImportFile; busy: string;
+  onAct: (fileId: number, action: string, payload?: Record<string, unknown>) => Promise<void>;
+}) {
+  const [ex, setEx] = useState<Record<string, string>>(file.extras ?? {});
+  useEffect(() => { setEx(file.extras ?? {}); }, [file.extras]);
+  const dirty = JSON.stringify(ex) !== JSON.stringify(file.extras ?? {});
+  const mapped = new Set(Object.values(file.mapping));
+  const available = file.columns.filter((c) => !mapped.has(c) && !(c in ex));
+
+  return (
+    <div>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+        Campi conservati <span className="normal-case tracking-normal text-slate-600">— colonne che non sono un campo di Radar, ma che restano</span>
+      </p>
+      {Object.keys(ex).length === 0 && (
+        <p className="mb-2 text-xs text-slate-600">Nessuna: tutte le colonne utili sono già assegnate a un campo.</p>
+      )}
+      <div className="flex flex-col gap-1.5">
+        {Object.entries(ex).map(([col, label]) => (
+          <div key={col} className="flex flex-wrap items-center gap-2">
+            <span className="min-w-[9rem] truncate text-xs text-slate-500">{col}</span>
+            <ArrowRight className="size-3 shrink-0 text-slate-700" />
+            <input value={label} onChange={(e) => setEx({ ...ex, [col]: e.target.value })}
+              className="min-w-[10rem] flex-1 rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-2.5 py-1 text-xs text-slate-100" />
+            <button onClick={() => { const n = { ...ex }; delete n[col]; setEx(n); }}
+              title="Non conservare questa colonna"
+              className="text-slate-600 hover:text-red-300"><Trash2 className="size-3.5" /></button>
+          </div>
+        ))}
+      </div>
+      {available.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-slate-600">aggiungi:</span>
+          {available.slice(0, 14).map((c) => (
+            <button key={c} onClick={() => setEx({ ...ex, [c]: c })}
+              className="rounded-lg border border-dashed border-[var(--border)] px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-300">
+              + {c}
+            </button>
+          ))}
+        </div>
+      )}
+      {dirty && (
+        <button onClick={() => onAct(file.id, 'extras', { extras: ex })} disabled={!!busy}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40">
+          <Check className="size-3.5" /> Salva i campi conservati
+        </button>
+      )}
+    </div>
   );
 }
 

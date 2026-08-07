@@ -41,6 +41,7 @@ const IT: Record<string, string> = {
   'nav.messages': 'Ripresa dei messaggi',
   'nav.emv': 'Valore media',
   'nav.insights': 'Esplora gli insight',
+  'nav.measures': 'Misure',
   'nav.pov': 'Point of View',
   'nav.narratives': 'Narrazioni',
   'nav.timeline': 'Cronologia',

@@ -150,3 +150,25 @@ test('CSV: file senza righe dati non esplode', async () => {
   assert.equal(rows.length, 0);
   assert.equal(total, 0);
 });
+
+test('formula trascinata il cui risultato è ZERO: il valore si recupera', async () => {
+  // Su una formula condivisa la libreria omette `result` quando vale 0 e lo
+  // espone solo su `cell.result`. Fidarsi del solo oggetto faceva sparire celle
+  // che nel file un valore ce l'hanno: 65 su un singolo foglio reale, tutte 0.
+  // Zero e "non rilevato" sono cose diverse, e confonderle falsa ogni media.
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('S');
+  ws.addRow(['testo', 'clic']);
+  ws.addRow(['primo', null]);
+  ws.addRow(['secondo', null]);
+  ws.getCell('B2').value = { formula: 'SUM(C2:D2)', result: 5 };
+  // La seconda eredita la formula e vale 0: è la forma che la libreria produce.
+  ws.getCell('B3').value = { sharedFormula: 'B2', result: 0 };
+  const buf = Buffer.from(await wb.xlsx.writeBuffer());
+
+  const { rows, issues } = await parseSheet(buf, 'f.xlsx');
+  assert.equal(rows[0].clic, 5);
+  assert.equal(rows[1].clic, 0, 'lo zero calcolato è un valore, non una cella vuota');
+  assert.equal(issues.formulaNoValue, 0);
+  assert.equal(issues.formulas, 2);
+});

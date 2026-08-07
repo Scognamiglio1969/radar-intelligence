@@ -8,7 +8,7 @@ import {
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
   UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb, MessageSquareQuote, Euro, Award, Trophy, FileClock,
-  BookOpen,
+  BookOpen, LineChart,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
@@ -48,6 +48,7 @@ const NAV: NavItem[] = [
   { href: '/messages', label: 'Message pull-through', key: 'nav.messages', icon: MessageSquareQuote },
   { href: '/emv', label: 'Media value', key: 'nav.emv', icon: Euro },
   { href: '/insights', label: 'Explore insights', key: 'nav.insights', icon: LayoutGrid },
+  { href: '/measures', label: 'Measures', key: 'nav.measures', icon: LineChart },
   { section: 'Interpret', key: 'nav.interpret' },
   { href: '/pov', label: 'Point of View', key: 'nav.pov', icon: Lightbulb },
   { href: '/narratives', label: 'Narratives', key: 'nav.narratives', icon: GitBranch },
