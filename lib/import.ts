@@ -21,6 +21,24 @@ export type SheetIssues = { formulas: number; formulaErrors: number; formulaNoVa
 
 export type ParsedSheet = {
   columns: string[]; rows: Record<string, unknown>[]; total: number; issues: SheetIssues;
+  /** Da quale foglio arrivano queste righe (vuoto per i CSV). */
+  sheet?: string;
+  /** Riga usata come intestazione (1-based): non è sempre la prima. */
+  headerRow?: number;
+};
+
+/** Un foglio del file, come si presenta prima di decidere se importarlo. */
+export type SheetInfo = {
+  name: string;
+  hidden: boolean;
+  /** Righe di DATI reali, già al netto dell'intestazione e delle righe vuote. */
+  rows: number;
+  columns: number;
+  headerRow: number;
+  /** Le intestazioni trovate, per far capire cosa c'è dentro senza aprirlo. */
+  headers: string[];
+  /** Vero se l'intestazione è su due righe fuse (blocchi tipo "DATI COMPANY"). */
+  twoRowHeader: boolean;
 };
 
 /** Mappa: campo di Radar → nome colonna del file ('' = non mappato). */
@@ -123,42 +141,210 @@ function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim() !== ''));
 }
 
+const isBlank = (v: unknown) => v == null || String(v).trim() === '';
+
+/**
+ * La griglia di un foglio, ridotta alla sua estensione REALE.
+ *
+ * `ws.rowCount` e `ws.columnCount` contano anche le righe e le colonne solo
+ * FORMATTATE: su database veri gonfiano fino a 27 volte (un foglio che dichiara
+ * 998 righe ne ha 36). Fidarsene significa importare migliaia di righe fantasma
+ * e, peggio, falsare la percentuale di riempimento delle colonne — che è il
+ * criterio con cui Radar riconosce che cosa contiene ciascuna colonna.
+ */
+function grid(ws: ExcelJS.Worksheet, issues?: SheetIssues, maxRows = 200_000): unknown[][] {
+  const out: unknown[][] = [];
+  let lastRow = 0, lastCol = 0;
+  ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
+    if (rowNum > maxRows) return;
+    const vals: unknown[] = [];
+    let rowHasValue = false;
+    row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+      const v = normalizeCell(cell.value, issues);
+      vals[colNum - 1] = v;
+      if (!isBlank(v)) { rowHasValue = true; if (colNum > lastCol) lastCol = colNum; }
+    });
+    if (rowHasValue) { out[rowNum - 1] = vals; lastRow = rowNum; }
+  });
+  const g: unknown[][] = [];
+  for (let r = 0; r < lastRow; r++) {
+    const src = out[r] ?? [];
+    g.push(Array.from({ length: lastCol }, (_, c) => src[c] ?? null));
+  }
+  return g;
+}
+
+/**
+ * Quale riga è l'intestazione.
+ *
+ * Non è sempre la prima: i database veri antepongono titoli, note e righe
+ * vuote. Si cerca la prima riga densa e testuale seguita da almeno una riga di
+ * dati — e la si preferisce a una riga di titoli di sezione, che è sparsa.
+ */
+function findHeaderRow(g: unknown[][]): number {
+  const look = Math.min(g.length, 15);
+  const filledOf = (r: number) => (g[r] ?? []).filter((v) => !isBlank(v)).length;
+  const widest = Math.max(...Array.from({ length: look }, (_, r) => filledOf(r)), 1);
+
+  for (let r = 0; r < look; r++) {
+    const row = g[r] ?? [];
+    const filled = filledOf(r);
+    if (filled < 2) continue;                       // riga di titolo o nota isolata
+    // Una riga di preambolo ("Report generato il", "12/03/2024") è molto più
+    // stretta della tabella vera: si scarta confrontandola con la riga più
+    // larga vista finora, non in assoluto.
+    if (filled < widest * 0.6) continue;
+    const texty = row.filter((v) => typeof v === 'string' && String(v).trim() !== '').length;
+    if (texty < filled * 0.5) continue;             // riga di dati, non di nomi
+    return r;
+  }
+  // Nessuna candidata convincente: la prima riga con qualcosa dentro.
+  for (let r = 0; r < g.length; r++) if (filledOf(r) > 0) return r;
+  return 0;
+}
+
+/**
+ * Intestazione su DUE righe: la prima nomina il blocco, la seconda il campo
+ * ("DATI COMPANY" sopra "DATA POST | AZIENDA | %"). Succede nei fogli di
+ * audience, dove più tabelle stanno affiancate sulla stessa griglia. Fondendole
+ * si ottengono nomi non ambigui invece di tre colonne tutte chiamate "AZIENDA".
+ */
+function mergeTwoRowHeader(top: unknown[], bottom: unknown[]): string[] {
+  let group = '';
+  return bottom.map((b, i) => {
+    const t = isBlank(top[i]) ? '' : String(top[i]).trim();
+    if (t) group = t;
+    const f = isBlank(b) ? '' : String(b).trim();
+    if (!f) return t || '';
+    return group ? `${group} · ${f}` : f;
+  });
+}
+
+function looksLikeGroupRow(top: unknown[], bottom: unknown[]): boolean {
+  const tf = top.filter((v) => !isBlank(v));
+  const bf = bottom.filter((v) => !isBlank(v));
+  if (tf.length < 2 || bf.length < 2) return false;
+  // Due indizi che la riga di sopra sia un CAPPELLO e non l'intestazione:
+  //  - è sparsa, con la tabella vera densa sotto;
+  //  - contiene lo stesso valore in colonne ADIACENTI, che è ciò che produce
+  //    una cella unita. Una semplice ripetizione non basta: un'intestazione
+  //    vera può contenere due volte "PILLAR" in punti diversi del foglio, e
+  //    quella è una colonna duplicata, non un blocco.
+  const sparse = bf.length >= tf.length * 2 && tf.length / Math.max(1, top.length) < 0.4;
+  let adjacent = false;
+  for (let i = 1; i < top.length; i++) {
+    if (!isBlank(top[i]) && String(top[i]).trim() === String(top[i - 1] ?? '').trim()) { adjacent = true; break; }
+  }
+  if (!sparse && !adjacent) return false;
+
+  // La riga sotto deve essere fatta di NOMI, non di dati.
+  const texty = bf.filter((v) => typeof v === 'string').length;
+  if (texty < bf.length * 0.8) return false;
+
+  // E la fusione deve servire a qualcosa: se non aumenta i nomi distinti,
+  // non stiamo disambiguando niente e conviene lasciare l'intestazione com'è.
+  const distinctTop = new Set(top.map((v, i) => (isBlank(v) ? `c${i}` : String(v).trim().toLowerCase()))).size;
+  const distinctMerged = new Set(mergeTwoRowHeader(top, bottom).map((s, i) => s || `c${i}`)).size;
+  return distinctMerged > distinctTop;
+}
+
+/** Nomi di colonna sempre presenti e sempre distinti. */
+function nameColumns(raw: unknown[]): string[] {
+  const seen = new Map<string, number>();
+  return raw.map((v, i) => {
+    let name = isBlank(v) ? `Colonna ${i + 1}` : String(v).replace(/\s+/g, ' ').trim();
+    // Un'intestazione ripetuta nello stesso foglio esiste davvero (un file
+    // reale ha "PILLAR" due volte): senza rinominarla, la seconda colonna
+    // sovrascriverebbe la prima e quei dati sparirebbero.
+    const n = seen.get(name.toLowerCase()) ?? 0;
+    seen.set(name.toLowerCase(), n + 1);
+    if (n > 0) name = `${name} (${n + 1})`;
+    return name;
+  });
+}
+
+export type ParseOptions = {
+  /** Nome del foglio (o indice 0-based). Assente = il primo foglio visibile. */
+  sheet?: string | number;
+  /** Riga d'intestazione forzata (1-based); assente = rilevata. */
+  headerRow?: number;
+};
+
+/** Che fogli contiene il file, senza importarne nessuno. */
+export async function listSheets(buffer: Buffer, filename: string): Promise<SheetInfo[]> {
+  if (/\.csv$/i.test(filename)) {
+    const { columns, total, headerRow } = await parseSheet(buffer, filename);
+    return [{
+      name: 'CSV', hidden: false, rows: total, columns: columns.length,
+      headerRow: headerRow ?? 1, headers: columns, twoRowHeader: false,
+    }];
+  }
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+  return wb.worksheets.map((ws) => {
+    // Il campione basta a capire forma e intestazione: leggere per intero 25
+    // fogli solo per elencarli costerebbe minuti su file da 4 MB.
+    const g = grid(ws, undefined, 60);
+    if (!g.length) {
+      return { name: ws.name, hidden: ws.state !== 'visible', rows: 0, columns: 0, headerRow: 1, headers: [], twoRowHeader: false };
+    }
+    const h = findHeaderRow(g);
+    const two = h + 1 < g.length && looksLikeGroupRow(g[h], g[h + 1]);
+    const headers = nameColumns(two ? mergeTwoRowHeader(g[h], g[h + 1]) : g[h]);
+    // Le righe totali vanno contate sul foglio intero, non sul campione.
+    let last = 0;
+    ws.eachRow({ includeEmpty: false }, (row, n) => {
+      let any = false;
+      row.eachCell({ includeEmpty: false }, (c) => { if (!isBlank(normalizeCell(c.value))) any = true; });
+      if (any) last = n;
+    });
+    return {
+      name: ws.name,
+      hidden: ws.state !== 'visible',
+      rows: Math.max(0, last - (h + (two ? 2 : 1))),
+      columns: headers.filter((x) => x && !/^Colonna \d+$/.test(x)).length,
+      headerRow: h + 1,
+      headers,
+      twoRowHeader: two,
+    };
+  });
+}
+
 /** Legge un buffer .xlsx/.csv e restituisce colonne + righe (oggetti per header). */
-export async function parseSheet(buffer: Buffer, filename: string): Promise<ParsedSheet> {
+export async function parseSheet(
+  buffer: Buffer, filename: string, opts: ParseOptions = {},
+): Promise<ParsedSheet> {
   const isCsv = /\.csv$/i.test(filename);
-  let columns: string[] = [];
-  const rows: Record<string, unknown>[] = [];
   const issues: SheetIssues = { formulas: 0, formulaErrors: 0, formulaNoValue: 0 };
 
+  let g: unknown[][];
+  let sheetName: string | undefined;
   if (isCsv) {
-    const matrix = parseCsv(buffer.toString('utf8'));
-    if (matrix.length === 0) return { columns: [], rows: [], total: 0, issues };
-    columns = matrix[0].map((h, i) => (h.trim() || `Column ${i + 1}`));
-    for (let r = 1; r < matrix.length; r++) {
-      const obj: Record<string, unknown> = {};
-      columns.forEach((h, i) => { obj[h] = matrix[r][i] ?? null; });
-      rows.push(obj);
-    }
+    g = parseCsv(buffer.toString('utf8'));
   } else {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);
-    const ws = wb.worksheets[0];
+    const ws = typeof opts.sheet === 'number' ? wb.worksheets[opts.sheet]
+      : opts.sheet ? wb.getWorksheet(opts.sheet)
+        : (wb.worksheets.find((w) => w.state === 'visible') ?? wb.worksheets[0]);
     if (!ws) return { columns: [], rows: [], total: 0, issues };
-    // Anche l'intestazione può essere una formula: senza normalizzarla il nome
-    // della colonna diventerebbe "[object Object]".
-    ws.getRow(1).eachCell((cell, col) => {
-      const v = normalizeCell(cell.value);
-      columns[col - 1] = String(v ?? `Column ${col}`).trim() || `Column ${col}`;
-    });
-    for (let i = 0; i < columns.length; i++) if (!columns[i]) columns[i] = `Column ${i + 1}`;
-    ws.eachRow((r, rowNum) => {
-      if (rowNum === 1) return;
-      const obj: Record<string, unknown> = {};
-      columns.forEach((h, idx) => { obj[h] = normalizeCell(r.getCell(idx + 1).value, issues); });
-      if (columns.some((h) => obj[h] != null && String(obj[h]).trim() !== '')) rows.push(obj);
-    });
+    sheetName = ws.name;
+    g = grid(ws, issues);
   }
-  return { columns, rows, total: rows.length, issues };
+  if (!g.length) return { columns: [], rows: [], total: 0, issues, sheet: sheetName };
+
+  const h = opts.headerRow ? Math.max(0, opts.headerRow - 1) : findHeaderRow(g);
+  const two = h + 1 < g.length && looksLikeGroupRow(g[h], g[h + 1]);
+  const columns = nameColumns(two ? mergeTwoRowHeader(g[h], g[h + 1]) : g[h]);
+
+  const rows: Record<string, unknown>[] = [];
+  for (let r = h + (two ? 2 : 1); r < g.length; r++) {
+    const line = g[r];
+    const obj: Record<string, unknown> = {};
+    columns.forEach((name, i) => { obj[name] = line[i] ?? null; });
+    if (columns.some((name) => !isBlank(obj[name]))) rows.push(obj);
+  }
+  return { columns, rows, total: rows.length, issues, sheet: sheetName, headerRow: h + 1 };
 }
 
 // Hash deterministico (djb2) per l'external_id: reimportare lo stesso file non
