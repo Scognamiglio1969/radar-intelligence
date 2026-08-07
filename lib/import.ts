@@ -142,8 +142,44 @@ function normalizeCell(v: unknown, issues?: SheetIssues, depth = 0, fallback?: u
   return null;
 }
 
-/** CSV robusto (gestisce virgolette, virgole e newline dentro i campi). */
-function parseCsv(text: string): string[][] {
+/**
+ * Il separatore non è sempre la virgola.
+ *
+ * Excel in italiano esporta con il PUNTO E VIRGOLA, perché la virgola è già il
+ * separatore decimale. Assumere la virgola su un file del genere produce una
+ * colonna sola con dentro tutta la riga — e nessun messaggio d'errore, perché
+ * formalmente il file è stato letto.
+ *
+ * Si sceglie il candidato che divide le prime righe nel modo più regolare:
+ * un separatore vero dà lo stesso numero di campi su ogni riga.
+ */
+function sniffDelimiter(text: string): string {
+  const lines = text.split('\n').slice(0, 20).filter((l) => l.trim() !== '');
+  if (!lines.length) return ',';
+  let best = ',', bestScore = -1;
+  for (const d of [',', ';', '\t', '|']) {
+    // Si contano i separatori FUORI dalle virgolette: un testo che contiene
+    // "ciao, mondo" non deve far vincere la virgola.
+    const counts = lines.map((l) => {
+      let n = 0, inQ = false;
+      for (const c of l) {
+        if (c === '"') inQ = !inQ;
+        else if (c === d && !inQ) n++;
+      }
+      return n;
+    });
+    const first = counts[0];
+    if (!first) continue;
+    const consistent = counts.filter((n) => n === first).length / counts.length;
+    // Regolarità prima di tutto; a parità, vince chi produce più colonne.
+    const score = consistent * 100 + Math.min(first, 40);
+    if (score > bestScore) { bestScore = score; best = d; }
+  }
+  return best;
+}
+
+/** CSV robusto (gestisce virgolette, separatore variabile e newline nei campi). */
+function parseCsv(text: string, delimiter = sniffDelimiter(text)): string[][] {
   const rows: string[][] = [];
   let row: string[] = [], field = '', inQ = false;
   for (let i = 0; i < text.length; i++) {
@@ -152,12 +188,25 @@ function parseCsv(text: string): string[][] {
       if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
       else field += c;
     } else if (c === '"') inQ = true;
-    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === delimiter) { row.push(field); field = ''; }
     else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
     else if (c !== '\r') field += c;
   }
   if (field.length || row.length) { row.push(field); rows.push(row); }
   return rows.filter((r) => r.some((c) => c.trim() !== ''));
+}
+
+/**
+ * Il testo di un CSV, nella codifica giusta.
+ *
+ * Molti export italiani non sono UTF-8 ma Windows-1252: letti come UTF-8
+ * diventano "perché" invece di "perché". Il carattere di sostituzione U+FFFD
+ * è il segnale che la decodifica è andata storta, e allora si riprova.
+ */
+function decodeText(buffer: Buffer): string {
+  const utf8 = buffer.toString('utf8');
+  if (!utf8.includes('�')) return utf8.replace(/^﻿/, '');
+  return buffer.toString('latin1').replace(/^﻿/, '');
 }
 
 const isBlank = (v: unknown) => v == null || String(v).trim() === '';
@@ -361,7 +410,7 @@ export async function parseSheet(
   let g: unknown[][];
   let sheetName: string | undefined;
   if (isCsv) {
-    g = parseCsv(buffer.toString('utf8'));
+    g = parseCsv(decodeText(buffer));
   } else {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);

@@ -172,3 +172,32 @@ test('formula trascinata il cui risultato è ZERO: il valore si recupera', async
   assert.equal(issues.formulaNoValue, 0);
   assert.equal(issues.formulas, 2);
 });
+
+test('CSV: il separatore si riconosce, non si presume', async () => {
+  // Excel in italiano esporta con il punto e virgola, perché la virgola è già
+  // il separatore decimale. Presumere la virgola dava UNA colonna con dentro
+  // tutta la riga — senza errori, perché formalmente il file era stato letto.
+  const semi = await parseSheet(
+    Buffer.from('Data;Testo;Autore\n01/03/2024;"Un post, con virgola";mario\n02/03/2024;Altro;lucia', 'utf8'), 'f.csv');
+  assert.deepEqual(semi.columns, ['Data', 'Testo', 'Autore']);
+  assert.equal(semi.total, 2);
+  assert.equal(semi.rows[0].Testo, 'Un post, con virgola');
+
+  const tab = await parseSheet(
+    Buffer.from('Data\tTesto\tAutore\n01/03/2024\tUn post\tmario', 'utf8'), 'f.csv');
+  assert.deepEqual(tab.columns, ['Data', 'Testo', 'Autore']);
+
+  // La virgola resta la scelta giusta quando è lei il separatore, anche se il
+  // testo contiene punti e virgola.
+  const comma = await parseSheet(
+    Buffer.from('Data,Testo,Autore\n01/03/2024,"Un post; con punto e virgola",mario', 'utf8'), 'f.csv');
+  assert.deepEqual(comma.columns, ['Data', 'Testo', 'Autore']);
+  assert.equal(comma.rows[0].Testo, 'Un post; con punto e virgola');
+});
+
+test('CSV non UTF-8: gli accenti sopravvivono', async () => {
+  // Molti export italiani sono Windows-1252: letti come UTF-8 diventano
+  // caratteri di sostituzione, e il testo analizzato è già sbagliato in partenza.
+  const latin = await parseSheet(Buffer.from('Data;Testo\n01/03/2024;perché è così', 'latin1'), 'f.csv');
+  assert.equal(latin.rows[0].Testo, 'perché è così');
+});
