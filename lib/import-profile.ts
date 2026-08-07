@@ -185,7 +185,7 @@ const FIELD_ALIASES: Partial<Record<TargetField, string>> = {
 };
 
 const NAME_HINTS: Partial<Record<TargetField, RegExp>> = {
-  content: /(content|text|testo|message|messaggio|body|post|comment|caption|descri|snippet)/i,
+  content: /(content|text|testo|copy|message|messaggio|body|post|comment|caption|descri|snippet)/i,
   title: /(title|titolo|headline|subject|oggetto)/i,
   date: /(date|data|giorno|created|published|pubblic|timestamp)/i,
   time: /(time|ora|orario|hour)/i,
@@ -231,7 +231,11 @@ function scoreField(field: TargetField, p: ColumnProfile, rowCount: number): num
   if (EXPECTED_KIND[field] && /(rate|%|perc|ratio|media|avg)/i.test(p.name)) score -= 60;
 
   // Indizi dai VALORI, che pesano quanto il nome.
+  // Il testo del post: lungo e quasi sempre presente. Un testo MOLTO lungo
+  // (centinaia di caratteri) è quasi certamente il contenuto, anche quando la
+  // colonna si chiama in un modo che nessun dizionario prevede.
   if (field === 'content' && p.kind === 'text' && p.avgLength >= 40) score += 40;
+  if (field === 'content' && p.kind === 'text' && p.avgLength >= 200 && p.filled >= 60) score += 30;
   if (field === 'title' && p.kind === 'text' && p.avgLength >= 12 && p.avgLength < 90) score += 15;
   if (field === 'sentiment' && p.distinct <= 6 && p.kind === 'text') score += 35;
   if (field === 'language' && p.avgLength <= 6 && p.distinct <= 20) score += 30;
@@ -315,4 +319,75 @@ export async function buildProposal(
       : a;
   });
   return { proposal: merged, usedAi: true };
+}
+
+// ---------------------------------------------------------------------------
+// Le colonne che non sono un campo di Radar — ma che non vanno perse.
+//
+// Un database editoriale porta PILLAR, RUBRICA, CAMPAGNA, TEMA, CAT.
+// TRASVERSALE: dimensioni con cui quel lavoro viene letto e giudicato.
+// Scartarle perché "non corrispondono a niente" significa buttare via proprio
+// l'informazione che il cliente ha aggiunto a mano.
+// ---------------------------------------------------------------------------
+
+/** Etichette leggibili per le sigle che ricorrono nei database editoriali. */
+const EXTRA_LABELS: [RegExp, string][] = [
+  [/^pillar$/i, 'Pilastro editoriale'],
+  [/^rubrica$/i, 'Rubrica'],
+  [/^campagna$|^nome campagna$|^campaign$/i, 'Campagna'],
+  [/^tema$|^topic$|^argomento$/i, 'Tema'],
+  [/^cat\.?\s*trasversale$|^categoria trasversale$/i, 'Area semantica'],
+  [/^formato$|^format$|^tipo di post$|^media type$/i, 'Formato'],
+  [/^brand$/i, 'Brand'],
+  [/^lingua$|^language$/i, 'Lingua'],
+  [/^job title$|^ruolo$/i, 'Ruolo'],
+  [/^settore$|^sector$|^industry$/i, 'Settore'],
+  [/^azienda$|^company$|^companies$/i, 'Azienda'],
+  [/^location$|^luogo$/i, 'Luogo'],
+  [/^fonte$/i, 'Fonte originale'],
+  [/^stream$/i, 'Stream'],
+  [/^classificazione engagement$/i, 'Classe di engagement'],
+  [/^pubblicato da$|^published by$/i, 'Pubblicato da'],
+  [/^pubblico$|^audience$/i, 'Pubblico'],
+  [/^canale$|^channel$/i, 'Canale'],
+];
+
+/** Da nome di colonna a etichetta: sigla nota, altrimenti il nome ripulito. */
+export function extraLabel(name: string): string {
+  const clean = name.replace(/\s+/g, ' ').trim();
+  for (const [re, label] of EXTRA_LABELS) if (re.test(clean)) return label;
+  // "CAT. TRASVERSALE" → "Cat. trasversale": leggibile senza inventare nulla.
+  if (clean === clean.toUpperCase() && clean.length > 3) {
+    return clean.charAt(0) + clean.slice(1).toLowerCase();
+  }
+  return clean;
+}
+
+/**
+ * Vale la pena conservarla?
+ *
+ * Si tiene ciò che CLASSIFICA: testo con pochi valori distinti, cioè una
+ * dimensione. Si lasciano fuori gli identificatori tecnici e le colonne
+ * completamente vuote, che non aggiungono niente a nessuna analisi.
+ */
+export function keepAsExtra(p: ColumnProfile, rowCount: number): boolean {
+  if (p.filled === 0) return false;
+  if (/^Colonna \d+$/.test(p.name)) return false;
+  if (/(^id$|_id$|^id |permalink|link|url|external)/i.test(p.name)) return false;
+  if (p.kind === 'number' || p.kind === 'date' || p.kind === 'time') return false;
+  // Una colonna quasi tutta diversa riga per riga è un identificatore o un
+  // testo libero, non una categoria: non serve come dimensione.
+  return p.distinct <= Math.max(60, rowCount * 0.4);
+}
+
+/** Le colonne da conservare e con che etichetta, escluse quelle già mappate. */
+export function proposeExtras(
+  profiles: ColumnProfile[], taken: Set<string>, rowCount: number,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of profiles) {
+    if (taken.has(p.name) || !keepAsExtra(p, rowCount)) continue;
+    out[p.name] = extraLabel(p.name);
+  }
+  return out;
 }

@@ -4,8 +4,10 @@ import { getDb } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import {
-  deleteFile, deriveMentions, listFiles, purgeRaw, registerFile, updateMapping,
+  deleteFile, deriveMentions, deriveMetricPoints, listFiles, purgeRaw, registerFile,
+  updateExtras, updateKind, updateMapping, updateMetricMap,
 } from '@/lib/import-store';
+import { listSheets } from '@/lib/import';
 
 export const runtime = 'nodejs';
 // Un file grande va letto, profilato, proposto all'AI e archiviato riga per
@@ -43,7 +45,25 @@ export async function POST(req: Request) {
 
   try {
     const buf = Buffer.from(await file.arrayBuffer());
-    return NextResponse.json(await registerFile(projectId, buf, file.name));
+    const chosen = String(form.get('sheets') ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
+
+    // Un file può contenere decine di fogli, ognuno con una forma diversa.
+    // Al primo caricamento se ne restituisce l'INVENTARIO invece di indovinare
+    // quale importare: sceglie l'utente, e ogni foglio scelto diventa un
+    // elemento a sé con la sua mappatura.
+    if (!chosen.length) {
+      const sheets = await listSheets(buf, file.name);
+      const withData = sheets.filter((s) => s.rows > 0);
+      if (withData.length > 1) return NextResponse.json({ sheets, needsChoice: true });
+      const only = withData[0]?.name;
+      return NextResponse.json(await registerFile(projectId, buf, file.name, only));
+    }
+
+    const results = [];
+    for (const sheet of chosen) {
+      results.push(await registerFile(projectId, buf, `${file.name} › ${sheet}`, sheet));
+    }
+    return NextResponse.json({ imported: results.length, fileId: results[0]?.fileId });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
@@ -53,8 +73,11 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const body = await req.json() as {
     projectId: number; fileId: number;
-    action: 'map' | 'derive' | 'delete' | 'purge';
+    action: 'map' | 'derive' | 'delete' | 'purge' | 'map-metrics' | 'extras' | 'kind';
     mapping?: Record<string, string>;
+    metricMap?: Record<string, unknown>;
+    extras?: Record<string, string>;
+    kind?: 'mentions' | 'metrics';
   };
   const err = await guard(Number(body.projectId));
   if (err) return NextResponse.json({ error: err }, { status: 400 });
@@ -63,9 +86,23 @@ export async function PATCH(req: Request) {
     switch (body.action) {
       case 'map':
         await updateMapping(body.fileId, body.projectId, body.mapping ?? {});
+        if (body.extras) await updateExtras(body.fileId, body.projectId, body.extras);
+        return NextResponse.json({ ok: true });
+      case 'map-metrics':
+        await updateMetricMap(body.fileId, body.projectId, body.metricMap ?? {});
+        return NextResponse.json({ ok: true });
+      case 'kind':
+        await updateKind(body.fileId, body.projectId, body.kind === 'metrics' ? 'metrics' : 'mentions');
+        return NextResponse.json({ ok: true });
+      case 'extras':
+        await updateExtras(body.fileId, body.projectId, body.extras ?? {});
         return NextResponse.json({ ok: true });
       case 'derive':
-        return NextResponse.json({ report: await deriveMentions(body.fileId, body.projectId) });
+        // Un foglio di misure e un foglio di post si derivano in modo diverso:
+        // il tipo è già stato deciso alla lettura, qui si applica soltanto.
+        return NextResponse.json(body.kind === 'metrics'
+          ? { metricReport: await deriveMetricPoints(body.fileId, body.projectId) }
+          : { report: await deriveMentions(body.fileId, body.projectId) });
       case 'delete':
         await deleteFile(body.fileId, body.projectId);
         return NextResponse.json({ ok: true });

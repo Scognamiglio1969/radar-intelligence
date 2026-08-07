@@ -36,6 +36,8 @@ export type NormalizedRow = {
   views: number | null;
   engagementScore: number;
   externalId: string;
+  /** Le colonne conservate ma non mappate: etichetta → valore. */
+  custom: Record<string, string>;
 };
 
 export type DeriveResult = { rows: NormalizedRow[]; report: ImportReport };
@@ -73,7 +75,10 @@ export function deriveRows(
   for (const [rowIndex, row] of raw.entries()) {
     if (limit !== undefined && rows.length >= limit) break;
 
-    const content = cleanText(get(row, map.content));
+    // Un post senza didascalia è comunque un post: su un canale Facebook reale
+    // 68 righe su 130 hanno la descrizione vuota, e scartarle significherebbe
+    // buttare metà delle metriche. Si ripiega sul titolo prima di rinunciare.
+    const content = cleanText(get(row, map.content)) || cleanText(get(row, map.title));
     if (!content) { report.skippedEmpty++; continue; }
 
     // Data: se la colonna c'è ma non si interpreta va CONTATO, non nascosto
@@ -102,6 +107,15 @@ export function deriveRows(
       : { sentiment: null, score: null };
     if (sentiment) report.sentimentImported++;
 
+    // Le colonne conservate ma non mappate. Restano come TESTO: sono
+    // dimensioni con cui si taglia l'analisi (pillar, campagna, area
+    // semantica), non misure su cui si fanno somme.
+    const custom: Record<string, string> = {};
+    for (const [col, label] of Object.entries(map.extras ?? {})) {
+      const v = cleanText(get(row, col));
+      if (v) custom[label || col] = v;
+    }
+
     const author = has(map.author) ? cleanText(get(row, map.author)) || null : null;
     // L'id include il file: due file diversi possono contenere legittimamente
     // lo stesso post (finestre temporali sovrapposte) e vanno tenuti distinti
@@ -129,6 +143,7 @@ export function deriveRows(
       views: engagement.views ?? null,
       engagementScore: score,
       externalId,
+      custom,
     });
   }
 

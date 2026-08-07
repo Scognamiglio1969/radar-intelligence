@@ -106,6 +106,12 @@ export const mentions = pgTable('mentions', {
   topics: jsonb('topics').$type<string[]>(),
   entities: jsonb('entities').$type<string[]>(),
   quality: jsonb('quality').$type<Quality>(),
+  /**
+   * Le colonne del file che non corrispondono a nessun campo di Radar ma che
+   * NON vanno perse: pillar editoriale, rubrica, campagna, area semantica.
+   * Etichetta scelta dall'utente → valore della riga.
+   */
+  custom: jsonb('custom').$type<Record<string, string>>(),
   analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
   storyId: integer('story_id'),
   // Da quale file importato proviene questa mention. Senza questo legame non
@@ -379,6 +385,14 @@ export const importFiles = pgTable('import_files', {
   usedAi: integer('used_ai').notNull().default(0),
   /** Cosa si è incontrato leggendo il foglio: formule, errori, formule senza valore. */
   issues: jsonb('issues').$type<Record<string, number>>(),
+  /** Il foglio da cui viene, quando il file ne ha più d'uno. */
+  sheetName: text('sheet_name'),
+  /** mentions = righe con un testo · metrics = serie di misure senza testo. */
+  kind: text('kind').$type<'mentions' | 'metrics'>().notNull().default('mentions'),
+  /** Mappatura del foglio di metriche (data, entità, colonne valore, dimensioni). */
+  metricMap: jsonb('metric_map').$type<Record<string, unknown>>(),
+  /** Colonne conservate ma non mappate: nome colonna → etichetta. */
+  extras: jsonb('extras').$type<Record<string, string>>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   importedAt: timestamp('imported_at', { withTimezone: true }),
 });
@@ -435,4 +449,31 @@ export const periodicReports = pgTable('periodic_reports', {
    *  contraddirebbe la nota di provenienza stampata accanto. */
   pov: jsonb('pov').$type<unknown>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Punti di metrica.
+//
+// I database veri non contengono solo post: contengono SERIE. Follower per
+// piattaforma, pubblicazioni per mese, engagement medio per manager, audience
+// per azienda. Non hanno un testo né un autore — non sono mention, e infilarle
+// lì dentro le distruggerebbe.
+//
+// La forma è volutamente minima e universale: chi, che cosa, quando, quanto, e
+// le dimensioni che qualificano il punto. Qualunque foglio di aggregati, largo
+// o lungo, si riduce a questo.
+// ---------------------------------------------------------------------------
+export const metricPoints = pgTable('metric_points', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  /** Da quale file/foglio viene: permette di rifarlo o toglierlo da solo. */
+  importFileId: integer('import_file_id'),
+  /** Chi: un canale, un manager, un brand. Il foglio stesso, se non c'è colonna. */
+  entity: text('entity').notNull(),
+  /** Che cosa: "Follower", "Impressions", "Eng. Rate"… */
+  metric: text('metric').notNull(),
+  date: timestamp('date', { withTimezone: true }).notNull(),
+  value: real('value').notNull(),
+  /** Le dimensioni che qualificano il punto: canale, pillar, azienda, ruolo. */
+  dims: jsonb('dims').$type<Record<string, string>>().notNull().default({}),
 });

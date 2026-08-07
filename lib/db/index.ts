@@ -330,6 +330,23 @@ const DDL = [
   `CREATE INDEX IF NOT EXISTS import_rows_file ON import_rows (file_id, row_index)`,
   `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS used_ai INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS issues JSONB`,
+  `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS sheet_name TEXT`,
+  `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'mentions'`,
+  `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS metric_map JSONB`,
+  `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS extras JSONB NOT NULL DEFAULT '{}'`,
+  `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS custom JSONB`,
+  `CREATE TABLE IF NOT EXISTS metric_points (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    import_file_id INTEGER,
+    entity TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    date TIMESTAMPTZ NOT NULL,
+    value REAL NOT NULL,
+    dims JSONB NOT NULL DEFAULT '{}'
+  )`,
+  `CREATE INDEX IF NOT EXISTS metric_points_proj ON metric_points (project_id, metric, date)`,
+  `CREATE INDEX IF NOT EXISTS metric_points_file ON metric_points (import_file_id)`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS import_file_id INTEGER`,
   `CREATE INDEX IF NOT EXISTS mentions_import_file ON mentions (import_file_id)`,
   `CREATE TABLE IF NOT EXISTS custom_reports (

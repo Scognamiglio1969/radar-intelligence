@@ -66,7 +66,7 @@ export async function POST(req: Request) {
 
   // La mappatura può arrivare dal client: è la bozza in corso di modifica, non
   // ancora salvata — ed è proprio quella che l'utente vuole provare.
-  const map = (body.mapping ?? await fileMapping(fileId, projectId)) as ColumnMap | null;
+  const map = (body.mapping ?? await fileMapping(fileId, projectId)) as unknown as ColumnMap | null;
   if (!map?.content) return NextResponse.json({ error: 'Assegna prima la colonna del testo' }, { status: 400 });
 
   // Si leggono più righe di quante se ne mostrano: quelle senza testo vengono
@@ -102,7 +102,7 @@ export async function GET(req: Request) {
   const all: (NormalizedRow & { file: string })[] = [];
   const skipped: string[] = [];
   for (const f of files) {
-    const map = f.mapping as ColumnMap;
+    const map = { ...f.mapping, extras: f.extras ?? {} } as unknown as ColumnMap;
     // Un file non mappato o già purgato non ha un normalizzato da dare: si
     // dichiara invece di far uscire un export silenziosamente incompleto.
     if (!map?.content || f.rawPurged === 1) { skipped.push(f.filename); continue; }

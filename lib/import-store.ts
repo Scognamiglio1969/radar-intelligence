@@ -1,8 +1,13 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
-import { importFiles, importRows, mentions } from '@/lib/db/schema';
+import { importFiles, importRows, mentions, metricPoints } from '@/lib/db/schema';
 import { parseSheet, type ColumnMap, type ImportReport, type SheetIssues } from '@/lib/import';
-import { buildProposal, profileColumns, type ColumnProfile, type FieldProposal } from '@/lib/import-profile';
+import {
+  buildProposal, profileColumns, proposeExtras, type ColumnProfile, type FieldProposal,
+} from '@/lib/import-profile';
+import {
+  deriveMetrics, looksLikeMetrics, proposeMetricMap, type MetricMap, type MetricReport,
+} from '@/lib/import-metrics';
 import { deriveRows } from '@/lib/import-derive';
 
 // ---------------------------------------------------------------------------
@@ -28,37 +33,62 @@ export type ImportFileRow = {
   mapping: Record<string, string>; status: 'uploaded' | 'mapped' | 'imported';
   report: Record<string, number> | null; rawPurged: boolean; usedAi: boolean;
   issues: Record<string, number> | null;
+  sheetName: string | null;
+  kind: 'mentions' | 'metrics';
+  metricMap: Record<string, unknown> | null;
+  extras: Record<string, string>;
   createdAt: Date; importedAt: Date | null;
 };
 
 /** Legge il foglio, ne conserva le righe grezze e chiede all'AI una proposta. */
 export async function registerFile(
-  projectId: number, buffer: Buffer, filename: string,
+  projectId: number, buffer: Buffer, filename: string, sheetName?: string,
 ): Promise<{
   fileId: number; columns: string[]; profiles: ColumnProfile[]; proposal: FieldProposal[];
-  usedAi: boolean; total: number; issues: SheetIssues;
+  usedAi: boolean; total: number; issues: SheetIssues; kind: 'mentions' | 'metrics';
 }> {
-  const { columns, rows, issues } = await parseSheet(buffer, filename);
-  if (columns.length === 0) throw new Error('Il file non ha colonne leggibili');
+  const { columns, rows, issues } = await parseSheet(buffer, filename, { sheet: sheetName });
+  if (columns.length === 0) throw new Error('Il foglio non ha colonne leggibili');
 
   const profiles = profileColumns(columns, rows);
-  // Riconoscimento deterministico sempre presente, raffinato dall'AI quando
-  // risponde: la chiamata al modello è un servizio esterno e non deve poter
-  // lasciare l'utente davanti a un file completamente non mappato.
-  const { proposal, usedAi } = await buildProposal(profiles, rows.length);
 
-  // Mappatura iniziale dalle sole proposte convincenti: le incerte restano
-  // visibili nel pannello ma non entrano in vigore da sole.
+  // Che cosa è questo foglio? Una tabella di post o una tabella di misure.
+  // È la prima domanda da fare, perché cambia tutto ciò che viene dopo: una
+  // serie di follower mensili trattata come post darebbe 36 "mention" senza
+  // testo, e nessun grafico sensato.
+  const kind: 'mentions' | 'metrics' = looksLikeMetrics(profiles, rows.length) ? 'metrics' : 'mentions';
+
+  let proposal: FieldProposal[] = [];
+  let usedAi = false;
   const mapping: Record<string, string> = {};
-  for (const p of proposal) {
-    if (p.field && p.confidence && p.confidence !== 'bassa') mapping[p.field] = p.column;
+  const extras: Record<string, string> = {};
+  let metricMap: Record<string, unknown> | null = null;
+
+  if (kind === 'metrics') {
+    metricMap = (proposeMetricMap(profiles) ?? null) as Record<string, unknown> | null;
+  } else {
+    // Riconoscimento deterministico sempre presente, raffinato dall'AI quando
+    // risponde: la chiamata al modello è un servizio esterno e non deve poter
+    // lasciare l'utente davanti a un file completamente non mappato.
+    const built = await buildProposal(profiles, rows.length);
+    proposal = built.proposal; usedAi = built.usedAi;
+    // Mappatura iniziale dalle sole proposte convincenti: le incerte restano
+    // visibili nel pannello ma non entrano in vigore da sole.
+    for (const p of proposal) {
+      if (p.field && p.confidence && p.confidence !== 'bassa') mapping[p.field] = p.column;
+    }
+    // Nessuna colonna va persa: quelle che non sono un campo di Radar restano
+    // come campi personalizzati, con l'etichetta proposta. È l'unico modo per
+    // non buttare PILLAR, RUBRICA, CAMPAGNA e CAT. TRASVERSALE — che in un
+    // database editoriale sono le dimensioni con cui si legge tutto il lavoro.
+    Object.assign(extras, proposeExtras(profiles, new Set(Object.values(mapping)), rows.length));
   }
 
   const db = await getDb();
   const [file] = await db.insert(importFiles).values({
     projectId, filename, sizeBytes: buffer.length, rowCount: rows.length,
     columns, profiles, proposal, mapping, usedAi: usedAi ? 1 : 0, status: 'uploaded',
-    issues,
+    issues, sheetName: sheetName ?? null, kind, metricMap, extras,
   }).returning({ id: importFiles.id });
 
   for (let i = 0; i < rows.length; i += CHUNK) {
@@ -67,7 +97,7 @@ export async function registerFile(
     );
   }
 
-  return { fileId: file.id, columns, profiles, proposal, usedAi, total: rows.length, issues };
+  return { fileId: file.id, columns, profiles, proposal, usedAi, total: rows.length, issues, kind };
 }
 
 export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
@@ -81,6 +111,8 @@ export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
     proposal: (r.proposal ?? null) as FieldProposal[] | null,
     mapping: r.mapping, status: r.status, report: r.report ?? null,
     rawPurged: r.rawPurged === 1, usedAi: r.usedAi === 1, issues: r.issues ?? null,
+    sheetName: r.sheetName ?? null, kind: r.kind, metricMap: r.metricMap ?? null,
+    extras: r.extras ?? {},
     createdAt: r.createdAt, importedAt: r.importedAt,
   }));
 }
@@ -106,7 +138,9 @@ export async function deriveMentions(fileId: number, projectId: number): Promise
   if (!file) throw new Error('File non trovato');
   if (file.rawPurged === 1) throw new Error('Le righe grezze di questo file sono state eliminate: non è più ri-derivabile');
 
-  const map = file.mapping as ColumnMap;
+  // La mappatura dei campi e le colonne conservate vivono in due colonne
+  // diverse ma sono un'unica istruzione di trasformazione.
+  const map = { ...file.mapping, extras: file.extras ?? {} } as unknown as ColumnMap;
   if (!map.content) throw new Error('Manca la colonna del testo');
 
   await db.delete(mentions).where(eq(mentions.importFileId, fileId));
@@ -133,6 +167,7 @@ export async function deriveMentions(fileId: number, projectId: number): Promise
       : undefined,
     engagementScore: n.engagementScore,
     reach: n.reach,
+    custom: Object.keys(n.custom).length ? n.custom : null,
     sentiment: n.sentiment, sentimentScore: n.sentimentScore,
     analyzedAt: n.sentiment ? new Date() : null,
   }));
@@ -154,6 +189,7 @@ export async function deriveMentions(fileId: number, projectId: number): Promise
 export async function deleteFile(fileId: number, projectId: number): Promise<void> {
   const db = await getDb();
   await db.delete(mentions).where(eq(mentions.importFileId, fileId));
+  await db.delete(metricPoints).where(eq(metricPoints.importFileId, fileId));
   await db.delete(importFiles).where(and(eq(importFiles.id, fileId), eq(importFiles.projectId, projectId)));
 }
 
@@ -190,9 +226,9 @@ export async function importedCount(projectId: number): Promise<number> {
 /** La mappatura salvata di un file, per chi deve normalizzare senza ricaricarla. */
 export async function fileMapping(fileId: number, projectId: number): Promise<Record<string, string> | null> {
   const db = await getDb();
-  const [f] = await db.select({ mapping: importFiles.mapping }).from(importFiles)
+  const [f] = await db.select({ mapping: importFiles.mapping, extras: importFiles.extras }).from(importFiles)
     .where(and(eq(importFiles.id, fileId), eq(importFiles.projectId, projectId)));
-  return f?.mapping ?? null;
+  return f ? { ...f.mapping, extras: f.extras ?? {} } as unknown as Record<string, string> : null;
 }
 
 /**
@@ -205,4 +241,110 @@ export async function allRawRows(fileId: number): Promise<Record<string, unknown
   const rows = await db.select({ data: importRows.data }).from(importRows)
     .where(eq(importRows.fileId, fileId)).orderBy(asc(importRows.rowIndex));
   return rows.map((r) => r.data as Record<string, unknown>);
+}
+
+/** Cambia la mappatura di un foglio di metriche. */
+export async function updateMetricMap(
+  fileId: number, projectId: number, metricMap: Record<string, unknown>,
+): Promise<void> {
+  const db = await getDb();
+  const ok = Boolean(metricMap.date) && Array.isArray(metricMap.metrics) && metricMap.metrics.length > 0;
+  await db.update(importFiles)
+    .set({ metricMap, status: ok ? 'mapped' : 'uploaded' })
+    .where(and(eq(importFiles.id, fileId), eq(importFiles.projectId, projectId)));
+}
+
+/** Le colonne conservate ma non mappate: nome colonna → etichetta. */
+export async function updateExtras(
+  fileId: number, projectId: number, extras: Record<string, string>,
+): Promise<void> {
+  const db = await getDb();
+  await db.update(importFiles).set({ extras })
+    .where(and(eq(importFiles.id, fileId), eq(importFiles.projectId, projectId)));
+}
+
+/**
+ * Deriva i punti di metrica dalle righe grezze. Stessa logica di
+ * deriveMentions: si cancella prima ciò che questo file aveva prodotto, così
+ * cambiare mappatura non lascia in archivio due letture dello stesso foglio.
+ */
+export async function deriveMetricPoints(fileId: number, projectId: number): Promise<MetricReport> {
+  const db = await getDb();
+  const [file] = await db.select().from(importFiles)
+    .where(and(eq(importFiles.id, fileId), eq(importFiles.projectId, projectId)));
+  if (!file) throw new Error('File non trovato');
+  if (file.rawPurged === 1) throw new Error('Le righe grezze di questo file sono state eliminate: non è più ri-derivabile');
+
+  const map = (file.metricMap ?? null) as MetricMap | null;
+  if (!map?.date) throw new Error('Manca la colonna della data');
+  if (!map.metrics?.length) throw new Error('Nessuna colonna di valori selezionata');
+
+  await db.delete(metricPoints).where(eq(metricPoints.importFileId, fileId));
+
+  const raw = await db.select({ data: importRows.data }).from(importRows)
+    .where(eq(importRows.fileId, fileId)).orderBy(asc(importRows.rowIndex));
+
+  const label = map.entityLabel || file.sheetName || file.filename.replace(/\.(xlsx|csv)$/i, '');
+  const { points, report } = deriveMetrics(
+    raw.map((r) => r.data as Record<string, unknown>), map, label,
+  );
+
+  for (let i = 0; i < points.length; i += 500) {
+    await db.insert(metricPoints).values(points.slice(i, i + 500).map((p) => ({
+      projectId, importFileId: fileId,
+      entity: p.entity, metric: p.metric, date: p.date, value: p.value, dims: p.dims,
+    })));
+  }
+
+  await db.update(importFiles)
+    .set({
+      status: 'imported', importedAt: new Date(),
+      report: { total: report.rows, inserted: report.points, skippedEmpty: report.emptyValues,
+        duplicates: 0, datesFailed: report.datesFailed, sentimentImported: 0 },
+    })
+    .where(eq(importFiles.id, fileId));
+  return report;
+}
+
+/**
+ * Cambia il tipo di un foglio: da post a misure o viceversa.
+ *
+ * Il riconoscimento automatico ci prende quasi sempre, ma "quasi" non basta su
+ * un foglio di storie senza didascalia, che assomiglia a una tabella di misure
+ * pur essendo fatto di post. L'ultima parola resta all'utente — e cambiare
+ * idea deve cancellare ciò che era stato derivato con la lettura precedente,
+ * altrimenti il progetto conterrebbe le due letture insieme.
+ */
+export async function updateKind(
+  fileId: number, projectId: number, kind: 'mentions' | 'metrics',
+): Promise<void> {
+  const db = await getDb();
+  const [file] = await db.select().from(importFiles)
+    .where(and(eq(importFiles.id, fileId), eq(importFiles.projectId, projectId)));
+  if (!file) throw new Error('File non trovato');
+  if (file.kind === kind) return;
+
+  await db.delete(mentions).where(eq(mentions.importFileId, fileId));
+  await db.delete(metricPoints).where(eq(metricPoints.importFileId, fileId));
+
+  const profiles = (file.profiles ?? []) as ColumnProfile[];
+  const patch: Partial<typeof importFiles.$inferInsert> = {
+    kind, status: 'uploaded', report: null, importedAt: null,
+  };
+  // Passando a misure serve una mappatura di misure, e viceversa: si propone
+  // quella mancante invece di lasciare l'utente davanti a un foglio muto.
+  if (kind === 'metrics' && !file.metricMap) {
+    patch.metricMap = (proposeMetricMap(profiles) ?? null) as Record<string, unknown> | null;
+  }
+  if (kind === 'mentions' && Object.keys(file.mapping ?? {}).length === 0) {
+    const { proposal } = await buildProposal(profiles, file.rowCount);
+    const mapping: Record<string, string> = {};
+    for (const p of proposal) {
+      if (p.field && p.confidence && p.confidence !== 'bassa') mapping[p.field] = p.column;
+    }
+    patch.mapping = mapping;
+    patch.proposal = proposal;
+    patch.extras = proposeExtras(profiles, new Set(Object.values(mapping)), file.rowCount);
+  }
+  await db.update(importFiles).set(patch).where(eq(importFiles.id, fileId));
 }

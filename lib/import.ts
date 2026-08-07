@@ -64,6 +64,15 @@ export type ColumnMap = {
   views?: string;
   /** Engagement già aggregato: usato solo se mancano le colonne separate. */
   engagement?: string;
+  /**
+   * Le colonne che non sono un campo di Radar ma che vanno conservate lo
+   * stesso: nome della colonna → etichetta con cui compariranno.
+   *
+   * Senza questo, un database editoriale perde PILLAR, RUBRICA, CAMPAGNA e
+   * CAT. TRASVERSALE — cioè proprio le dimensioni con cui quel lavoro viene
+   * letto. Un campo non riconosciuto non è un campo inutile.
+   */
+  extras?: Record<string, string>;
 };
 
 /** Esito dell'import, con il dettaglio di cosa NON è passato e perché. */
@@ -92,9 +101,13 @@ export type ImportReport = {
  *  - formula SENZA valore in cache → il file è stato scritto da uno strumento
  *    che non calcola. Non c'è niente da recuperare, ma va detto.
  */
+/** Gli errori di Excel scritti come testo: valgono quanto una cella vuota. */
+const ERROR_TEXT = /^#(VALUE|REF|NAME|DIV\/0|N\/A|NULL|NUM|SPILL|CALC|GETTING_DATA)[!?]?$/i;
+
 function normalizeCell(v: unknown, issues?: SheetIssues, depth = 0): unknown {
   if (v == null) return null;
   if (v instanceof Date) return v;
+  if (typeof v === 'string' && ERROR_TEXT.test(v.trim())) return null;
   if (typeof v !== 'object') return v;
   const o = v as Record<string, unknown>;
 
@@ -115,6 +128,7 @@ function normalizeCell(v: unknown, issues?: SheetIssues, depth = 0): unknown {
   }
 
   if ('error' in o) return null;                       // cella di errore diretta
+  if ('sharedFormula' in o) return null;               // condivisa senza risultato
   if ('richText' in o && Array.isArray(o.richText)) {
     return (o.richText as { text?: string }[]).map((r) => r.text ?? '').join('');
   }
@@ -181,25 +195,46 @@ function grid(ws: ExcelJS.Worksheet, issues?: SheetIssues, maxRows = 200_000): u
  * vuote. Si cerca la prima riga densa e testuale seguita da almeno una riga di
  * dati — e la si preferisce a una riga di titoli di sezione, che è sparsa.
  */
+/** Una riga di ETICHETTE: due o più celle, testo corto, niente frasi. */
+function looksLikeLabels(row: unknown[] = []): boolean {
+  const filled = row.filter((v) => !isBlank(v));
+  if (filled.length < 2) return false;
+  const short = filled.filter((v) => typeof v === 'string' && String(v).trim().length <= 60);
+  if (short.length < filled.length * 0.7) return false;
+  return !filled.some((v) => typeof v === 'string' && String(v).length > 100);
+}
+
+/** Una riga di DATI: numeri, date, o testo lungo. */
+function looksLikeData(row: unknown[] = []): boolean {
+  const filled = row.filter((v) => !isBlank(v));
+  if (!filled.length) return false;
+  return filled.some((v) => typeof v === 'number' || v instanceof Date
+    || (typeof v === 'string' && String(v).length > 80));
+}
+
+/**
+ * Quale riga è l'intestazione.
+ *
+ * Non è sempre la prima: i database veri antepongono titoli, note e righe
+ * vuote. Si cerca la prima riga di ETICHETTE seguita da una riga di DATI.
+ *
+ * Il criterio non è la larghezza: un foglio reale ha 17 intestazioni sopra
+ * righe da 64 celle, e misurare l'intestazione sulla riga più larga la faceva
+ * scartare — con il risultato che i nomi delle colonne diventavano il testo
+ * del primo post.
+ */
 function findHeaderRow(g: unknown[][]): number {
   const look = Math.min(g.length, 15);
-  const filledOf = (r: number) => (g[r] ?? []).filter((v) => !isBlank(v)).length;
-  const widest = Math.max(...Array.from({ length: look }, (_, r) => filledOf(r)), 1);
-
   for (let r = 0; r < look; r++) {
-    const row = g[r] ?? [];
-    const filled = filledOf(r);
-    if (filled < 2) continue;                       // riga di titolo o nota isolata
-    // Una riga di preambolo ("Report generato il", "12/03/2024") è molto più
-    // stretta della tabella vera: si scarta confrontandola con la riga più
-    // larga vista finora, non in assoluto.
-    if (filled < widest * 0.6) continue;
-    const texty = row.filter((v) => typeof v === 'string' && String(v).trim() !== '').length;
-    if (texty < filled * 0.5) continue;             // riga di dati, non di nomi
-    return r;
+    if (!looksLikeLabels(g[r])) continue;
+    const next = g[r + 1];
+    if (looksLikeData(next)) return r;
+    // Due righe di etichette di fila: è un cappello sopra la tabella vera.
+    if (looksLikeLabels(next) && looksLikeGroupRow(g[r], next)) return r;
   }
-  // Nessuna candidata convincente: la prima riga con qualcosa dentro.
-  for (let r = 0; r < g.length; r++) if (filledOf(r) > 0) return r;
+  for (let r = 0; r < g.length; r++) {
+    if ((g[r] ?? []).some((v) => !isBlank(v))) return r;
+  }
   return 0;
 }
 
