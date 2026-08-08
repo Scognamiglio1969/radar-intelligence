@@ -389,6 +389,10 @@ export const importFiles = pgTable('import_files', {
   sheetName: text('sheet_name'),
   /** mentions = righe con un testo · metrics = serie di misure senza testo. */
   kind: text('kind').$type<'mentions' | 'metrics'>().notNull().default('mentions'),
+  /** Che tipo di foglio è: da qui nascono gli insight che può dare. */
+  archetype: text('archetype'),
+  /** Le entità di questo foglio sono persone (personal branding). */
+  people: integer('people').notNull().default(0),
   /** Mappatura del foglio di metriche (data, entità, colonne valore, dimensioni). */
   metricMap: jsonb('metric_map').$type<Record<string, unknown>>(),
   /** Colonne conservate ma non mappate: nome colonna → etichetta. */

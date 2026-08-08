@@ -42,6 +42,7 @@ const IT: Record<string, string> = {
   'nav.emv': 'Valore media',
   'nav.insights': 'Esplora gli insight',
   'nav.measures': 'Misure',
+  'nav.people': 'Persone',
   'nav.pov': 'Point of View',
   'nav.narratives': 'Narrazioni',
   'nav.timeline': 'Cronologia',

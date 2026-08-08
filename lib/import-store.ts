@@ -9,6 +9,7 @@ import {
   deriveMetrics, looksLikeMetrics, proposeMetricMap, type MetricMap, type MetricReport,
 } from '@/lib/import-metrics';
 import { deriveRows } from '@/lib/import-derive';
+import { classifySheet } from '@/lib/sheet-archetype';
 
 // ---------------------------------------------------------------------------
 // Ciclo di vita di un file importato.
@@ -37,6 +38,7 @@ export type ImportFileRow = {
   kind: 'mentions' | 'metrics';
   metricMap: Record<string, unknown> | null;
   extras: Record<string, string>;
+  archetype: string | null; people: boolean;
   createdAt: Date; importedAt: Date | null;
 };
 
@@ -46,6 +48,7 @@ export async function registerFile(
 ): Promise<{
   fileId: number; columns: string[]; profiles: ColumnProfile[]; proposal: FieldProposal[];
   usedAi: boolean; total: number; issues: SheetIssues; kind: 'mentions' | 'metrics';
+  archetype: string; people: boolean;
 }> {
   const { columns, rows, issues } = await parseSheet(buffer, filename, { sheet: sheetName });
   if (columns.length === 0) throw new Error('Il foglio non ha colonne leggibili');
@@ -84,6 +87,9 @@ export async function registerFile(
     Object.assign(extras, proposeExtras(profiles, new Set(Object.values(mapping)), rows.length));
   }
 
+  // Che tipo di foglio è: da qui nascono gli insight che potrà dare.
+  const guess = classifySheet(profiles, kind, sheetName ?? filename, metricMap as MetricMap | null);
+
   const db = await getDb();
   const [file] = await db.insert(importFiles).values({
     projectId, filename, sizeBytes: buffer.length, rowCount: rows.length,
@@ -94,6 +100,7 @@ export async function registerFile(
       ? Boolean(metricMap?.date) && ((metricMap?.metrics as string[] | undefined)?.length ?? 0) > 0
       : Boolean(mapping.content)) ? 'mapped' : 'uploaded',
     issues, sheetName: sheetName ?? null, kind, metricMap, extras,
+    archetype: guess.archetype, people: guess.people ? 1 : 0,
   }).returning({ id: importFiles.id });
 
   for (let i = 0; i < rows.length; i += CHUNK) {
@@ -102,7 +109,10 @@ export async function registerFile(
     );
   }
 
-  return { fileId: file.id, columns, profiles, proposal, usedAi, total: rows.length, issues, kind };
+  return {
+    fileId: file.id, columns, profiles, proposal, usedAi, total: rows.length, issues, kind,
+    archetype: guess.archetype, people: guess.people,
+  };
 }
 
 export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
@@ -117,6 +127,7 @@ export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
     mapping: r.mapping, status: r.status, report: r.report ?? null,
     rawPurged: r.rawPurged === 1, usedAi: r.usedAi === 1, issues: r.issues ?? null,
     sheetName: r.sheetName ?? null, kind: r.kind, metricMap: r.metricMap ?? null,
+    archetype: r.archetype ?? null, people: r.people === 1,
     extras: r.extras ?? {},
     createdAt: r.createdAt, importedAt: r.importedAt,
   }));

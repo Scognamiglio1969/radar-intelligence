@@ -243,3 +243,18 @@ export async function projectSources(projectId: number): Promise<{ id: string; c
     .groupBy(mentions.source).orderBy(sql`count(*) desc`);
   return rows.map((r) => ({ id: r.id, count: Number(r.count) }));
 }
+
+/** Che tipi di foglio contiene il progetto: da qui si decide cosa mostrare. */
+export async function projectArchetypes(projectId: number): Promise<{
+  archetype: string; sheets: number; people: boolean;
+}[]> {
+  const db = await getDb();
+  const rows = await db.execute(sql`
+    select archetype, count(*) as sheets, max(people) as people
+    from import_files
+    where project_id = ${projectId} and archetype is not null
+    group by 1 order by 2 desc
+  `);
+  return (rows.rows as { archetype: string; sheets: number; people: number }[])
+    .map((r) => ({ archetype: r.archetype, sheets: Number(r.sheets), people: Number(r.people) === 1 }));
+}

@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
+import { ARCHETYPE_LABEL } from '@/lib/sheet-archetype';
 import { getCurrentProject } from '@/lib/data';
 import { PageHeader, EmptyState } from '@/components/ui';
 import {
   availableDims, breakdownByDim, customFields, defaultAgg, metricCatalog, metricMix,
-  performanceByCustom, rankEntities, seriesByMetric,
+  performanceByCustom, projectArchetypes, rankEntities, seriesByMetric,
 } from '@/lib/metrics-data';
 import { CustomPerformance, MixChart, RankChart, TrendChart } from '@/components/metric-charts';
 
@@ -97,6 +99,9 @@ export default async function MeasuresPage() {
     field: f, rows: await performanceByCustom(project.id, f),
   })));
 
+  const archetypes = await projectArchetypes(project.id);
+  const hasPeople = archetypes.some((a) => a.people);
+
   const totalPoints = catalog.reduce((s, c) => s + c.points, 0);
 
   return (
@@ -107,11 +112,27 @@ export default async function MeasuresPage() {
         info="A metric point is chi · che cosa · quando · quanto · come. Any sheet of aggregates reduces to that shape, wide or long, which is why files with completely different layouts end up comparable here. Rankings never blindly sum: rates and averages are averaged, cumulative totals take the latest value — summing an engagement rate month by month produces a plausible, meaningless number."
       />
 
-      <p className="mb-4 text-xs text-slate-500">
-        {catalog.length} misure · {totalPoints.toLocaleString('it-IT')} punti ·
-        {' '}dal {catalog.reduce((m, c) => (c.from < m ? c.from : m), catalog[0].from)}
-        {' '}al {catalog.reduce((m, c) => (c.to > m ? c.to : m), catalog[0].to)}
-      </p>
+      {/* Che cosa contiene questo progetto: i tipi di foglio riconosciuti sono
+          ciò che decide quali domande ha senso porgli, e vanno dichiarati. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500">
+        <span>
+          {catalog.length} misure · {totalPoints.toLocaleString('it-IT')} punti ·
+          {' '}dal {catalog.reduce((m, c) => (c.from < m ? c.from : m), catalog[0].from)}
+          {' '}al {catalog.reduce((m, c) => (c.to > m ? c.to : m), catalog[0].to)}
+        </span>
+        {archetypes.map((a) => (
+          <span key={a.archetype}
+            className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-slate-400">
+            {ARCHETYPE_LABEL[a.archetype as keyof typeof ARCHETYPE_LABEL] ?? a.archetype} × {a.sheets}
+          </span>
+        ))}
+        {hasPeople && (
+          <Link href="/people"
+            className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-0.5 text-[11px] text-sky-200 hover:bg-sky-500/20">
+            Questo progetto segue delle persone → vedi le schede
+          </Link>
+        )}
+      </div>
 
       <div className="flex flex-col gap-4">
         {families.filter((f) => f.series.length > 0).map((f) => (
