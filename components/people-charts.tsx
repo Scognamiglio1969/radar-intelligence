@@ -1,6 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import {
+  ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+} from 'recharts';
+import { NewBadge } from './new-badge';
 import { TrendingUp, TrendingDown, Users, CalendarClock, Sparkles, Trophy } from 'lucide-react';
 import { entityColor } from '@/lib/entity-colors';
 
@@ -84,13 +88,156 @@ export function PeopleLeaderboard({ rows }: {
   );
 }
 
-export function PersonCards({ cards }: { cards: Card[] }) {
-  const [open, setOpen] = useState<string | null>(cards[0]?.name ?? null);
+type PersonSeries = {
+  name: string;
+  followers: { date: string; value: number }[];
+  publishing: { date: string; value: number }[];
+  engagement: { date: string; value: number }[];
+};
+
+const TOOLTIP = {
+  backgroundColor: '#16203c', border: '1px solid #1e2a4a',
+  borderRadius: 8, fontSize: 12, color: '#e2e8f0',
+};
+const GRID = '#1e2a4a';
+const AXIS = '#7c8cab';
+const fmt = (n: number) => {
+  const a = Math.abs(n);
+  if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.0', '')}M`;
+  if (a >= 1_000) return `${(n / 1_000).toFixed(1).replace('.0', '')}k`;
+  if (a > 0 && a < 1) return n.toFixed(2);
+  return String(Math.round(n));
+};
+const monthTick = (d: string) => new Date(d).toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
+
+/**
+ * Il confronto: una linea per persona sullo stesso grafico.
+ *
+ * Chi cresce da 15.000 a 42.000 e chi cresce da 1.100 a 9.100 hanno curve
+ * incomparabili in valore assoluto: la seconda resta schiacciata sull'asse.
+ * Indicizzando a 100 si confrontano le CRESCITE, che è la domanda vera —
+ * senza ricorrere a un secondo asse, che falserebbe il rapporto.
+ */
+export function PeopleTrend({ series, focus, onFocus }: {
+  series: PersonSeries[]; focus: string | null; onFocus: (name: string | null) => void;
+}) {
+  const [indexed, setIndexed] = useState(true);
+  const shown = focus ? series.filter((s) => s.name === focus) : series.slice(0, 8);
+  const colorOf = (name: string) => entityColor(series.findIndex((s) => s.name === name));
+
+  const data = useMemo(() => {
+    const dates = [...new Set(shown.flatMap((s) => s.followers.map((p) => p.date)))].sort();
+    const base = new Map(shown.map((s) => [s.name, s.followers.find((p) => p.value > 0)?.value ?? 1]));
+    return dates.map((date) => {
+      const row: Record<string, string | number | null> = { date };
+      for (const s of shown) {
+        const v = s.followers.find((p) => p.date === date)?.value ?? null;
+        row[s.name] = v === null ? null : indexed ? Math.round((v / (base.get(s.name) || 1)) * 100) : v;
+      }
+      return row;
+    });
+  }, [shown, indexed]);
+
+  if (!shown.length) return null;
+  const latest = series.flatMap((s) => s.followers.map((p) => p.date)).sort().at(-1) ?? null;
+
+  return (
+    <section className="panel px-5 py-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-semibold text-slate-200">Crescita del pubblico</h2>
+        <NewBadge id="people:trend" latest={latest} />
+        <button onClick={() => setIndexed((v) => !v)}
+          title="Indicizzando a 100 tutte le curve partono dallo stesso punto: si confronta la crescita, non la dimensione"
+          className={`ml-auto rounded-lg border px-2 py-1 text-[11px] ${indexed
+            ? 'border-sky-500/50 bg-sky-500/10 text-sky-200'
+            : 'border-[var(--border)] text-slate-400 hover:bg-white/5'}`}>
+          {indexed ? 'crescita (base 100)' : 'follower assoluti'}
+        </button>
+      </div>
+
+      {/* Il focus: cliccando un nome resta solo lui. */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        <button onClick={() => onFocus(null)}
+          className={`rounded-lg border px-2 py-1 text-[11px] ${!focus
+            ? 'border-sky-500/50 bg-sky-500/10 text-sky-200'
+            : 'border-[var(--border)] text-slate-400 hover:bg-white/5'}`}>
+          tutti
+        </button>
+        {series.map((s) => (
+          <button key={s.name} onClick={() => onFocus(focus === s.name ? null : s.name)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] ${focus === s.name
+              ? 'border-sky-500/50 bg-sky-500/10 text-sky-200'
+              : 'border-[var(--border)] text-slate-400 hover:bg-white/5'}`}>
+            <span className="size-2 rounded-full" style={{ backgroundColor: colorOf(s.name) }} />
+            {s.name}
+          </button>
+        ))}
+      </div>
+
+      <ResponsiveContainer width="100%" height={280}>
+        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
+          <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="date" tickFormatter={monthTick} stroke={AXIS} fontSize={11} tickLine={false} />
+          <YAxis tickFormatter={fmt} stroke={AXIS} fontSize={11} tickLine={false} axisLine={false} width={52} />
+          <Tooltip contentStyle={TOOLTIP}
+            labelFormatter={(d) => new Date(String(d)).toLocaleDateString('it-IT')}
+            formatter={(v) => [indexed ? `${Number(v)} (base 100)` : Number(v).toLocaleString('it-IT'), '']} />
+          {shown.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: AXIS }} />}
+          {shown.map((s) => (
+            <Line key={s.name} type="monotone" dataKey={s.name} connectNulls
+              stroke={colorOf(s.name)} strokeWidth={focus ? 2.5 : 2} dot={false} activeDot={{ r: 4 }} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+      {!focus && series.length > 8 && (
+        <p className="mt-1 text-[11px] text-slate-600">
+          Mostrate le 8 con più pubblico. Clicca un nome per vedere solo quella.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** Il ritmo di pubblicazione di chi è a fuoco: barre, perché sono conteggi. */
+export function PersonRhythm({ s }: { s: PersonSeries }) {
+  if (s.publishing.length < 2) return null;
+  return (
+    <section className="panel px-5 py-4">
+      <h2 className="mb-1 text-sm font-semibold text-slate-200">Ritmo di pubblicazione — {s.name}</h2>
+      <p className="mb-3 text-[11px] text-slate-600">
+        Quanti contenuti per periodo. Un calo prolungato spiega quasi sempre una crescita che si ferma.
+      </p>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={s.publishing} margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
+          <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="date" tickFormatter={monthTick} stroke={AXIS} fontSize={11} tickLine={false} />
+          <YAxis tickFormatter={fmt} stroke={AXIS} fontSize={11} tickLine={false} axisLine={false} width={40} />
+          <Tooltip contentStyle={TOOLTIP} cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+            labelFormatter={(d) => new Date(String(d)).toLocaleDateString('it-IT')}
+            formatter={(v) => [`${Number(v)} contenuti`, '']} />
+          <Bar dataKey="value" fill={entityColor(2)} radius={[4, 4, 0, 0]} barSize={14} />
+        </BarChart>
+      </ResponsiveContainer>
+    </section>
+  );
+}
+
+export function PersonCards({ cards, series }: { cards: Card[]; series?: PersonSeries[] }) {
+  const [focus, setFocus] = useState<string | null>(null);
+  const focused = focus ? series?.find((s) => s.name === focus) : undefined;
+  const shown = focus ? cards.filter((c) => c.name === focus) : cards;
+
   return (
     <div className="flex flex-col gap-3">
-      {cards.map((c, i) => (
-        <PersonPanel key={c.name} card={c} color={entityColor(i)}
-          open={open === c.name} onToggle={() => setOpen(open === c.name ? null : c.name)} />
+      {series && series.length > 0 && (
+        <PeopleTrend series={series} focus={focus} onFocus={setFocus} />
+      )}
+      {focused && <PersonRhythm s={focused} />}
+      {shown.map((c) => (
+        <PersonPanel key={c.name} card={c}
+          color={entityColor(cards.findIndex((x) => x.name === c.name))}
+          open={Boolean(focus) || shown.length === 1}
+          onToggle={() => setFocus(focus === c.name ? null : c.name)} />
       ))}
     </div>
   );

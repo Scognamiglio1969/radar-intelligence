@@ -1,5 +1,5 @@
 import { ExternalLink, Heart, Info, MessageCircle, Repeat2, Star } from 'lucide-react';
-import { SOURCE_META } from '@/lib/connectors';
+import { sourceColor, sourceLabel } from '@/lib/source-label';
 import type { mentions } from '@/lib/db/schema';
 import { MentionBody } from '@/components/mention-translate';
 import { ArticleBody } from '@/components/article-body';
@@ -73,7 +73,7 @@ export function fmtCompact(n: number): string {
 }
 
 export function SourceBadge({ source }: { source: string }) {
-  const meta = SOURCE_META[source] ?? { label: source, color: '#94a3b8' };
+  const meta = { label: sourceLabel(source), color: sourceColor(source) };
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"

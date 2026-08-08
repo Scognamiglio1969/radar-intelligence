@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   UploadCloud, FileSpreadsheet, Check, Loader2, ArrowRight, Sparkles, AlertTriangle,
   EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive,
-  Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart,
+  Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart, Info,
 } from 'lucide-react';
 import { TopProgress, creepingProgress } from './top-progress';
 
@@ -52,24 +52,41 @@ type PreviewRow = {
   engagementScore: number; language: string | null; url: string | null;
 };
 
-const FIELDS: { key: string; label: string; hint: string; required?: boolean }[] = [
-  { key: 'content', label: 'Testo', hint: 'ciò che viene analizzato', required: true },
-  { key: 'date', label: 'Data', hint: 'per i grafici temporali' },
-  { key: 'time', label: 'Ora', hint: 'solo se in colonna separata' },
-  { key: 'title', label: 'Titolo', hint: 'headline, se distinta' },
-  { key: 'author', label: 'Autore', hint: 'chi ha scritto' },
-  { key: 'authorHandle', label: 'Handle', hint: '@username' },
-  { key: 'source', label: 'Fonte', hint: 'piattaforma o testata' },
-  { key: 'url', label: 'Link', hint: "URL all'originale" },
-  { key: 'language', label: 'Lingua', hint: 'it, en, "Italiano"…' },
-  { key: 'community', label: 'Community', hint: 'gruppo, pagina, subreddit' },
-  { key: 'sentiment', label: 'Sentiment', hint: 'già calcolato: evita il costo AI' },
-  { key: 'reach', label: 'Reach', hint: 'impression potenziali' },
-  { key: 'likes', label: 'Like', hint: 'reazioni' },
-  { key: 'comments', label: 'Commenti', hint: 'risposte' },
-  { key: 'shares', label: 'Condivisioni', hint: 'retweet, repost' },
-  { key: 'views', label: 'Visualizzazioni', hint: 'views' },
-  { key: 'engagement', label: 'Engagement totale', hint: 'solo se manca il dettaglio' },
+const FIELDS: { key: string; label: string; hint: string; help: string; required?: boolean }[] = [
+  { key: 'content', label: 'Testo', hint: 'ciò che viene analizzato', required: true,
+    help: 'Il testo del post o dell’articolo. È l’unico campo obbligatorio: da qui nascono sentiment, temi ed emozioni. Se manca, la riga non viene importata — a meno che ci sia un titolo, che uso al suo posto.' },
+  { key: 'date', label: 'Data', hint: 'per i grafici temporali', 
+    help: 'Quando è stato pubblicato. Senza, ogni riga finisce a oggi e tutti i grafici temporali diventano una colonna sola. Leggo i formati italiani, americani e i seriali di Excel.' },
+  { key: 'time', label: 'Ora', hint: 'solo se in colonna separata',
+    help: 'Serve SOLO se ora e data stanno in due colonne diverse. Se la colonna data contiene già l’orario, lascia vuoto qui.' },
+  { key: 'title', label: 'Titolo', hint: 'headline, se distinta',
+    help: 'La headline, quando è separata dal testo. Fa anche da rete di sicurezza: se il testo di una riga è vuoto, uso il titolo invece di scartarla.' },
+  { key: 'author', label: 'Autore', hint: 'chi ha scritto',
+    help: 'Il nome di chi pubblica. Alimenta le classifiche di autori, la piramide di influenza e — se i nomi sono persone che segui — le schede personali.' },
+  { key: 'authorHandle', label: 'Handle', hint: '@username',
+    help: 'Lo username (@nome). Utile quando lo stesso autore compare con nomi scritti in modo diverso.' },
+  { key: 'source', label: 'Fonte', hint: 'piattaforma o testata',
+    help: 'La piattaforma o la testata. Diventa un filtro nell’Ascolto e una serie nei grafici per canale. Attenzione: una colonna che si chiama "Source" ma contiene Organic/Sponsored NON è la fonte — guarda i valori.' },
+  { key: 'url', label: 'Link', hint: "URL all'originale",
+    help: 'Il collegamento al contenuto originale, per aprirlo dalla scheda della mention.' },
+  { key: 'language', label: 'Lingua', hint: 'it, en, "Italiano"…',
+    help: 'Riconosco sia i codici (it, en, it-IT) sia i nomi estesi (Italiano, English). Diventa un filtro e serve a non tradurre ciò che è già nella tua lingua.' },
+  { key: 'community', label: 'Community', hint: 'gruppo, pagina, subreddit',
+    help: 'Il gruppo, la pagina o il subreddit in cui è uscito. Alimenta la vista Pubblico: dove avviene la conversazione.' },
+  { key: 'sentiment', label: 'Sentiment', hint: 'già calcolato: evita il costo AI',
+    help: 'Se il file porta già il sentiment, assegnalo: risparmi l’analisi AI su ogni riga. Capisco parole (Positivo/Negative/neutro) e punteggi, sia -1..+1 sia 0..100.' },
+  { key: 'reach', label: 'Reach', hint: 'impression potenziali',
+    help: 'Quante persone potevano vedere il contenuto. Non confonderlo con i follower dell’autore: sono cose diverse e il reach è per singolo contenuto.' },
+  { key: 'likes', label: 'Like', hint: 'reazioni',
+    help: 'Reazioni, mi piace, preferiti. Insieme a commenti e condivisioni compone il punteggio di engagement con cui si ordinano i contenuti migliori.' },
+  { key: 'comments', label: 'Commenti', hint: 'risposte',
+    help: 'Numero di commenti o risposte. Nel punteggio di engagement pesa il doppio di un like: costa più fatica.' },
+  { key: 'shares', label: 'Condivisioni', hint: 'retweet, repost',
+    help: 'Condivisioni, retweet, repost. Nel punteggio pesano il triplo di un like: è il segnale più forte di adesione.' },
+  { key: 'views', label: 'Visualizzazioni', hint: 'views',
+    help: 'Visualizzazioni video. Pesano poco nel punteggio (una ogni 200) perché una vista non è un’interazione.' },
+  { key: 'engagement', label: 'Engagement totale', hint: 'solo se manca il dettaglio',
+    help: 'Usalo SOLO se il file non ha like, commenti e condivisioni separati: quando ci sono, il totale viene calcolato da quelli. E non assegnare qui un TASSO percentuale: "Engagement Rate 15,4%" non sono 15 interazioni.' },
 ];
 const FIELD_LABEL: Record<string, string> = Object.fromEntries(FIELDS.map((f) => [f.key, f.label]));
 
@@ -388,6 +405,45 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * Il suggerimento su un campo da assegnare.
+ *
+ * Non è solo "che cos'è": è cosa ci finisce dentro, a cosa serve a valle e
+ * cosa succede se lo lasci vuoto. E quando una colonna è già assegnata mostra
+ * ANCHE che cosa Radar ha visto in quella colonna — tipo, riempimento e primi
+ * valori — perché il modo più veloce per accorgersi di uno scambio è vedere
+ * un numero dove ti aspettavi del testo.
+ */
+function FieldTip({ help, column, profiles }: {
+  help: string; column?: string; profiles: Profile[];
+}) {
+  const [open, setOpen] = useState(false);
+  const p = column ? profiles.find((x) => x.name === column) : undefined;
+
+  return (
+    <span className="relative inline-flex"
+      onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <Info className="size-3 cursor-help text-slate-600 hover:text-sky-300" />
+      {open && (
+        <span className="absolute left-4 top-0 z-50 w-80 rounded-lg border border-[var(--border)] bg-[#0c1226] px-3 py-2.5 text-[11px] leading-relaxed text-slate-300 shadow-2xl">
+          {help}
+          {p && (
+            <span className="mt-2 block border-t border-[var(--border)] pt-2 text-slate-500">
+              <span className="text-slate-300">{p.name}</span> — tipo {p.kind}, piena al {p.filled}%,
+              {' '}{p.distinct} valori distinti.
+              {p.samples.length > 0 && (
+                <span className="mt-0.5 block truncate text-slate-600">
+                  es: {p.samples.slice(0, 2).join(' ¦ ')}
+                </span>
+              )}
+            </span>
+          )}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -851,9 +907,10 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {FIELDS.map((f) => (
                 <label key={f.key} className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-300">
+                  <span className="flex items-center gap-1 text-xs text-slate-300">
                     {f.label}{f.required && <span className="text-sky-400"> *</span>}
-                    <span className="text-slate-600"> · {f.hint}</span>
+                    <FieldTip help={f.help} column={map[f.key]} profiles={file.profiles} />
+                    <span className="text-slate-600">· {f.hint}</span>
                   </span>
                   <select value={map[f.key] ?? ''}
                     onChange={(e) => { setMap((m) => ({ ...m, [f.key]: e.target.value })); setPreview(null); }}

@@ -10,6 +10,7 @@ import { getNarratives } from '@/lib/narratives';
 import { getTimeline } from '@/lib/timeline';
 import { geoDistribution, emotionDistribution, brandHealthReport, momentumQuadrant, semanticConstellation, sovOverTime, conversationFlow, influencerNetwork, crisisAnatomy, authorPyramid } from '@/lib/insights';
 import { getPovCached } from '@/lib/pov';
+import { detectPeople, personCard, peopleRanking } from '@/lib/people-insights';
 import { SOURCE_META } from '@/lib/connectors';
 import type { projects } from '@/lib/db/schema';
 
@@ -60,10 +61,17 @@ export async function collectExportData(project: Project, days = 30) {
       .limit(3000),
   ]);
   const health = await brandHealthReport(project.id, 14);
+  // Le persone entrano nell'export solo se il progetto ne ha: su un progetto di
+  // listening puro queste query non trovano niente e costano una scansione.
+  const peopleNames = await detectPeople(project.id);
+  const people = peopleNames.length ? {
+    ranking: await peopleRanking(project.id, peopleNames),
+    cards: await Promise.all(peopleNames.map((n) => personCard(project.id, n))),
+  } : { ranking: [], cards: [] };
   // Solo se già generato: l'export non deve mai far scattare una spesa AI.
   const pov = await getPovCached(project.id, 90);
 
-  return { project, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, sov, flow, network, crisis, pyramid, health, pov, allMentions };
+  return { project, people, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, sov, flow, network, crisis, pyramid, health, pov, allMentions };
 }
 
 export type ExportData = Awaited<ReturnType<typeof collectExportData>>;

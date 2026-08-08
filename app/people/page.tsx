@@ -1,7 +1,7 @@
 import { getCurrentUser, isAdmin } from '@/lib/auth';
 import { getCurrentProject } from '@/lib/data';
 import { PageHeader, EmptyState } from '@/components/ui';
-import { detectPeople, personCard, peopleRanking } from '@/lib/people-insights';
+import { detectPeople, personCard, peopleRanking, personSeries } from '@/lib/people-insights';
 import { PersonCards, PeopleLeaderboard } from '@/components/people-charts';
 
 export const metadata = { title: 'People' };
@@ -37,6 +37,12 @@ export default async function PeoplePage() {
   const ranking = await peopleRanking(project.id, names);
   // Chi non ha nessun dato utile non merita una scheda vuota.
   const useful = cards.filter((c) => c.followers || c.rhythm || c.averages.length || c.audience.length);
+  // Le serie nel tempo, una per persona: alimentano il confronto e il focus.
+  // Chi ha meno di due rilevazioni non fa una curva e resta fuori dal grafico.
+  const series = (await Promise.all(useful.map(async (c) => ({
+    name: c.name, ...(await personSeries(project.id, c.name)),
+  })))).filter((s) => s.followers.length >= 2)
+    .sort((a, b) => (b.followers.at(-1)?.value ?? 0) - (a.followers.at(-1)?.value ?? 0));
 
   return (
     <>
@@ -50,7 +56,7 @@ export default async function PeoplePage() {
         <PeopleLeaderboard rows={ranking} />
       </div>
 
-      <PersonCards cards={useful} />
+      <PersonCards cards={useful} series={series} />
     </>
   );
 }

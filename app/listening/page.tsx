@@ -5,6 +5,7 @@ import { PageHeader, MentionCard, EmptyState, fmtNum } from '@/components/ui';
 import { articleCoverage } from '@/lib/article-enrich';
 import { getT } from '@/lib/i18n';
 import { projectSources } from '@/lib/metrics-data';
+import { sourceLabel } from '@/lib/source-label';
 import { SOURCE_META } from '@/lib/connectors';
 import { SearchBox } from '@/components/search-box';
 import { TranslateBar } from '@/components/translate-bar';
@@ -23,11 +24,6 @@ function buildQS(params: Record<string, string | number | undefined>) {
   }
   const s = qs.toString();
   return s ? `?${s}` : '';
-}
-
-/** Da slug a etichetta leggibile per le fonti che arrivano dai file. */
-function prettySource(id: string): string {
-  return id.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export const metadata = { title: 'Listening' };
@@ -91,7 +87,7 @@ export default async function ListeningPage({ searchParams }: {
           { value: 'article', label: t('ui.articles', 'articles') },
           { value: 'post', label: t('ui.posts', 'posts') },
         ]} param="tipo" current={current} />
-        <FilterGroup label={t('ui.source', 'Source')} items={sources.map((s) => ({ value: s.id, label: SOURCE_META[s.id]?.label ?? prettySource(s.id) }))}
+        <FilterGroup label={t('ui.source', 'Source')} items={sources.map((s) => ({ value: s.id, label: sourceLabel(s.id) }))}
           param="fonte" current={current} />
         <FilterGroup label={t('ui.sentiment', 'Sentiment')} items={SENTIMENTS.map((s) => ({ value: s, label: s }))}
           param="sentiment" current={current} />
@@ -104,10 +100,10 @@ export default async function ListeningPage({ searchParams }: {
         <FilterGroup label={t('ui.sort', 'Sort')} items={[
           { value: 'engagement', label: 'engagement' }, { value: 'rilevanza', label: 'relevance' },
         ]} param="ordina" current={current} />
-        {sp.fonte && SOURCE_META[sp.fonte] && (
+        {sp.fonte && sources.some((s) => s.id === sp.fonte) && (
           <Link href={`/source/${sp.fonte}`}
             className="flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 font-semibold text-sky-300 transition hover:bg-sky-500/25"
-            title={`Full channel analysis of ${SOURCE_META[sp.fonte].label}: volume, sentiment, topics and authors compared with the whole project`}>
+            title={`Full channel analysis of ${sourceLabel(sp.fonte)}: volume, sentiment, topics and authors compared with the whole project`}>
             🔬 {t('listening.deepdive', 'Deep-dive')} {SOURCE_META[sp.fonte].label} →
           </Link>
         )}

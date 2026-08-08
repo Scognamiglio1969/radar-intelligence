@@ -35,6 +35,9 @@ export type ArchetypeGuess = {
 };
 
 const PLATFORM = /^(twitter|x|facebook|fb|instagram|ig|ig feed|ig story|ig stories|tiktok|tt|linkedin|lk|youtube|yt|threads|reddit|telegram)$/i;
+/** Basta UNA parola da piattaforma per escludere che sia una persona:
+ *  "Instagram Story" e "LinkedIn Profile" sono canali, non nomi propri. */
+const PLATFORM_WORD = /^(twitter|x|facebook|fb|instagram|ig|tiktok|tt|linkedin|lk|youtube|yt|threads|reddit|telegram|whatsapp|snapchat|pinterest|twitch|mastodon|bluesky)$/i;
 const AUDIENCE_METRIC = /(follower|fan|iscritti|subscriber|audience|seguaci)/i;
 const PUBLISH_METRIC = /(pubblicazion|post|updates|contenuti|video pubblicati|uscite)/i;
 const BREAKDOWN_DIM = /(azienda|company|job title|ruolo|role|location|luogo|settore|industry|seniority|paese|country)/i;
@@ -52,13 +55,14 @@ const BREAKDOWN_DIM = /(azienda|company|job title|ruolo|role|location|luogo|sett
  * nell'elenco delle persone. Una scheda personale intestata a una metrica è il
  * genere di errore che fa perdere fiducia in tutto il resto.
  */
-const METRIC_WORD = /\b(avg|average|medi[aeo]|total[ei]?|sum|somma|rate|tasso|perc|engagement|impression\w*|reach|follower\w*|iscritti|subscriber\w*|like|reaction\w*|reazion\w*|comment\w*|condivision\w*|share\w*|reshare\w*|update\w*|post|view\w*|visualizzazion\w*|interazion\w*|interaction\w*|clic\w*|click\w*|copertura|delta|count|rank\w*|mes[ei]|ann[oi]|month|year|dat[ae]|canale|channel)\b/i;
+const METRIC_WORD = /\b(avg|average|medi[aeo]|total[ei]?|sum|somma|rate|tasso|perc|engagement|impression\w*|reach|follower\w*|iscritti|subscriber\w*|like|dislike|preferiti|reaction\w*|reazion\w*|comment\w*|rispost\w*|repl\w*|condivision\w*|share\w*|reshare\w*|repost|retweet|update\w*|post|stor(y|ies|ia|ie)|reel\w*|video|view\w*|visualizzazion\w*|spettatori|interazion\w*|interaction\w*|clic\w*|click\w*|copertura|salvataggi|segnalibri|bookmark\w*|durata|tempo|watch\w*|delta|count|rank\w*|mes[ei]|ann[oi]|month|year|dat[ae]|canale|channel|profil\w*|panoramica)\b/i;
 
 export function looksLikePerson(name: string): boolean {
   const s = name.trim();
   if (!s || /\d/.test(s)) return false;
   if (PLATFORM.test(s)) return false;
   if (METRIC_WORD.test(s)) return false;
+  if (s.split(/[\s_]+/).some((w) => PLATFORM_WORD.test(w))) return false;
   if (/(spa|srl|group|gruppo|italia|italiane|official|brand|channel|canale|corporate|team)/i.test(s)) return false;
   const words = s.split(/[\s_]+/).filter(Boolean);
   if (words.length < 1 || words.length > 4) return false;

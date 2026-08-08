@@ -248,3 +248,53 @@ export async function peopleRanking(
     engagement: c.averages.find((a) => /engagement/i.test(a.metric))?.value ?? null,
   })).sort((a, b) => (b.followers ?? 0) - (a.followers ?? 0));
 }
+
+/**
+ * Le serie nel tempo di una persona: pubblico e ritmo di pubblicazione.
+ *
+ * Sono due misure di natura diversa — uno stock e un flusso — e per questo
+ * vivono in due grafici e non su due assi dello stesso: il rapporto fra le due
+ * curve lo deciderebbe chi sceglie le scale, non i dati.
+ */
+export async function personSeries(projectId: number, person: string): Promise<{
+  followers: { date: string; value: number }[];
+  publishing: { date: string; value: number }[];
+  engagement: { date: string; value: number }[];
+}> {
+  const db = await getDb();
+  const points = await db.select({
+    metric: metricPoints.metric, entity: metricPoints.entity,
+    date: metricPoints.date, value: metricPoints.value,
+  }).from(metricPoints).where(eq(metricPoints.projectId, projectId));
+
+  const mine = points.filter((p) => matches(person, p.entity) || matches(person, p.metric));
+  const pick = (test: (m: string) => boolean) => {
+    const byDay = new Map<string, number>();
+    for (const p of mine) {
+      if (!test(p.metric)) continue;
+      const day = p.date.toISOString().slice(0, 10);
+      // Più fogli possono portare la stessa misura nello stesso mese: si tiene
+      // il valore più alto invece di sommarli, che raddoppierebbe.
+      byDay.set(day, Math.max(byDay.get(day) ?? 0, p.value));
+    }
+    return [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, value]) => ({ date, value }));
+  };
+
+  return {
+    followers: pick((m) => (FOLLOWER.test(m) || matches(person, m)) && !/delta/i.test(m)),
+    publishing: pick((m) => PUBLISH.test(m) && !AVERAGE.test(m)),
+    engagement: pick((m) => /engagement/i.test(m) && AVERAGE.test(m)),
+  };
+}
+
+/** Una linea per persona sullo stesso grafico: il confronto diretto. */
+export async function peopleFollowerSeries(
+  projectId: number, people: string[],
+): Promise<{ name: string; points: { date: string; value: number }[] }[]> {
+  const series = await Promise.all(people.map(async (p) => ({
+    name: p, points: (await personSeries(projectId, p)).followers,
+  })));
+  return series.filter((s) => s.points.length >= 2)
+    .sort((a, b) => (b.points.at(-1)?.value ?? 0) - (a.points.at(-1)?.value ?? 0));
+}

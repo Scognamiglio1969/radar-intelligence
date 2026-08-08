@@ -92,3 +92,12 @@ test('ogni archetipo ha una etichetta leggibile', () => {
     assert.ok(ARCHETYPE_LABEL[k as keyof typeof ARCHETYPE_LABEL].length > 3);
   }
 });
+
+test('un canale composto non è una persona', () => {
+  // "Instagram Story" e "LK Profile" sono due parole capitalizzate come un
+  // nome e cognome, e comparivano fra le persone su un progetto di soli canali.
+  for (const x of ['Instagram Story', 'LK Profile', 'Instagram Feed', 'LinkedIn Profile',
+    'Risposte', 'Segnalibri', 'Salvataggi', 'Panoramica', 'Spettatori unici']) {
+    assert.equal(looksLikePerson(x), false, `"${x}" non è una persona`);
+  }
+});

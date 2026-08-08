@@ -492,6 +492,74 @@ export const SECTION_RENDERERS: Record<SectionId, Section> = {
     },
   },
 
+  // --- Personal branding -------------------------------------------------
+  // Le persone entrano nel report come le altre sezioni, così una relazione
+  // sul personal branding si compone senza uscire da Radar.
+
+  people: {
+    has: (d) => d.people.ranking.length > 1,
+    render: (c, d) => {
+      c.heading('People — the team at a glance');
+      c.table(
+        ['Person', 'Audience', 'Posts / month', 'Avg engagement'],
+        d.people.ranking.map((r) => [
+          r.name,
+          r.followers === null ? '—' : r.followers.toLocaleString('en-US'),
+          r.perMonth === null ? '—' : String(r.perMonth),
+          r.engagement === null ? '—' : String(Math.round(r.engagement)),
+        ]),
+        [0.34, 0.22, 0.22, 0.22], ['left', 'right', 'right', 'right'],
+      );
+      c.para('Three different measures: whoever has the largest audience is not necessarily the one engaging it most.',
+        { size: 9, color: MUTED });
+    },
+  },
+
+  peopleGrowth: {
+    has: (d) => d.people.cards.some((p) => p.followers),
+    render: (c, d) => {
+      c.heading('Audience growth per person');
+      const rows = d.people.cards.filter((p) => p.followers)
+        .sort((a, b) => (b.followers!.gained) - (a.followers!.gained));
+      c.hbars(rows.map((p) => ({
+        label: p.name,
+        value: p.followers!.gained,
+        sub: `now ${p.followers!.latest.toLocaleString('en-US')}`,
+      })));
+      const span = rows[0]?.followers;
+      if (span) c.para(`Gained between ${span.from} and ${span.to}.`, { size: 9, color: MUTED });
+    },
+  },
+
+  peopleDetail: {
+    has: (d) => d.people.cards.length > 0,
+    render: (c, d) => {
+      c.heading('Person cards');
+      for (const p of d.people.cards) {
+        if (!p.followers && !p.rhythm && !p.averages.length) continue;
+        c.para(p.name, { bold: true, size: 11, gap: 0.15 });
+        const bits: string[] = [];
+        if (p.followers) {
+          bits.push(`${p.followers.latest.toLocaleString('en-US')} followers (${p.followers.gained >= 0 ? '+' : ''}${p.followers.gained.toLocaleString('en-US')} since ${p.followers.from})`);
+        }
+        if (p.rhythm) {
+          bits.push(`${p.rhythm.perMonth} posts/month over ${p.rhythm.months} months${p.rhythm.trend !== null ? ` (${p.rhythm.trend >= 0 ? '+' : ''}${p.rhythm.trend}%)` : ''}`);
+        }
+        for (const a of p.averages.slice(0, 3)) bits.push(`${a.metric}: ${a.value}`);
+        c.para(bits.join('  ·  '), { size: 9, color: MUTED, gap: 0.2 });
+        if (p.formats.length) {
+          c.para(`Best format: ${p.formats[0].name} (avg engagement ${p.formats[0].avgEngagement} over ${p.formats[0].posts} posts)`,
+            { size: 9, gap: 0.2 });
+        }
+        if (p.audience.length) {
+          const a = p.audience[0];
+          c.para(`Audience by ${a.dimension}: ${a.rows.slice(0, 4).map((r) => `${r.name} ${(r.share * 100).toFixed(0)}%`).join(', ')}`,
+            { size: 9, color: MUTED, gap: 0.4 });
+        }
+      }
+    },
+  },
+
   mentions: {
     has: (d) => d.allMentions.length > 0,
     render: (c, d) => {

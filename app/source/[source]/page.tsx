@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 import { getCurrentProject } from '@/lib/data';
 import { sourceDeepDive } from '@/lib/deepdive';
 import { SOURCE_META } from '@/lib/connectors';
+import { sourceColor, sourceLabel } from '@/lib/source-label';
 import { PageHeader, KpiCard, MentionCard, EmptyState, fmtNum } from '@/components/ui';
 import { SourceVolumeCompare, SentimentCompareBars } from '@/components/deepdive-charts';
 
@@ -22,8 +23,13 @@ export default async function SourceDeepDivePage({ params }: {
   params: Promise<{ source: string }>;
 }) {
   const { source } = await params;
-  const meta = SOURCE_META[source];
-  if (!meta) return <EmptyState message="Unknown source." />;
+  // Nessun rifiuto per "fonte sconosciuta": un progetto nato da file porta
+  // canali che nessun connettore produce, e hanno diritto alla stessa analisi.
+  const meta = {
+    label: sourceLabel(source),
+    color: sourceColor(source),
+    note: SOURCE_META[source]?.note,
+  };
   const project = await getCurrentProject();
   if (!project) return <EmptyState message="No project configured." />;
 

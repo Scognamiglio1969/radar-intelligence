@@ -6,6 +6,7 @@ import {
   Tooltip, Legend, Cell,
 } from 'recharts';
 import { entityColor, OVERFLOW_COLOR } from '@/lib/entity-colors';
+import { NewBadge } from './new-badge';
 
 // ---------------------------------------------------------------------------
 // I grafici sulle misure.
@@ -39,6 +40,12 @@ const fmt = (n: number) => {
   return String(Math.round(n));
 };
 const month = (d: string) => new Date(d).toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
+
+/** La data più recente fra tutte le serie: è ciò che rende "nuovo" un grafico. */
+const latestOf = (series: Series[]) => series
+  .flatMap((s) => s.points.map((p) => p.date))
+  .sort()
+  .at(-1) ?? null;
 
 /** Le serie in eccesso non prendono un colore nuovo: diventano "Altro". */
 function fold(series: Series[]): { kept: Series[]; folded: number } {
@@ -92,6 +99,7 @@ export function TrendChart({ series, title, hint }: {
   return (
     <section className="panel px-5 py-4">
       <Head title={title} hint={hint} folded={folded}
+        newId={`trend:${title}`} latest={latestOf(kept)}
         action={spread >= 8 ? (
           <button onClick={() => setIndexed((v) => !v)}
             title="Confronta la crescita invece dei valori assoluti: tutte le serie partono da 100"
@@ -232,13 +240,15 @@ export function CustomPerformance({ rows, field }: {
   );
 }
 
-function Head({ title, hint, folded, action }: {
+function Head({ title, hint, folded, action, newId, latest }: {
   title: string; hint?: string; folded?: number; action?: React.ReactNode;
+  newId?: string; latest?: string | null;
 }) {
   return (
     <div className="mb-3">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold text-slate-200">{title}</h3>
+        {newId && <NewBadge id={newId} latest={latest} />}
         {folded ? (
           <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-slate-500">
             {folded} serie minori raccolte in &ldquo;Altro&rdquo;

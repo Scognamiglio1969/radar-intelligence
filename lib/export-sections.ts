@@ -27,6 +27,10 @@ export const EXPORT_SECTIONS = [
   { id: 'audience', label: 'Audience', group: 'Benchmark & audience' },
   { id: 'network', label: 'Influencer network', group: 'Benchmark & audience' },
   { id: 'pyramid', label: 'Author pyramid', group: 'Benchmark & audience' },
+  // People — personal branding, quando il progetto segue delle persone
+  { id: 'people', label: 'People leaderboard', group: 'People' },
+  { id: 'peopleGrowth', label: 'Audience growth per person', group: 'People' },
+  { id: 'peopleDetail', label: 'Person cards (detail)', group: 'People' },
   // Intelligence — narrazione e sintesi
   { id: 'pov', label: 'Point of View', group: 'Intelligence' },
   { id: 'narratives', label: 'Narratives', group: 'Intelligence' },
@@ -43,5 +47,5 @@ export const ALL_SECTION_IDS = EXPORT_SECTIONS.map((s) => s.id) as SectionId[];
 
 /** Ordine dei gruppi per il selettore. */
 export const SECTION_GROUPS = [
-  'Overview', 'Deep analysis', 'Benchmark & audience', 'Intelligence', 'Raw data',
+  'Overview', 'Deep analysis', 'Benchmark & audience', 'People', 'Intelligence', 'Raw data',
 ] as const;
