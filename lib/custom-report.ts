@@ -4,7 +4,8 @@ import { customReports } from '@/lib/db/schema';
 import { callClaude, MODELS } from '@/lib/claude';
 import { sourceLabel, type ExportData } from '@/lib/export-data';
 import { ALL_SECTION_IDS, EXPORT_SECTIONS, type SectionId } from '@/lib/export-sections';
-import type { CommentRole, ReportBlock, ReportPage } from '@/lib/report-pdf';
+import type { CommentRole, ReportBlock, ReportPage, StudioRendered } from '@/lib/report-pdf';
+import { studioFacts } from '@/lib/studio';
 
 const ROLES: readonly string[] = ['intro', 'comment', 'synthesis', 'free'];
 
@@ -29,17 +30,21 @@ export type CustomReport = {
 const SECTION_LABEL = new Map(EXPORT_SECTIONS.map((s) => [s.id as string, s.label]));
 
 /** Scarta blocchi malformati: la scaletta arriva dal client e va ripulita. */
-function sanitizePages(input: unknown): ReportPage[] {
+export function sanitizePages(input: unknown): ReportPage[] {
   if (!Array.isArray(input)) return [];
   return input.slice(0, 40).map((raw) => {
     const p = (raw ?? {}) as { title?: unknown; blocks?: unknown };
     const blocks: ReportBlock[] = Array.isArray(p.blocks)
       ? p.blocks.slice(0, 30).flatMap((b): ReportBlock[] => {
         const blk = (b ?? {}) as {
-          type?: unknown; section?: unknown; text?: unknown; ai?: unknown; role?: unknown;
+          type?: unknown; section?: unknown; text?: unknown; ai?: unknown;
+          role?: unknown; chartId?: unknown;
         };
         if (blk.type === 'chart' && ALL_SECTION_IDS.includes(blk.section as SectionId)) {
           return [{ type: 'chart', section: blk.section as SectionId }];
+        }
+        if (blk.type === 'studio' && Number(blk.chartId) > 0) {
+          return [{ type: 'studio', chartId: Number(blk.chartId) }];
         }
         if (blk.type === 'text' && typeof blk.text === 'string') {
           const role = ROLES.includes(blk.role as CommentRole) ? blk.role as CommentRole : undefined;
@@ -342,34 +347,50 @@ export type CommentRequest = 'intro' | 'comment' | 'both' | 'synthesis';
  */
 export async function generateComments(
   data: ExportData, sections: SectionId[], role: CommentRequest = 'comment',
+  /**
+   * I grafici di Studio Graph da commentare, già eseguiti. Entrano nella stessa
+   * chiamata dei grafici di serie: per il modello sono materiale identico —
+   * cifre calcolate dal database — e commentarli separatamente costerebbe una
+   * richiesta in più senza far vedere la pagina intera.
+   */
+  studio: { id: number; chart: StudioRendered }[] = [],
 ): Promise<{
   comments: Record<string, GeneratedComment>; synthesis?: string;
-  empty: SectionId[]; available: boolean;
+  empty: SectionId[];
+  /** Grafici di Studio Graph senza cifre da descrivere nel loro periodo. */
+  emptyStudio: number[];
+  available: boolean;
   /** Nessuna sezione aveva cifre da descrivere: il modello non è stato chiamato. */
   noFacts?: boolean;
 }> {
   const empty: SectionId[] = [];
+  const emptyStudio: number[] = [];
   const parts: string[] = [];
   for (const id of sections) {
     const facts = sectionFacts(data, id);
     if (!facts.trim()) { empty.push(id); continue; }
     parts.push(`### ${id} — ${SECTION_LABEL.get(id) ?? id}\n${facts}`);
   }
+  for (const { id, chart } of studio) {
+    const facts = studioFacts(chart);
+    if (!facts.trim()) { emptyStudio.push(id); continue; }
+    parts.push(`### studio:${id} — ${chart.title}\n${facts}`);
+  }
   // Nessun fatto da mandare: NON si chiama il modello, e non gli si dà la
   // colpa. Dire "il modello non ha risposto" per una chiamata mai partita
   // manda l'utente a premere "riprova" all'infinito.
-  if (!parts.length) return { comments: {}, empty, available: true, noFacts: true };
+  if (!parts.length) return { comments: {}, empty, emptyStudio, available: true, noFacts: true };
 
   const user = `Progetto: ${data.project.name}\nTema seguito: ${data.project.keywords.join(', ')}\n\n${parts.join('\n\n')}`;
   // La sintesi è un testo solo: non serve lo stesso tetto di token dei
   // commenti, che crescono con il numero di grafici.
   const maxTokens = role === 'synthesis' ? 700 : 2000;
   const text = await callClaude(MODELS.sonnet, `report-${role}`, SYSTEM[role], user, maxTokens, true);
-  if (text === null) return { comments: {}, empty, available: false };
+  if (text === null) return { comments: {}, empty, emptyStudio, available: false };
 
   const obj = parseObject(text) ?? {};
   if (role === 'synthesis') {
-    return { comments: {}, synthesis: str(obj.synthesis), empty, available: true };
+    return { comments: {}, synthesis: str(obj.synthesis), empty, emptyStudio, available: true };
   }
   const comments: Record<string, GeneratedComment> = {};
   for (const [k, v] of Object.entries(obj)) {
@@ -378,5 +399,5 @@ export async function generateComments(
     const entry: GeneratedComment = { intro: str(o.intro), comment: str(o.comment) };
     if (entry.intro || entry.comment) comments[k] = entry;
   }
-  return { comments, empty, available: true };
+  return { comments, empty, emptyStudio, available: true };
 }

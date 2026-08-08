@@ -6,6 +6,7 @@ import {
   EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive,
   Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart, Info,
 } from 'lucide-react';
+import { SpotCheck } from '@/components/import-spotcheck';
 import { TopProgress, creepingProgress } from './top-progress';
 
 // ---------------------------------------------------------------------------
@@ -35,6 +36,8 @@ type ImportFile = {
   kind: 'mentions' | 'metrics';
   metricMap: MetricMap | null;
   extras: Record<string, string>;
+  /** Righe di questo file davvero presenti in archivio adesso. */
+  inArchive: number;
   createdAt: string; importedAt: string | null;
 };
 type MetricMap = {
@@ -218,8 +221,13 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     const imported = files.filter((f) => f.status === 'imported');
     return {
       rawRows: files.reduce((s, f) => s + f.rowCount, 0),
-      mentions: files.filter((f) => f.kind === 'mentions').reduce((s, f) => s + (f.report?.inserted ?? 0), 0),
-      points: files.filter((f) => f.kind === 'metrics').reduce((s, f) => s + (f.report?.inserted ?? 0), 0),
+      // Si conta quello che c'è in archivio, non quello che il verbale dice di
+      // aver scritto: è il numero su cui l'utente potrà fare i grafici.
+      mentions: files.filter((f) => f.kind === 'mentions').reduce((s, f) => s + f.inArchive, 0),
+      points: files.filter((f) => f.kind === 'metrics').reduce((s, f) => s + f.inArchive, 0),
+      // Righe che il verbale dice importate ma che in archivio non ci sono più.
+      drifted: files.filter((f) => f.status === 'imported')
+        .reduce((s, f) => s + Math.max(0, (f.report?.inserted ?? 0) - f.inArchive), 0),
       pending: files.filter((f) => f.status !== 'imported').length,
       ready: files.filter((f) => !f.rawPurged && f.status !== 'imported' && isReady(f)).length,
       importedCount: imported.length,
@@ -288,12 +296,35 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     }
 
     const imported = files.filter((f) => f.status === 'imported');
-    const rows = imported.reduce((s, f) => s + (f.report?.inserted ?? 0), 0);
+    const rows = imported.reduce((s, f) => s + f.inArchive, 0);
+
+    // Il verbale dice una cosa e l'archivio ne dice un'altra: succede quando
+    // un foglio è stato importato prima di cambiare le colonne, o quando il
+    // progetto è stato ripulito. È l'unico caso in cui i numeri della pagina
+    // mentirebbero, quindi è il primo da dire — e ha un rimedio solo.
+    const drifted = files.filter((f) => f.status === 'imported'
+      && (f.report?.inserted ?? 0) > f.inArchive);
+    if (drifted.length) {
+      const one = drifted[0];
+      return {
+        mood: 'you',
+        did: `${num(rows)} righe sono in archivio e si possono già graficare.`,
+        title: drifted.length === 1
+          ? `“${one.sheetName ?? one.filename}” è da reimportare`
+          : `${drifted.length} fogli sono da reimportare`,
+        text: `Quando ${drifted.length === 1 ? 'questo foglio è stato importato' : 'questi fogli sono stati importati'} le colonne erano assegnate diversamente, così in archivio ci sono meno righe di quante il file ne contenga (${num(stats.drifted)} in meno). Il file originale è ancora qui: basta reimportarlo, non devi ricaricare niente.`,
+        action: {
+          label: `Reimporta ${one.sheetName ?? one.filename}`,
+          onClick: () => act(one.id, 'derive', { kind: one.kind }),
+        },
+      };
+    }
+
     return {
       mood: 'done',
-      did: `${num(rows)} righe importate da ${imported.length} fogli.`,
+      did: `${num(rows)} righe in archivio da ${imported.length} fogli.`,
       title: 'I tuoi dati sono dentro',
-      text: 'Da qui in poi non serve fare altro: i dati sono già nei grafici. Se vuoi controllare cosa ho letto, apri “Cosa ho letto dai tuoi file” qui sotto — e se qualcosa non ti torna, cambia l’assegnazione di un foglio e reimportalo: il file resta, non devi ricaricarlo.',
+      text: 'Da qui in poi non serve fare altro: i dati sono già nei grafici. Se vuoi essere sicuro che sia andata bene, apri “Cosa ho letto dai tuoi file” qui sotto e usa “Controlla tre righe a campione”: ti faccio vedere righe del tuo foglio accanto a quello che ho in archivio, così confronti con il file aperto davanti.',
       links: [
         { label: 'Vedi le misure', href: '/measures' },
         { label: 'Vedi le persone', href: '/people' },
@@ -318,7 +349,7 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
               <Stat icon={Table2} label="Righe grezze" value={num(stats.rawRows)} hint="conservate, rimappabili" />
               {stats.mentions > 0 && (
                 <Stat icon={Check} label="Contenuti" value={num(stats.mentions)}
-                  hint={stats.withSentiment ? `${num(stats.withSentiment)} con sentiment dal file` : 'righe con un testo'}
+                  hint={stats.withSentiment ? `${num(stats.withSentiment)} con sentiment dal file` : 'righe con un testo, in archivio adesso'}
                   tone="ok" />
               )}
               {stats.points > 0 && (
@@ -569,6 +600,24 @@ function ImportLog({ projectId, files, open, onToggle }: {
         )}
       </button>
 
+      {/* Il verdetto si legge senza aprire niente: è la prima cosa che uno
+          vuole sapere dopo aver caricato un file. */}
+      {audit && done.length > 0 && (
+        <p className="mt-1.5 text-xs text-slate-400">
+          {unexplained > 0
+            ? <><AlertTriangle className="mr-1 inline size-3 text-red-400" />
+              <span className="text-red-300">Qualcosa non torna</span> in {unexplained}
+              {' '}{unexplained === 1 ? 'foglio' : 'fogli'}: apri qui sotto, te lo spiego riga per riga.</>
+            : ignoredCols > 0
+              ? <><Check className="mr-1 inline size-3 text-emerald-400" />
+                Tutte le righe sono a posto, ma <span className="text-amber-300">{ignoredCols} colonne</span> del
+                foglio non le sto usando. Se ti servono, aprile qui sotto e conservale.</>
+              : <><Check className="mr-1 inline size-3 text-emerald-400" />
+                <span className="text-emerald-300">Tutto quadra.</span> Ogni riga dei tuoi file o è
+                entrata, o so dirti perché no — e puoi verificarlo tu su righe a campione.</>}
+        </p>
+      )}
+
       {open && (
         <div className="mt-3 flex flex-col gap-2.5 border-t border-[var(--border)] pt-3">
           {loading && <p className="text-xs text-slate-500"><Loader2 className="mr-1 inline size-3 animate-spin" /> Conteggio…</p>}
@@ -581,7 +630,7 @@ function ImportLog({ projectId, files, open, onToggle }: {
             </p>
           )}
 
-          {audit?.map((a) => <LogEntry key={a.fileId} a={a} />)}
+          {audit?.map((a) => <LogEntry key={a.fileId} a={a} projectId={projectId} />)}
           {audit && audit.length === 0 && <p className="text-xs text-slate-600">Nessun file ancora.</p>}
         </div>
       )}
@@ -590,7 +639,7 @@ function ImportLog({ projectId, files, open, onToggle }: {
 }
 
 /** Una riga di log: la storia di un foglio, in italiano. */
-function LogEntry({ a }: { a: Audit }) {
+function LogEntry({ a, projectId }: { a: Audit; projectId: number }) {
   if (a.status !== 'imported') {
     return (
       <p className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs text-slate-500">
@@ -644,6 +693,9 @@ function LogEntry({ a }: { a: Audit }) {
       </p>
 
       {a.notes.map((n) => <p key={n} className="mt-0.5 text-[11px] text-amber-300/80">{n}</p>)}
+
+      {/* La prova, non il riassunto: tre righe del foglio contro l'archivio. */}
+      <SpotCheck fileId={a.fileId} projectId={projectId} />
     </div>
   );
 }

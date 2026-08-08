@@ -481,3 +481,20 @@ export const metricPoints = pgTable('metric_points', {
   /** Le dimensioni che qualificano il punto: canale, pillar, azienda, ruolo. */
   dims: jsonb('dims').$type<Record<string, string>>().notNull().default({}),
 });
+
+// ---------------------------------------------------------------------------
+// I grafici costruiti in Studio Graph.
+//
+// Si salva la DOMANDA (che campi, che aggregazione, che forma), mai i numeri:
+// riaprendo il grafico fra un mese risponde con i dati di quel mese. È la
+// stessa scelta del report personalizzato, per la stessa ragione.
+// ---------------------------------------------------------------------------
+export const studioCharts = pgTable('studio_charts', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  title: text('title').notNull(),
+  /** La specifica: sorgente, tipo, assi, aggregazioni, periodo, palette. */
+  spec: jsonb('spec').$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

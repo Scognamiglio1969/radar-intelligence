@@ -1,67 +1,79 @@
 import { NextResponse } from 'next/server';
-import { desc, eq, and, gte } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
-import { contentIdeas } from '@/lib/db/schema';
+import { studioCharts } from '@/lib/db/schema';
 import { getCurrentProject } from '@/lib/data';
-import { callClaude, claudeAvailable, MODELS } from '@/lib/claude';
-import { getTrends } from '@/lib/trends';
-import { contentData, dashboardData } from '@/lib/data';
+import { getCurrentUser, isAdmin } from '@/lib/auth';
+import { runStudio, studioFields, type StudioSpec, type StudioSource } from '@/lib/studio';
 
-export const maxDuration = 60;
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
-const SYSTEM = `You are a senior content strategist. Based on the day's real trends and conversations, propose content to publish.
-Write in English, in Markdown, EXACTLY 3 proposals, each with this structure:
-## Idea N — [idea title]
-**Why now:** 1 sentence tied to a real trend or conversation from today.
-**Recommended format:** (LinkedIn post / X thread / short video / article) and posting moment.
-**Draft:**
-The post text, ready to publish (80-120 words for LinkedIn, shorter for X). No junk hashtags: at most 3, relevant.
-Respect the brand tone of voice if provided. Max 550 words total.`;
-
-export async function POST() {
+async function ctx() {
+  if (!isAdmin(await getCurrentUser())) return { error: 'Solo gli amministratori' as const };
   const project = await getCurrentProject();
-  if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
-  if (!await claudeAvailable()) return NextResponse.json({ error: 'Claude API key not configured' }, { status: 400 });
-
-  const db = await getDb();
-  // Cache giornaliera: un giro di idee al giorno (rigenerabile domani)
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const [existing] = await db.select().from(contentIdeas)
-    .where(and(eq(contentIdeas.projectId, project.id), gte(contentIdeas.createdAt, today)))
-    .orderBy(desc(contentIdeas.createdAt)).limit(1);
-  if (existing) return NextResponse.json({ ideas: existing.contentMd, cached: true });
-
-  const [trends, dashboard, top] = await Promise.all([
-    getTrends(project.id), dashboardData(project.id), contentData(project.id),
-  ]);
-
-  const ideas = await callClaude(
-    MODELS.sonnet, 'content_studio', SYSTEM,
-    `Sector: ${project.name}
-${project.brandVoice ? `Brand tone of voice: ${project.brandVoice}\n` : ''}
-Emerging trends (radar):
-${trends.map((t) => `- ${t.topic} (x${t.score.toFixed(1)} vs the norm)${t.explanation ? `: ${t.explanation}` : ''}`).join('\n') || '- no anomalous trend today'}
-
-Top topics of the week:
-${dashboard.topTopics.slice(0, 10).map((t) => `- ${t.topic} (${t.n})`).join('\n')}
-
-Content that is performing (to understand what works):
-${top.slice(0, 8).map((r) => `- [${r.source}, eng ${Math.round(r.engagementScore)}] ${(r.title || r.content).slice(0, 140)}`).join('\n')}`,
-    1500, true,
-  );
-  if (!ideas) return NextResponse.json({ error: 'spend cap reached or API error' }, { status: 429 });
-
-  await db.insert(contentIdeas).values({ projectId: project.id, contentMd: ideas });
-  return NextResponse.json({ ideas });
+  if (!project) return { error: 'Nessun progetto selezionato' as const };
+  return { project };
 }
 
-export async function GET() {
-  const project = await getCurrentProject();
-  if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
+/** I campi disponibili e i grafici già salvati. */
+export async function GET(req: Request) {
+  const c = await ctx();
+  if ('error' in c) return NextResponse.json({ error: c.error }, { status: 400 });
+  const source = (new URL(req.url).searchParams.get('source') ?? 'mentions') as StudioSource;
   const db = await getDb();
-  const history = await db.select().from(contentIdeas)
-    .where(eq(contentIdeas.projectId, project.id))
-    .orderBy(desc(contentIdeas.createdAt)).limit(10);
-  return NextResponse.json({ history });
+  const [fields, saved] = await Promise.all([
+    studioFields(c.project.id, source === 'metrics' ? 'metrics' : 'mentions'),
+    db.select().from(studioCharts)
+      .where(eq(studioCharts.projectId, c.project.id))
+      .orderBy(desc(studioCharts.updatedAt)),
+  ]);
+  return NextResponse.json({ fields, saved });
+}
+
+/** Esegue una specifica e restituisce i dati del grafico. */
+export async function POST(req: Request) {
+  const c = await ctx();
+  if ('error' in c) return NextResponse.json({ error: c.error }, { status: 400 });
+  const spec = (await req.json().catch(() => null)) as StudioSpec | null;
+  if (!spec?.x || !spec?.y) {
+    return NextResponse.json({ error: 'Scegli almeno un campo per l’asse X e uno per l’asse Y' }, { status: 400 });
+  }
+  try {
+    return NextResponse.json(await runStudio(c.project.id, spec));
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+  }
+}
+
+/** Salva o aggiorna un grafico: si conserva la domanda, mai i numeri. */
+export async function PUT(req: Request) {
+  const c = await ctx();
+  if ('error' in c) return NextResponse.json({ error: c.error }, { status: 400 });
+  const body = await req.json().catch(() => ({}));
+  const title = String(body.title ?? '').trim() || 'Grafico senza titolo';
+  const db = await getDb();
+
+  if (body.id) {
+    await db.update(studioCharts)
+      .set({ title, spec: body.spec, updatedAt: new Date() })
+      .where(and(eq(studioCharts.id, Number(body.id)), eq(studioCharts.projectId, c.project.id)));
+    return NextResponse.json({ id: Number(body.id) });
+  }
+  const [row] = await db.insert(studioCharts)
+    .values({ projectId: c.project.id, title, spec: body.spec })
+    .returning({ id: studioCharts.id });
+  return NextResponse.json({ id: row.id });
+}
+
+export async function DELETE(req: Request) {
+  const c = await ctx();
+  if ('error' in c) return NextResponse.json({ error: c.error }, { status: 400 });
+  const id = Number(new URL(req.url).searchParams.get('id'));
+  if (!id) return NextResponse.json({ error: 'Grafico mancante' }, { status: 400 });
+  const db = await getDb();
+  await db.delete(studioCharts)
+    .where(and(eq(studioCharts.id, id), eq(studioCharts.projectId, c.project.id)));
+  return NextResponse.json({ ok: true });
 }

@@ -74,6 +74,105 @@ subset of the totals:
 
 ---
 
+## Two kinds of project
+
+A Radar project starts from one of two places, and everything downstream — charts,
+insights, reports, exports — works the same either way.
+
+**Listening**: Radar collects the conversation itself from public sources, and you read
+it as it arrives — relevance stars, sentiment, topics, translation on demand:
+
+![Listening](docs/screenshots/listening.png)
+
+**Import**: you already have the data. Drop in one Excel or CSV export — or twenty, with
+every sheet shaped differently — and Radar reads what each column actually contains
+instead of demanding a template. Here one workbook has become four sheets: two of posts,
+one of monthly follower counts, one of personal-branding metrics, each with its own
+mapping. Cells produced by a **formula are stored as their result**, and the columns
+Radar has no field for (`PILLAR`, `CAMPAGNA`, editorial format) are kept as custom fields
+rather than dropped:
+
+![Import workspace](docs/screenshots/import-workspace.png)
+
+### "Did it load correctly?"
+
+Counts alone don't answer that — you have to take them on faith. So Radar does the check
+you would do yourself: it takes the first row of your sheet, one in the middle and the
+last, and puts your file next to what is actually in the archive, field by field. It is
+not a simulation — it goes and fetches the stored record back:
+
+![Spot check](docs/screenshots/import-spotcheck.png)
+
+The headline numbers count **what is in the archive right now**, not what the import log
+once claimed to have written. When the two diverge — a sheet imported before you changed
+a column assignment — the panel says so in plain language and offers the one gesture that
+fixes it: re-import. The original file is still there; nothing needs re-uploading.
+
+### People
+
+When a sheet is about people rather than channels, Radar recognises it and builds the
+personal-branding view: the team at a glance, audience growth per person, and a focus on
+any single one. *(Fictional names and data.)*
+
+![People](docs/screenshots/people.png)
+
+---
+
+## Studio Graph — the chart nobody planned for
+
+Every other view in Radar answers a question we chose. Studio Graph lets you ask your
+own: pick the **X**, **Y** and **Z** axes from the fields your project actually has —
+listening fields and spreadsheet columns in one list, because it doesn't matter to the
+reader where a number came from — then pick the shape, the aggregation and the palette.
+
+![Studio Graph](docs/screenshots/studio-graph.png)
+
+Three things it does deliberately:
+
+- **No SQL ever leaves the client.** You choose from a closed catalogue of fields; the
+  server translates each id into an expression. A custom column name travels as a
+  *parameter*, never as concatenated SQL.
+- **It warns, it doesn't forbid.** Summing a rate, a pie with twelve slices, a line drawn
+  between categories that have no order, more than eight series — each is stated in plain
+  words under the title, and you decide. Sometimes the unusual choice is the right one.
+- **The palettes are the three jobs of colour**, not three moods: *identity*
+  (categorical), *intensity* (sequential), *polarity* (diverging). All three pass a
+  colour-vision-deficiency check — and the categorical one is validated *as an ordered
+  sequence*, which is why there is no "reorder" option: the same eight hues in a different
+  order put pink next to green at ΔE 1.6 for a deuteranope, i.e. the same colour.
+
+Saved charts show up in **Explore insights** alongside Radar's own — with an **(X)** to
+remove them, which the built-in ones don't have, so the difference needs no explaining:
+
+![Your charts in the insights hub](docs/screenshots/insights-studio.png)
+
+---
+
+## Reports the AI comments, in four formats
+
+Compose a report page by page: pick charts from the catalogue — Radar's own **and** the
+ones you built in Studio Graph — reorder them, and let the AI write the commentary. Each
+comment has a **role** you choose *before* generating it: a presentation *before* the
+chart, a comment *after* it, both, or a synthesis of how the charts on the page relate.
+
+![Custom report](docs/screenshots/custom-report.png)
+
+The model never sees your rows. It receives the figures already computed by SQL and
+writes prose around them — the same rule as the Point of View. A report is a **running
+order, not a snapshot**: re-export it in a month and it redraws with that month's data.
+
+The same charts reach the generic export too — **PDF, Excel, Word and PowerPoint**, each
+rendering what suits it (a table in Word, a sheet of long-format rows in Excel, a bar
+slide in PowerPoint):
+
+![Export panel](docs/screenshots/export-panel.png)
+
+Every exported file carries the **AI Act disclosure** (Reg. (EU) 2024/1689, art. 50) in
+its notes and in its file metadata — not in the title and not in the body, where it would
+read as part of the analysis.
+
+---
+
 ## Beyond mentions — signals Talkwalker doesn't have
 
 Not everything worth watching is a keyword match in a stream of posts. Three
@@ -144,7 +243,21 @@ just want to collect data).
 - **Import your own data**: create an *Import* project and drop in an Excel/CSV export
   (from any platform or vendor). Radar runs the whole analysis engine — sentiment, topics,
   narratives, insights — over rows it never scraped, so external data lives alongside live
-  listening.
+  listening. Many files, many sheets, each shaped differently: Radar reads what the columns
+  *contain* rather than requiring a template, keeps formula cells as their **result**,
+  preserves the columns it has no field for as custom dimensions, and can hand you the
+  **normalised file** back. Nothing is consumed — the raw rows stay, so a re-mapping is a
+  re-import, not a re-upload. See [the walkthrough above](#two-kinds-of-project).
+- **A second data type: measures** — not everything in a spreadsheet is a post. Aggregate
+  sheets (monthly followers, publishing mix, engagement rate per manager) become
+  *who · what · when · how much*, wide or long, and get their own charts. Rates are
+  averaged, cumulative totals take the latest value, counts sum — because summing a rate
+  produces a number with no meaning.
+- **Studio Graph** ✦: build the chart nobody planned for — choose the X, Y and Z axes from
+  your project's real fields (listening and spreadsheet columns in one list), the shape,
+  the aggregation and the palette. It warns instead of forbidding, never lets SQL through
+  from the client, and saved charts turn up in the insights hub, in the custom report and
+  in all four export formats. [Screenshots above](#studio-graph--the-chart-nobody-planned-for).
 - **Point of View** ✦: turns 90 days of data into a defensible thesis for a meeting — 3-5
   slide-ready blocks (named idea, narrative, supporting figures), counter-signals and
   clickable citations to the real posts. The numbers come from SQL, never from the model,
@@ -172,8 +285,15 @@ just want to collect data).
 - **Cost control**: an admin-set spend cap on the AI, a password-protected reset, and an
   all-time total across every user — the app stops calling the AI at the cap while data
   collection keeps running.
-- **Exports**: branded PDF, PowerPoint, Word, Excel — every insight included. Read-only
-  share links.
+- **Custom report with AI commentary** ✦: compose pages from the chart catalogue and your
+  own Studio Graph charts, then have the AI write the text — choosing its **role** before
+  generating: presentation *before* the chart, comment *after*, both, or a synthesis of how
+  the charts on a page relate. The model only ever sees figures already computed by SQL.
+  There is also a **periodic** edition (7 cadences) that freezes the Point of View it used
+  and always states when that POV was written and on what data.
+- **Exports**: branded PDF, PowerPoint, Word, Excel — every insight included, plus the
+  charts you built yourself. Read-only share links. Each file carries the **AI Act
+  disclosure** (Reg. (EU) 2024/1689, art. 50) in its notes and metadata.
 
 ## Try it in 30 seconds (local, zero config)
 
@@ -241,7 +361,10 @@ hub that groups them by the question they answer, so the menu stays readable.
 | Dashboard | KPIs, volume per source, sentiment, emerging topics, latest brief |
 | Listening | Stream of every mention with filters (source, sentiment, language, period, text) — filter by a source to open its **deep-dive**, or land on a curated set of posts from a narrative |
 | Source deep-dive | One channel vs the whole project: volume, sentiment, topics and top authors, each a verifiable subset of the totals |
-| Import | Create a project that ingests an Excel/CSV file instead of scraping — the full analysis engine runs over your own rows |
+| Import | Create a project that ingests Excel/CSV files instead of scraping — many files, many sheets, each shaped differently. Guided step by step, with a spot check that puts your rows next to what is in the archive |
+| Measures | The aggregate series a spreadsheet brings — follower growth, publishing mix, engagement rate — as *who · what · when · how much* |
+| People | Personal branding: the team at a glance, audience growth per person and a focus on any single one, built from the sheets that are about people |
+| Studio Graph | Build your own chart: choose the X, Y and Z axes from your project's real fields, the shape and the palette. Saved charts appear in the insights hub, the custom report and every export |
 | Media | News grouped into stories (AI clustering) + most active outlets |
 | Benchmark | Share of voice, trends and comparative sentiment across configurable entities |
 | Audience | Most active communities, languages, influential authors, topics by community |
@@ -249,9 +372,10 @@ hub that groups them by the question they answer, so the menu stays readable.
 | Point of View | An evidence-backed market thesis in slide-ready blocks, with research corroboration |
 | Message pull-through | Are your key messages being picked up, and by whom |
 | Media value | Earned Media Value with every assumption exposed |
-| Explore insights | A hub grouping 16 visualizations by the question they answer |
+| Explore insights | A hub grouping 16 visualizations by the question they answer — plus the charts you built in Studio Graph, the only ones that can be removed |
 | Content Studio | Concept → multi-format kit, Hook Lab, conversational refinement |
 | Alerts / Brief | Auto-detected volume spikes & sentiment drops; daily executive brief |
+| Custom report | Compose pages from charts and commentary — written by you or generated by the AI in the role you choose (before the chart, after it, both, or a synthesis of the page). Also in a periodic edition across 7 cadences |
 | War Room | Full-screen live view for a wall display |
 | Settings | Tabbed: **My account**, **Team** (mark one entity as *your brand*), **Sources** (connector status & keys), **Budget** (choose the AI engine — Claude/OpenAI/Grok — its key & models, spend cap, admin cost controls), **Credits & Legal** |
 | **Reviews** *(beyond mentions)* | Star ratings from App Store, Google Places and Yelp, plus your own imported file — a self-contained section, since a rating already *is* the sentiment |

@@ -26,6 +26,10 @@ export function ExportBar() {
   const [days, setDays] = useState(30);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // I grafici costruiti in Studio Graph: non sono un elenco fisso, ogni
+  // progetto ha i suoi, quindi si chiedono al server invece di elencarli qui.
+  const [studio, setStudio] = useState<{ id: number; title: string }[]>([]);
+  const [studioOff, setStudioOff] = useState<Set<number>>(new Set());
 
   // Ricorda l'ultima configurazione
   useEffect(() => {
@@ -36,6 +40,13 @@ export function ExportBar() {
       if (saved.days) setDays(saved.days);
       if (Array.isArray(saved.selected)) setSelected(new Set(saved.selected));
     } catch { /* nessuna preferenza salvata */ }
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/studio')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setStudio(d.saved ?? []))
+      .catch(() => { /* export resta usabile anche senza */ });
   }, []);
 
   function persist(next: Partial<{ format: Format; scope: string; days: number; selected: string[] }>) {
@@ -54,8 +65,14 @@ export function ExportBar() {
     setBusy(true);
     try {
       const ids = scope === 'complete' ? ALL_IDS : [...selected];
-      if (ids.length === 0) { setBusy(false); return; }
+      // In "Full state" i grafici di Studio Graph ci sono tutti; in
+      // "Customize" quelli che non sono stati tolti.
+      const studioIds = studio
+        .filter((g) => scope === 'complete' || !studioOff.has(g.id))
+        .map((g) => g.id);
+      if (ids.length === 0 && studioIds.length === 0) { setBusy(false); return; }
       const qs = new URLSearchParams({ sections: ids.join(','), days: String(days) });
+      if (studioIds.length) qs.set('studio', studioIds.join(','));
       const res = await fetch(`/api/export/${format}?${qs}`);
       if (!res.ok) throw new Error('export failed');
       const blob = await res.blob();
@@ -131,7 +148,7 @@ export function ExportBar() {
               </div>
               <p className="mt-1.5 text-[11px] text-slate-600">
                 {scope === 'complete'
-                  ? `Everything the report can hold — all ${ALL_IDS.length} sections. Each format renders the ones that suit it (e.g. the raw mentions list goes to PDF/Word/Excel, not the slides).`
+                  ? `Everything the report can hold — all ${ALL_IDS.length} sections${studio.length ? `, plus the ${studio.length} chart${studio.length > 1 ? 's' : ''} you built in Studio Graph` : ''}. Each format renders the ones that suit it (e.g. the raw mentions list goes to PDF/Word/Excel, not the slides).`
                   : 'Pick exactly what to include. Sections that a format cannot show are skipped automatically.'}
               </p>
 
@@ -139,7 +156,10 @@ export function ExportBar() {
               {scope === 'custom' && (
                 <div className="mt-3 rounded-lg border border-[var(--border)] p-2">
                   <div className="mb-1 flex items-center justify-between px-1">
-                    <span className="text-xs text-slate-500">{selected.size} sections selected</span>
+                    <span className="text-xs text-slate-500">
+                      {selected.size} sections selected
+                      {studio.length > 0 && ` · ${studio.length - studioOff.size}/${studio.length} Studio Graph`}
+                    </span>
                     <div className="flex gap-2 text-xs">
                       <button onClick={() => { setSelected(new Set(ALL_IDS)); persist({ selected: ALL_IDS }); }} className="text-sky-400 hover:text-sky-300">all</button>
                       <button onClick={() => { setSelected(new Set()); persist({ selected: [] }); }} className="text-slate-500 hover:text-slate-300">none</button>
@@ -165,6 +185,33 @@ export function ExportBar() {
                         </div>
                       </div>
                     ))}
+
+                    {studio.length > 0 && (
+                      <div>
+                        <p className="px-1 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                          Studio Graph
+                        </p>
+                        <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
+                          {studio.map((g) => {
+                            const on = !studioOff.has(g.id);
+                            return (
+                              <button key={g.id} onClick={() => setStudioOff((prev) => {
+                                const next = new Set(prev);
+                                next.has(g.id) ? next.delete(g.id) : next.add(g.id);
+                                return next;
+                              })}
+                                title="Grafico costruito da te in Studio Graph"
+                                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition ${on ? 'text-slate-200' : 'text-slate-500'} hover:bg-white/5`}>
+                                <span className={`flex size-4 shrink-0 items-center justify-center rounded border ${on ? 'border-violet-500 bg-violet-500 text-slate-950' : 'border-[var(--border)]'}`}>
+                                  {on && <Check className="size-3" />}
+                                </span>
+                                {g.title}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -185,7 +232,8 @@ export function ExportBar() {
 
             {/* Azione */}
             <div className="border-t border-[var(--border)] px-5 py-3.5">
-              <button onClick={generate} disabled={busy || (scope === 'custom' && selected.size === 0)}
+              <button onClick={generate}
+                disabled={busy || (scope === 'custom' && selected.size === 0 && studioOff.size >= studio.length)}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50">
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <activeFormat.icon className="size-4" />}
                 {busy ? 'Generating file…' : `Generate ${activeFormat.label}`}

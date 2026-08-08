@@ -5,6 +5,7 @@ import {
   Plus, Trash2, ChevronUp, ChevronDown, Sparkles, Loader2, Save, Download,
   FileText, BarChart3, AlertTriangle, Check, MessageSquareText,
   Presentation, GitMerge, PenLine,
+  Shapes,
 } from 'lucide-react';
 import { EXPORT_SECTIONS, SECTION_GROUPS } from '@/lib/export-sections';
 
@@ -21,7 +22,8 @@ import { EXPORT_SECTIONS, SECTION_GROUPS } from '@/lib/export-sections';
 type Role = 'intro' | 'comment' | 'synthesis' | 'free';
 type Block =
   | { type: 'chart'; section: string }
-  | { type: 'text'; text: string; ai?: boolean; role?: Role };
+  | { type: 'text'; text: string; ai?: boolean; role?: Role }
+  | { type: 'studio'; chartId: number };
 type Page = { title?: string; blocks: Block[] };
 type Report = { id: number; title: string; days: number; pages: Page[]; updatedAt: string };
 
@@ -54,6 +56,9 @@ export function ReportBuilder() {
   // apre la lettura e uno che la chiude.
   const [request, setRequest] = useState<'intro' | 'comment' | 'both' | 'synthesis'>('comment');
   const [msg, setMsg] = useState<{ kind: 'ok' | 'warn'; text: string } | null>(null);
+  // I grafici costruiti in Studio Graph: entrano nel catalogo accanto a quelli
+  // di serie, perche per chi compone il report non c'e differenza.
+  const [studio, setStudio] = useState<{ id: number; title: string }[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/report/custom');
@@ -64,6 +69,13 @@ export function ReportBuilder() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetch('/api/studio')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setStudio(d.saved ?? []))
+      .catch(() => {});
+  }, []);
 
   const pages = current?.pages ?? [];
   const page = pages[pageIdx];
@@ -80,6 +92,13 @@ export function ReportBuilder() {
     const next = structuredClone(ps);
     if (!next[pageIdx]) next.push({ title: `Pagina ${next.length + 1}`, blocks: [] });
     next[pageIdx].blocks.push({ type: 'chart', section });
+    return next;
+  });
+
+  const addStudio = (chartId: number) => setPages((ps) => {
+    const next = structuredClone(ps);
+    if (!next[pageIdx]) next.push({ title: `Pagina ${next.length + 1}`, blocks: [] });
+    next[pageIdx].blocks.push({ type: 'studio', chartId });
     return next;
   });
 
@@ -161,6 +180,18 @@ export function ReportBuilder() {
   };
 
   /**
+   * La chiave con cui un blocco viene commentato: l'id della sezione per i
+   * grafici di serie, `studio:<id>` per quelli costruiti dall'utente. I testi
+   * non sono blocchi commentabili e restituiscono null.
+   */
+  const blockKey = (b: Block): string | null =>
+    b.type === 'chart' ? b.section : b.type === 'studio' ? `studio:${b.chartId}` : null;
+
+  const targetLabel = (key: string) => (key.startsWith('studio:')
+    ? studio.find((g) => g.id === Number(key.slice(7)))?.title ?? 'grafico di Studio Graph'
+    : LABEL[key] ?? key);
+
+  /**
    * Genera i testi per i grafici della pagina corrente, nel ruolo scelto.
    * Una sola richiesta per tutta la pagina, e ogni testo finisce nel punto che
    * il suo ruolo impone: la presentazione PRIMA del grafico, il commento DOPO,
@@ -182,15 +213,16 @@ export function ReportBuilder() {
 
     const targets: string[] = [];
     page.blocks.forEach((b, i) => {
-      if (b.type !== 'chart') return;
-      if (only && b.section !== only) return;
+      const key = blockKey(b);
+      if (!key) return;
+      if (only && key !== only) return;
       if (!only && request !== 'synthesis') {
         // Già coperto per tutto ciò che è stato chiesto: salta.
         const introDone = !wantsIntro || hasRole(i - 1, 'intro');
         const commentDone = !wantsComment || hasRole(i + 1, 'comment');
         if (introDone && commentDone) return;
       }
-      targets.push(b.section);
+      targets.push(key);
     });
     if (!targets.length) {
       setMsg({ kind: 'warn', text: 'Ogni grafico di questa pagina ha già il testo che hai chiesto.' });
@@ -202,7 +234,13 @@ export function ReportBuilder() {
     try {
       const res = await fetch('/api/report/comment', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sections: [...new Set(targets)], days: current.days, role: request }),
+        body: JSON.stringify({
+          // I grafici di serie e quelli di Studio Graph viaggiano insieme:
+          // il modello vede la pagina intera, come la vedrà chi legge.
+          sections: [...new Set(targets.filter((t) => !t.startsWith('studio:')))],
+          studio: [...new Set(targets.filter((t) => t.startsWith('studio:')))].map((t) => Number(t.slice(7))),
+          days: current.days, role: request,
+        }),
       });
       const d = await res.json();
       if (!res.ok) { setMsg({ kind: 'warn', text: d.error ?? 'Generazione fallita' }); return; }
@@ -230,10 +268,10 @@ export function ReportBuilder() {
         const blocks = next[pageIdx].blocks;
         // All'indietro: inserire un blocco non sposta gli indici già visitati.
         for (let i = blocks.length - 1; i >= 0; i--) {
-          const b = blocks[i];
-          if (b.type !== 'chart') continue;
-          if (only && b.section !== only) continue;
-          const got = comments[b.section];
+          const key = blockKey(blocks[i]);
+          if (!key) continue;
+          if (only && key !== only) continue;
+          const got = comments[key];
           if (!got) continue;
 
           // Il commento va DOPO: si scrive per primo, così l'inserimento
@@ -263,7 +301,7 @@ export function ReportBuilder() {
       setMsg({
         kind: missing.length ? 'warn' : 'ok',
         text: missing.length
-          ? `Testi scritti: ${written}. Senza testo: ${missing.map((m) => LABEL[m] ?? m).join(', ')}${emptyIds.length ? ' (nessun dato nel periodo scelto)' : ''}.`
+          ? `Testi scritti: ${written}. Senza testo: ${missing.map(targetLabel).join(', ')}${emptyIds.length || (d.emptyStudio ?? []).length ? ' (nessun dato nel periodo scelto)' : ''}.`
           : `${written} testi generati. Rileggili prima di esportare: la responsabilità editoriale resta tua.`,
       });
     } catch (e) {
@@ -279,7 +317,9 @@ export function ReportBuilder() {
   };
 
   const chartCount = useMemo(
-    () => pages.reduce((s, p) => s + p.blocks.filter((b) => b.type === 'chart').length, 0),
+    // Anche i grafici di Studio Graph sono grafici: il contatore in testata
+    // deve dire quanti ne uscirà, non quanti ne conosce il catalogo di serie.
+    () => pages.reduce((s, p) => s + p.blocks.filter((b) => b.type === 'chart' || b.type === 'studio').length, 0),
     [pages],
   );
   const textCount = useMemo(
@@ -374,6 +414,26 @@ export function ReportBuilder() {
                 </div>
               </div>
             ))}
+
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-600">Studio Graph</p>
+              {studio.length ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {studio.map((g) => (
+                    <button key={g.id} onClick={() => addStudio(g.id)}
+                      title="Grafico costruito da te in Studio Graph"
+                      className="rounded-lg border border-violet-500/30 px-2 py-1 text-[11px] text-violet-200 hover:border-violet-400/60 hover:bg-violet-500/10">
+                      + {g.title}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] leading-snug text-slate-600">
+                  Nessuno ancora. In <a href="/graph" className="text-sky-400 hover:underline">Studio Graph</a> puoi
+                  costruire un grafico scegliendo tu gli assi: una volta salvato lo ritrovi qui.
+                </p>
+              )}
+            </div>
           </div>
         </section>
 
@@ -443,7 +503,29 @@ export function ReportBuilder() {
                         className="text-slate-600 hover:text-slate-300 disabled:opacity-20"><ChevronDown className="size-3.5" /></button>
                     </div>
 
-                    {b.type === 'chart' ? (
+                    {b.type === 'studio' ? (
+                      <div className="flex flex-1 flex-wrap items-center gap-2">
+                        <Shapes className="size-4 text-violet-400" />
+                        <span className="text-sm text-slate-200">
+                          {studio.find((g) => g.id === b.chartId)?.title ?? 'Grafico di Studio Graph'}
+                        </span>
+                        {!studio.some((g) => g.id === b.chartId) && (
+                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">
+                            cancellato da Studio Graph
+                          </span>
+                        )}
+                        <button onClick={() => comment(`studio:${b.chartId}`)} disabled={!!busy}
+                          title={`Genera: ${REQUESTS.find((r) => r.key === request)?.label}`}
+                          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-violet-500/30 px-2 py-1 text-[11px] text-violet-300 hover:bg-violet-500/10 disabled:opacity-50">
+                          {busy === `comment-studio:${b.chartId}` ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                          genera
+                        </button>
+                        <button onClick={() => addText(i + 1)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] text-slate-400 hover:bg-white/5">
+                          <PenLine className="size-3" /> scrivi
+                        </button>
+                      </div>
+                    ) : b.type === 'chart' ? (
                       <div className="flex flex-1 flex-wrap items-center gap-2">
                         <BarChart3 className="size-4 text-sky-400" />
                         <span className="text-sm text-slate-200">{LABEL[b.section] ?? b.section}</span>

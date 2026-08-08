@@ -4,7 +4,8 @@ import {
   Paragraph, Table, TableCell, TableRow, TextRun, WidthType,
 } from 'docx';
 import { getCurrentProject } from '@/lib/data';
-import { briefToBlocks, collectExportData, parseExportOptions, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
+import { briefToBlocks, collectExportData, parseExportOptions, parseStudioIds, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
+import { resolveStudioBlocks } from '@/lib/studio';
 import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
 
 export const maxDuration = 60;
@@ -54,9 +55,13 @@ function table(headers: string[], rows: string[][]) {
 export async function GET(req: Request) {
   const project = await getCurrentProject();
   if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
-  const { sections, days } = parseExportOptions(new URL(req.url));
+  const url = new URL(req.url);
+  const { sections, days } = parseExportOptions(url);
   const has = (s: string) => sections.has(s as never);
-  const data = await collectExportData(project, days);
+  const [data, studio] = await Promise.all([
+    collectExportData(project, days),
+    resolveStudioBlocks(project.id, parseStudioIds(url)),
+  ]);
   const today = new Date().toLocaleDateString('en-US', { dateStyle: 'full' });
 
   const kpi = data.dashboard.kpi;
@@ -320,6 +325,80 @@ export async function GET(req: Request) {
   }
 
   // Note finali: informativa art. 50 in forma estesa.
+  // ── Persone (personal branding). Erano solo nel PDF: chi le sceglieva e
+  // poi esportava in Word non trovava niente, senza che nulla lo avvisasse.
+  const ppl = data.people;
+  if (has('people') && ppl.ranking.length > 1) {
+    children.push(h1('People — the team at a glance'));
+    children.push(table(
+      ['Person', 'Audience', 'Posts / month', 'Avg engagement'],
+      ppl.ranking.map((r) => [
+        r.name,
+        r.followers === null ? '—' : r.followers.toLocaleString('en-US'),
+        r.perMonth === null ? '—' : String(r.perMonth),
+        r.engagement === null ? '—' : String(Math.round(r.engagement)),
+      ]),
+    ));
+    children.push(p('Three different measures: whoever has the largest audience is not necessarily the one engaging it most.', { muted: true, size: 16 }));
+  }
+  if (has('peopleGrowth') && ppl.cards.some((x) => x.followers)) {
+    children.push(h1('Audience growth per person'));
+    const rows = ppl.cards.filter((x) => x.followers)
+      .sort((a, b) => b.followers!.gained - a.followers!.gained);
+    children.push(table(['Person', 'Gained', 'Now'], rows.map((x) => [
+      x.name,
+      `${x.followers!.gained >= 0 ? '+' : ''}${x.followers!.gained.toLocaleString('en-US')}`,
+      x.followers!.latest.toLocaleString('en-US'),
+    ])));
+    const span = rows[0]?.followers;
+    if (span) children.push(p(`Gained between ${span.from} and ${span.to}.`, { muted: true, size: 16 }));
+  }
+  if (has('peopleDetail') && ppl.cards.length) {
+    children.push(h1('Person cards'));
+    for (const c of ppl.cards) {
+      if (!c.followers && !c.rhythm && !c.averages.length) continue;
+      children.push(h2(c.name));
+      const bits: string[] = [];
+      if (c.followers) bits.push(`${c.followers.latest.toLocaleString('en-US')} followers (${c.followers.gained >= 0 ? '+' : ''}${c.followers.gained.toLocaleString('en-US')} since ${c.followers.from})`);
+      if (c.rhythm) bits.push(`${c.rhythm.perMonth} posts/month over ${c.rhythm.months} months${c.rhythm.trend !== null ? ` (${c.rhythm.trend >= 0 ? '+' : ''}${c.rhythm.trend}%)` : ''}`);
+      for (const a of c.averages.slice(0, 3)) bits.push(`${a.metric}: ${a.value}`);
+      if (bits.length) children.push(p(bits.join('  ·  '), { muted: true, size: 16 }));
+      if (c.formats.length) children.push(bullet(`Best format: ${c.formats[0].name} (avg engagement ${c.formats[0].avgEngagement} over ${c.formats[0].posts} posts)`));
+      if (c.audience.length) {
+        const a = c.audience[0];
+        children.push(bullet(`Audience by ${a.dimension}: ${a.rows.slice(0, 4).map((r) => `${r.name} ${(r.share * 100).toFixed(0)}%`).join(', ')}`));
+      }
+    }
+  }
+
+  // I grafici costruiti in Studio Graph: una tabella per ciascuno, con il
+  // proprio periodo dichiarato — è il suo, non quello del report.
+  for (const chart of studio.values()) {
+    children.push(h1(chart.title));
+    children.push(p(
+      `${chart.yLabel} per ${chart.xLabel}${chart.zLabel ? `, diviso per ${chart.zLabel}` : ''} · ultimi ${chart.days} giorni`,
+      { muted: true, size: 16 },
+    ));
+    if (!chart.rows.length) {
+      children.push(p('Nessun dato con questi campi nel periodo del grafico.', { muted: true }));
+      continue;
+    }
+    const num = (v: number) => (Number.isInteger(v) ? v.toLocaleString('en-US')
+      : v.toLocaleString('en-US', { maximumFractionDigits: 2 }));
+    const series = [...new Set(chart.rows.map((r) => r.z).filter(Boolean))] as string[];
+    if (series.length > 1) {
+      const cols = series.slice(0, 6);
+      const xs = [...new Set(chart.rows.map((r) => r.x))].slice(0, 40);
+      children.push(table([chart.xLabel, ...cols], xs.map((x) => [x, ...cols.map((z) => {
+        const v = chart.rows.filter((r) => r.x === x && r.z === z).reduce((a, r) => a + r.y, 0);
+        return v ? num(v) : '—';
+      })])));
+    } else {
+      children.push(table([chart.xLabel, chart.yLabel],
+        chart.rows.slice(0, 60).map((r) => [r.x, num(r.y)])));
+    }
+  }
+
   children.push(new Paragraph({
     spacing: { before: 400, after: 80 },
     children: [new TextRun({ text: 'NOTE', bold: true, size: 16, color: '94A3B8' })],

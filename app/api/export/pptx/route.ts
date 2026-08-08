@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import PptxGenJS from 'pptxgenjs';
 import { getCurrentProject } from '@/lib/data';
-import { briefToBlocks, collectExportData, parseExportOptions, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
+import { briefToBlocks, collectExportData, parseExportOptions, parseStudioIds, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
+import { resolveStudioBlocks } from '@/lib/studio';
 import { SOURCE_META } from '@/lib/connectors';
 import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
 
@@ -21,9 +22,13 @@ const SENTIMENT_COLORS: Record<string, string> = {
 export async function GET(req: Request) {
   const project = await getCurrentProject();
   if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
-  const { sections, days: rangeDays } = parseExportOptions(new URL(req.url));
+  const url = new URL(req.url);
+  const { sections, days: rangeDays } = parseExportOptions(url);
   const has = (s: string) => sections.has(s as never);
-  const data = await collectExportData(project, rangeDays);
+  const [data, studio] = await Promise.all([
+    collectExportData(project, rangeDays),
+    resolveStudioBlocks(project.id, parseStudioIds(url)),
+  ]);
 
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: 'WIDE', width: 13.33, height: 7.5 });
@@ -534,6 +539,82 @@ export async function GET(req: Request) {
       },
     }));
     s8.addText(lines, { x: 0.5, y: 1.3, w: 12.3, h: 5.7, lineSpacing: 16, valign: 'top' });
+  }
+
+  // ── Persone (personal branding): una slide di classifica e una di crescita.
+  const ppl = data.people;
+  if (has('people') && ppl.ranking.length > 1) {
+    const sp = newSlide();
+    sp.addText('People — the team at a glance', titleOpts);
+    sp.addTable(
+      [
+        ['Person', 'Audience', 'Posts / month', 'Avg engagement'].map((t) => ({
+          text: t, options: { bold: true, color: TEXT, fill: { color: PANEL } },
+        })),
+        ...ppl.ranking.slice(0, 12).map((r) => [
+          r.name,
+          r.followers === null ? '—' : r.followers.toLocaleString('en-US'),
+          r.perMonth === null ? '—' : String(r.perMonth),
+          r.engagement === null ? '—' : String(Math.round(r.engagement)),
+        ].map((t) => ({ text: t, options: { color: TEXT } }))),
+      ],
+      { x: 0.5, y: 1.4, w: 12.3, fontSize: 12, border: { pt: 1, color: '1E2A4A' }, align: 'left' },
+    );
+  }
+  if (has('peopleGrowth') && ppl.cards.some((x) => x.followers)) {
+    const sg2 = newSlide();
+    sg2.addText('Audience growth per person', titleOpts);
+    const rows = ppl.cards.filter((x) => x.followers)
+      .sort((a, b) => b.followers!.gained - a.followers!.gained).slice(0, 12);
+    const max = Math.max(1, ...rows.map((x) => Math.abs(x.followers!.gained)));
+    const rowH = Math.min(0.42, 5.2 / Math.max(1, rows.length));
+    rows.forEach((x, i) => {
+      const y = 1.5 + i * rowH;
+      sg2.addText(x.name, { x: 0.5, y, w: 3.9, h: rowH, fontSize: 11, color: TEXT, valign: 'middle' });
+      sg2.addShape('roundRect', {
+        x: 4.5, y: y + rowH * 0.22, w: Math.max(0.08, (Math.abs(x.followers!.gained) / max) * 6.6), h: rowH * 0.56,
+        fill: { color: x.followers!.gained >= 0 ? '34D399' : 'F87171' }, rectRadius: 0.03, line: { color: BG, width: 0 },
+      });
+      sg2.addText(`${x.followers!.gained >= 0 ? '+' : ''}${x.followers!.gained.toLocaleString('en-US')}  ·  now ${x.followers!.latest.toLocaleString('en-US')}`,
+        { x: 11.1, y, w: 1.8, h: rowH, fontSize: 10, color: MUTED, align: 'right', valign: 'middle' });
+    });
+  }
+
+  // ── I grafici costruiti in Studio Graph: una slide per ciascuno, a barre.
+  // Su una slide contano i pochi valori che si leggono da lontano, non tutti.
+  for (const chart of studio.values()) {
+    const sg = newSlide();
+    sg.addText(chart.title, titleOpts);
+    sg.addText(
+      `${chart.yLabel} per ${chart.xLabel}${chart.zLabel ? `, diviso per ${chart.zLabel}` : ''}  ·  ultimi ${chart.days} giorni`,
+      { x: 0.5, y: 1.05, w: 12.3, h: 0.35, fontSize: 12, color: MUTED },
+    );
+    if (!chart.rows.length) {
+      sg.addText('Nessun dato con questi campi nel periodo del grafico.',
+        { x: 0.5, y: 2.5, w: 12.3, h: 0.5, fontSize: 16, color: MUTED });
+      continue;
+    }
+    // Con più serie i valori dello stesso X si sommano: una slide non regge
+    // otto colori impilati, e il totale resta la lettura corretta.
+    const byX = new Map<string, number>();
+    for (const r of chart.rows) byX.set(r.x, (byX.get(r.x) ?? 0) + r.y);
+    const top = [...byX.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+    const max = Math.max(1, ...top.map(([, v]) => v));
+    const rowH = Math.min(0.42, 5.2 / top.length);
+    top.forEach(([label, value], i) => {
+      const y = 1.6 + i * rowH;
+      sg.addText(label, { x: 0.5, y, w: 3.9, h: rowH, fontSize: 11, color: TEXT, valign: 'middle' });
+      sg.addShape('roundRect', {
+        x: 4.5, y: y + rowH * 0.22, w: Math.max(0.08, (value / max) * 6.6), h: rowH * 0.56,
+        fill: { color: ENTITY_COLORS[i % ENTITY_COLORS.length] }, rectRadius: 0.03, line: { color: BG, width: 0 },
+      });
+      sg.addText(Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(2),
+        { x: 11.3, y, w: 1.5, h: rowH, fontSize: 11, color: MUTED, align: 'right', valign: 'middle' });
+    });
+    if (byX.size > top.length) {
+      sg.addText(`Altre ${byX.size - top.length} voci non mostrate.`,
+        { x: 0.5, y: 6.6, w: 12.3, h: 0.3, fontSize: 10, color: MUTED });
+    }
   }
 
   const buffer = (await pptx.write({ outputType: 'nodebuffer' })) as Buffer;

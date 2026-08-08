@@ -1,11 +1,18 @@
 import Link from 'next/link';
+import { desc, eq } from 'drizzle-orm';
 import {
   Activity, Boxes, Gauge, Globe2, Grid3x3, HeartPulse, LayoutGrid, Orbit, Scale,
   ScatterChart, ShieldAlert, Sparkles, Triangle, TrendingDown, Waypoints, Network, Workflow,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
+import { getDb } from '@/lib/db';
+import { studioCharts } from '@/lib/db/schema';
+import { getCurrentProject } from '@/lib/data';
+import { fieldLabel, type StudioSpec } from '@/lib/studio';
+import { InsightStudioCards } from '@/components/insight-studio-cards';
 
 export const metadata = { title: 'Explore insights' };
+export const dynamic = 'force-dynamic';
 
 // Hub degli insight: 16 visualizzazioni raggruppate per DOMANDA a cui rispondono.
 // In elenco nel menu erano illeggibili (metà delle voci) e il nome da solo non
@@ -76,16 +83,50 @@ const GROUPS: {
   },
 ];
 
-export default function InsightsHubPage() {
+export default async function InsightsHubPage() {
   const total = GROUPS.reduce((s, g) => s + g.items.length, 0);
+
+  // I grafici costruiti in Studio Graph da chi usa questo progetto. La domanda
+  // a cui rispondono non la scrive nessuno: la si legge dagli assi, che è
+  // esattamente ciò che il grafico è.
+  const project = await getCurrentProject();
+  let mine: { id: number; title: string; question: string }[] = [];
+  if (project) {
+    const db = await getDb();
+    const rows = await db.select().from(studioCharts)
+      .where(eq(studioCharts.projectId, project.id))
+      .orderBy(desc(studioCharts.updatedAt));
+    mine = rows.map((r) => {
+      const spec = r.spec as unknown as StudioSpec;
+      const src = spec.source === 'metrics' ? 'metrics' : 'mentions';
+      const parts = [
+        `${fieldLabel(src, spec.y)} per ${fieldLabel(src, spec.x)}`,
+        ...(spec.z ? [`diviso per ${fieldLabel(src, spec.z)}`] : []),
+        `ultimi ${spec.days} giorni`,
+      ];
+      return { id: r.id, title: r.title, question: `${parts.join(' · ')}.` };
+    });
+  }
   return (
     <>
       <PageHeader
         title="Explore insights"
         info={`All ${total} advanced visualizations, grouped by the question they answer rather than by chart type. Each one runs on the mentions your project has collected; the AI-powered ones (clusters, cause & effect) are generated on demand and cached for the day.`}
-        subtitle={`${total} ways to read the same conversation, grouped by the question you are trying to answer. Every card says what it is for — pick the question, not the chart.`}
+        subtitle={`${total} ways to read the same conversation${mine.length ? `, più ${mine.length} che hai costruito tu` : ''}, grouped by the question you are trying to answer. Every card says what it is for — pick the question, not the chart.`}
       />
       <div className="flex flex-col gap-6">
+        {mine.length > 0 && (
+          <section>
+            <div className="mb-2 flex items-baseline gap-2">
+              <h2 className="text-sm font-semibold text-slate-200">I tuoi grafici</h2>
+              <span className="text-[11px] text-slate-600">
+                costruiti da te in <Link href="/graph" className="text-violet-400 hover:underline">Studio Graph</Link> — solo questi si possono togliere
+              </span>
+            </div>
+            <InsightStudioCards charts={mine} />
+          </section>
+        )}
+
         {GROUPS.map((g) => (
           <section key={g.title}>
             <div className="mb-2 flex items-baseline gap-2">

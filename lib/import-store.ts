@@ -39,6 +39,16 @@ export type ImportFileRow = {
   metricMap: Record<string, unknown> | null;
   extras: Record<string, string>;
   archetype: string | null; people: boolean;
+  /**
+   * Quante righe di questo file sono DAVVERO in archivio adesso.
+   *
+   * Non è `report.inserted`: quello è il verbale di com'è andata quel giorno.
+   * Se nel frattempo il progetto è stato ripulito, o la mappatura è cambiata
+   * senza reimportare, i due numeri divergono — ed è proprio la divergenza che
+   * l'utente non ha modo di vedere, e che gli fa dire "non capisco se è
+   * andata bene".
+   */
+  inArchive: number;
   createdAt: Date; importedAt: Date | null;
 };
 
@@ -120,6 +130,19 @@ export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
   const rows = await db.select().from(importFiles)
     .where(eq(importFiles.projectId, projectId))
     .orderBy(desc(importFiles.createdAt));
+
+  // Due conteggi soli per tutto il progetto: quello che c'è per davvero.
+  const [mCounts, pCounts] = await Promise.all([
+    db.select({ fileId: mentions.importFileId, n: sql<number>`count(*)` })
+      .from(mentions).where(eq(mentions.projectId, projectId)).groupBy(mentions.importFileId),
+    db.select({ fileId: metricPoints.importFileId, n: sql<number>`count(*)` })
+      .from(metricPoints).where(eq(metricPoints.projectId, projectId)).groupBy(metricPoints.importFileId),
+  ]);
+  const archive = new Map<number, number>();
+  for (const r of [...mCounts, ...pCounts]) {
+    if (r.fileId !== null) archive.set(r.fileId, (archive.get(r.fileId) ?? 0) + Number(r.n));
+  }
+
   return rows.map((r) => ({
     id: r.id, filename: r.filename, sizeBytes: r.sizeBytes, rowCount: r.rowCount,
     columns: r.columns, profiles: (r.profiles ?? []) as ColumnProfile[],
@@ -129,6 +152,7 @@ export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
     sheetName: r.sheetName ?? null, kind: r.kind, metricMap: r.metricMap ?? null,
     archetype: r.archetype ?? null, people: r.people === 1,
     extras: r.extras ?? {},
+    inArchive: archive.get(r.id) ?? 0,
     createdAt: r.createdAt, importedAt: r.importedAt,
   }));
 }
@@ -462,4 +486,227 @@ export async function auditProject(projectId: number): Promise<FileAudit[]> {
     });
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Il controllo a campione.
+//
+// I conteggi dicono "ho creato 130 contenuti", e restano da credere sulla
+// parola. La verifica che una persona fa davvero è un'altra: apre il file,
+// guarda la riga 7 e controlla che in Radar ci sia quella riga.
+//
+// Qui si fa esattamente questo — si rilegge la riga grezza, la si ritrasforma
+// con la mappatura corrente e si va a RIPRENDERE dal database il record che ne
+// è nato. Non è una simulazione: se il record non c'è, la spunta non arriva.
+// ---------------------------------------------------------------------------
+
+export type SpotCheckField = {
+  label: string;
+  /** Il valore così com'era nel foglio. */
+  fromFile: string;
+  /** Il valore che Radar ha in archivio. */
+  inRadar: string;
+  ok: boolean;
+};
+
+export type SpotCheckRow = {
+  /** Riga numerata come la vede l'utente in Excel (l'intestazione è la 1). */
+  rowNumber: number;
+  found: boolean;
+  fields: SpotCheckField[];
+  /** Le colonne conservate come campi extra: si vede che non si perdono. */
+  extras: { label: string; value: string }[];
+};
+
+export type SpotCheck = {
+  fileId: number;
+  label: string;
+  kind: 'mentions' | 'metrics';
+  rows: SpotCheckRow[];
+  checked: number;
+  matched: number;
+  note?: string;
+  /**
+   * Quante righe la mappatura di oggi produrrebbe ma in archivio non ci sono.
+   * Non è un errore di lettura: è un archivio più vecchio della mappatura, e
+   * si risolve rifacendo l'import. Distinguere i due casi è tutto: "la riga
+   * non è entrata" e "l'hai importata prima di cambiare le colonne" chiedono
+   * due gesti diversi.
+   */
+  stale?: number;
+};
+
+const showCell = (v: unknown): string => {
+  if (v === null || v === undefined || v === '') return '(vuoto)';
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'number') return v.toLocaleString('it-IT');
+  return String(v).slice(0, 160);
+};
+
+/** Confronto tollerante: 1.234 e "1234", spazi e maiuscole non sono differenze. */
+const sameCell = (a: unknown, b: unknown): boolean => {
+  if (a instanceof Date || b instanceof Date) {
+    const da = a instanceof Date ? a.getTime() : new Date(String(a)).getTime();
+    const dbt = b instanceof Date ? b.getTime() : new Date(String(b)).getTime();
+    return Number.isFinite(da) && Number.isFinite(dbt) && Math.abs(da - dbt) < 1000;
+  }
+  const na = Number(a); const nb = Number(b);
+  if (a !== null && b !== null && a !== '' && b !== '' && Number.isFinite(na) && Number.isFinite(nb)) {
+    return Math.abs(na - nb) < 0.005;
+  }
+  const norm = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return norm(a) === norm(b);
+};
+
+export async function spotCheck(fileId: number, projectId: number, n = 3): Promise<SpotCheck> {
+  const db = await getDb();
+  const [file] = await db.select().from(importFiles)
+    .where(and(eq(importFiles.id, fileId), eq(importFiles.projectId, projectId)));
+  if (!file) throw new Error('File non trovato');
+
+  const base: SpotCheck = {
+    fileId,
+    label: file.sheetName ?? file.filename,
+    kind: file.kind as 'mentions' | 'metrics',
+    rows: [], checked: 0, matched: 0,
+  };
+  if (file.status !== 'imported') return { ...base, note: 'Questo foglio non è ancora stato importato.' };
+  if (file.rawPurged === 1) {
+    return { ...base, note: 'Le righe originali di questo file sono state eliminate: il confronto con il foglio non è più possibile.' };
+  }
+
+  const rawRows = await db.select({ data: importRows.data, rowIndex: importRows.rowIndex })
+    .from(importRows).where(eq(importRows.fileId, fileId)).orderBy(asc(importRows.rowIndex));
+  if (!rawRows.length) return { ...base, note: 'Nessuna riga originale conservata per questo file.' };
+
+  // Prima, centrale e ultima riga: un disallineamento si vede agli estremi,
+  // non nelle prime tre righe, che sono quelle che uno guarda comunque.
+  const take = Math.min(n, rawRows.length);
+  const picks = [...new Set(Array.from({ length: take }, (_, i) => (take === 1
+    ? 0
+    : Math.round((i * (rawRows.length - 1)) / (take - 1)))))];
+
+  const extrasMap = (file.extras ?? {}) as Record<string, string>;
+  const all = rawRows.map((r) => r.data as Record<string, unknown>);
+  const excelRow = (i: number) => rawRows[i].rowIndex + 2;
+
+  if (file.kind === 'mentions') {
+    const map = { ...file.mapping, extras: extrasMap } as unknown as ColumnMap;
+    // Si ri-deriva TUTTO il file: l'id esterno dipende anche dalla deduplica,
+    // che dipende dalle righe viste prima. Una riga da sola darebbe un id
+    // che in archivio non esiste.
+    const { rows: norm } = deriveRows(all, map, fileId);
+
+    // Tutti gli id in archivio per questo file: serve a capire se la
+    // differenza è di questa riga o dell'intero foglio.
+    const storedIds = new Set((await db.select({ ext: mentions.externalId }).from(mentions)
+      .where(and(eq(mentions.projectId, projectId), eq(mentions.importFileId, fileId))))
+      .map((r) => r.ext));
+    base.stale = norm.filter((n) => !storedIds.has(n.externalId)).length;
+
+    for (const i of picks) {
+      base.checked++;
+      const derived = norm.find((x) => x.rowIndex === i);
+      if (!derived) {
+        // Non è un difetto: la riga può essere stata scartata per un motivo
+        // che il registro sopra ha già spiegato (vuota, o doppia).
+        base.rows.push({ rowNumber: excelRow(i), found: false, fields: [], extras: [] });
+        continue;
+      }
+      const [stored] = await db.select().from(mentions).where(and(
+        eq(mentions.projectId, projectId),
+        eq(mentions.importFileId, fileId),
+        eq(mentions.externalId, derived.externalId),
+      ));
+      if (stored) base.matched++;
+
+      const eng = (stored?.engagement ?? {}) as Record<string, number | undefined>;
+      const candidates: [string, unknown, unknown][] = [
+        ['Testo', derived.content, stored?.content],
+        ['Titolo', derived.title, stored?.title],
+        ['Data', derived.publishedAt, stored?.publishedAt],
+        ['Autore', derived.author, stored?.author],
+        ['Like', derived.likes, eng.likes],
+        ['Commenti', derived.comments, eng.comments],
+        ['Condivisioni', derived.shares, eng.shares],
+        ['Visualizzazioni', derived.views, eng.views],
+      ];
+      base.rows.push({
+        rowNumber: excelRow(i),
+        found: Boolean(stored),
+        fields: candidates
+          .filter(([, fromFile]) => fromFile !== null && fromFile !== undefined && fromFile !== '')
+          .map(([label, fromFile, inRadar]) => ({
+            label,
+            fromFile: showCell(fromFile),
+            inRadar: stored ? showCell(inRadar) : '—',
+            ok: Boolean(stored) && sameCell(fromFile, inRadar),
+          })),
+        extras: Object.entries(extrasMap)
+          .map(([col, label]) => ({ label, value: showCell(all[i][col]) }))
+          .filter((x) => x.value !== '(vuoto)')
+          .slice(0, 6),
+      });
+    }
+    return base;
+  }
+
+  // --- Fogli di misure ---------------------------------------------------
+  // Una riga produce PIÙ punti (uno per colonna di valore) e la data si riempie
+  // a scendere: per sapere quali punti vengono dalla riga i si deriva fino a i
+  // e fino a i-1, e la differenza è quello che ha prodotto lei.
+  const metricMap = (file.metricMap ?? {}) as unknown as MetricMap;
+  const fallback = file.sheetName ?? file.filename;
+  for (const i of picks) {
+    base.checked++;
+    const upTo = deriveMetrics(all.slice(0, i + 1), metricMap, fallback).points;
+    const before = i === 0 ? 0 : deriveMetrics(all.slice(0, i), metricMap, fallback).points.length;
+    const mine = upTo.slice(before);
+    if (!mine.length) {
+      base.rows.push({ rowNumber: excelRow(i), found: false, fields: [], extras: [] });
+      continue;
+    }
+
+    const fields: SpotCheckField[] = [];
+    let found = false;
+    for (const p of mine.slice(0, 6)) {
+      // Entità + metrica + data NON è una chiave: un foglio di venticinque
+      // video al mese ha venticinque righe con gli stessi tre valori. Si
+      // prendono tutti i candidati e si cerca il valore fra loro, altrimenti
+      // il confronto pesca la riga di un altro video e grida al lupo.
+      const candidates = await db.select({ value: metricPoints.value, dims: metricPoints.dims })
+        .from(metricPoints).where(and(
+          eq(metricPoints.projectId, projectId),
+          eq(metricPoints.importFileId, fileId),
+          eq(metricPoints.entity, p.entity),
+          eq(metricPoints.metric, p.metric),
+          eq(metricPoints.date, p.date),
+        ));
+      // Quando le dimensioni distinguono le righe (l'URL del video, il
+      // formato) si usa quella per puntare alla riga giusta.
+      const key = JSON.stringify(p.dims ?? {});
+      const exact = candidates.filter((c) => JSON.stringify(c.dims ?? {}) === key);
+      const pool = exact.length ? exact : candidates;
+      const hit = pool.find((c) => sameCell(p.value, c.value));
+      if (pool.length) found = true;
+      fields.push({
+        label: `${p.entity} · ${p.metric}`,
+        fromFile: showCell(p.value),
+        inRadar: hit ? showCell(hit.value)
+          : pool.length ? showCell(pool[0].value) : '—',
+        ok: Boolean(hit),
+      });
+    }
+    if (found) base.matched++;
+    base.rows.push({
+      rowNumber: excelRow(i),
+      found,
+      fields,
+      extras: (metricMap.dims ?? [])
+        .map((c) => ({ label: c, value: showCell(all[i][c]) }))
+        .filter((x) => x.value !== '(vuoto)')
+        .slice(0, 6),
+    });
+  }
+  return base;
 }

@@ -31,6 +31,20 @@ export function parseExportOptions(url: URL): { sections: Set<SectionId>; days: 
   return { sections: new Set(ids.length ? ids : ALL_SECTION_IDS), days };
 }
 
+/**
+ * Legge ?studio=1,2,3 — i grafici costruiti in Studio Graph da includere.
+ *
+ * Vivono fuori dal catalogo delle sezioni perché non sono un elenco fisso: ogni
+ * progetto ha i suoi, e il report salva l'ID, non i numeri.
+ */
+export function parseStudioIds(url: URL): number[] {
+  const raw = url.searchParams.get('studio');
+  if (!raw) return [];
+  return [...new Set(raw.split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0))].slice(0, 30);
+}
+
 /** Tutti i dati del progetto che finiscono negli export (Excel, Word, PPT, PDF). */
 export async function collectExportData(project: Project, days = 30) {
   const db = await getDb();

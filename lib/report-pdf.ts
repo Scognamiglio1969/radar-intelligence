@@ -601,7 +601,21 @@ export const ROLE_STYLE: Record<CommentRole, { label: string; color: string }> =
 /** Un blocco di report personalizzato: un grafico oppure un commento. */
 export type ReportBlock =
   | { type: 'chart'; section: SectionId }
-  | { type: 'text'; text: string; ai?: boolean; role?: CommentRole };
+  | { type: 'text'; text: string; ai?: boolean; role?: CommentRole }
+  | { type: 'studio'; chartId: number };
+
+/**
+ * Un grafico di Studio Graph già eseguito. Il PDF non interroga il database:
+ * riceve i numeri già pronti, come per ogni altra sezione.
+ */
+export type StudioRendered = {
+  title: string;
+  xLabel: string; yLabel: string; zLabel?: string;
+  /** Il periodo del grafico: è il suo, non quello del report. */
+  days: number;
+  palette: string[];
+  rows: { x: string; y: number; z?: string }[];
+};
 
 export type ReportPage = { title?: string; blocks: ReportBlock[] };
 
@@ -613,11 +627,77 @@ type BuildOptions = {
   sections?: Set<string>;
   /** Report personalizzato: pagine composte dall'utente. Vince su `sections`. */
   pages?: ReportPage[];
+  /** I grafici di Studio Graph citati dalle pagine, già eseguiti. */
+  studio?: Map<number, StudioRendered>;
   subtitle?: string;
 };
 
+/**
+ * Un grafico di Studio Graph dentro il PDF.
+ *
+ * Con una sola serie diventa una classifica a barre; con piu serie una
+ * tabella, perche impilare otto colori su una pagina stampata in bianco e nero
+ * non si legge. La forma scelta a schermo resta quella dello schermo: qui
+ * conta che i numeri arrivino leggibili.
+ */
+function renderStudio(c: Ctx, chart: StudioRendered, reportDays: number) {
+  c.heading(chart.title);
+  // Un grafico di Studio Graph porta con sé il proprio periodo, scelto quando
+  // è stato costruito. Se non è quello dichiarato in copertina va detto qui,
+  // altrimenti il lettore attribuisce alla pagina un arco di tempo che non ha.
+  const period = chart.days === reportDays
+    ? `ultimi ${chart.days} giorni`
+    : `ultimi ${chart.days} giorni — periodo proprio del grafico, diverso dai ${reportDays} del report`;
+  // Se il titolo è quello proposto in automatico ("Y per X") la didascalia non
+  // lo ripete: dice solo quello che il titolo non dice.
+  const what = `${chart.yLabel} per ${chart.xLabel}`;
+  const said = chart.title.trim().toLowerCase() === what.toLowerCase();
+  const parts = [
+    ...(said ? [] : [what]),
+    ...(chart.zLabel ? [`diviso per ${chart.zLabel}`] : []),
+    period,
+  ];
+  c.para(`${parts.join(' · ')}.`, { size: 8.5, color: MUTED, gap: 0.5 });
+  if (!chart.rows.length) {
+    c.para('Nessun dato con questi campi nel periodo del report.', { size: 9, color: MUTED });
+    return;
+  }
+
+  const series = [...new Set(chart.rows.map((r) => r.z).filter(Boolean))] as string[];
+  const fmtN = (n: number) => (Number.isInteger(n) ? n.toLocaleString('en-US')
+    : n.toLocaleString('en-US', { maximumFractionDigits: 2 }));
+
+  if (series.length < 2) {
+    const items = chart.rows.slice(0, 25).map((r, i) => ({
+      label: r.x, value: r.y, color: chart.palette[i % chart.palette.length],
+    }));
+    c.hbars(items);
+    if (chart.rows.length > items.length) {
+      c.para(`Altre ${chart.rows.length - items.length} voci non mostrate.`, { size: 8, color: MUTED });
+    }
+    return;
+  }
+
+  const cols = series.slice(0, 5);
+  const xs = [...new Set(chart.rows.map((r) => r.x))].slice(0, 20);
+  const cell = (x: string, z: string) => {
+    const v = chart.rows.filter((r) => r.x === x && r.z === z).reduce((s2, r) => s2 + r.y, 0);
+    return v ? fmtN(v) : '—';
+  };
+  const w = 0.34 / cols.length;
+  c.table(
+    [chart.xLabel, ...cols],
+    xs.map((x) => [x, ...cols.map((z) => cell(x, z))]),
+    [0.66, ...cols.map(() => w)],
+    ['left', ...cols.map(() => 'right' as const)],
+  );
+  if (series.length > cols.length) {
+    c.para(`Altre ${series.length - cols.length} serie non mostrate: nel PDF la tabella resta leggibile fino a cinque colonne.`, { size: 8, color: MUTED });
+  }
+}
+
 export async function buildReportPdf(opts: BuildOptions): Promise<Buffer> {
-  const { project, data, days, sections, pages, subtitle } = opts;
+  const { project, data, days, sections, pages, subtitle, studio } = opts;
 
   const doc = new PDFDocument({
     size: 'A4',
@@ -677,6 +757,13 @@ export async function buildReportPdf(opts: BuildOptions): Promise<Buffer> {
           doc.fillColor(TEXT);
           doc.y = y1;
           doc.moveDown(0.6);
+        } else if (block.type === 'studio') {
+          const chart = studio?.get(block.chartId);
+          if (!chart) {
+            c.para('Grafico di Studio Graph non piu disponibile: e stato cancellato dopo essere stato inserito nel report.', { size: 9, color: MUTED });
+            continue;
+          }
+          renderStudio(c, chart, days);
         } else {
           const s = SECTION_RENDERERS[block.section];
           if (!s) continue;
@@ -692,6 +779,9 @@ export async function buildReportPdf(opts: BuildOptions): Promise<Buffer> {
       if (!s.has(data)) continue;
       s.render(c, data, { days });
     }
+    // I grafici costruiti in Studio Graph chiudono il report: non hanno un
+    // posto nell'ordine canonico perché non esistevano quando è stato scritto.
+    if (studio) for (const chart of studio.values()) renderStudio(c, chart, days);
   }
 
   // ---- Note (informativa AI Act) ----

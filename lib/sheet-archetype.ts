@@ -55,7 +55,7 @@ const BREAKDOWN_DIM = /(azienda|company|job title|ruolo|role|location|luogo|sett
  * nell'elenco delle persone. Una scheda personale intestata a una metrica è il
  * genere di errore che fa perdere fiducia in tutto il resto.
  */
-const METRIC_WORD = /\b(avg|average|medi[aeo]|total[ei]?|sum|somma|rate|tasso|perc|engagement|impression\w*|reach|follower\w*|iscritti|subscriber\w*|like|dislike|preferiti|reaction\w*|reazion\w*|comment\w*|rispost\w*|repl\w*|condivision\w*|share\w*|reshare\w*|repost|retweet|update\w*|post|stor(y|ies|ia|ie)|reel\w*|video|view\w*|visualizzazion\w*|spettatori|interazion\w*|interaction\w*|clic\w*|click\w*|copertura|salvataggi|segnalibri|bookmark\w*|durata|tempo|watch\w*|delta|count|rank\w*|mes[ei]|ann[oi]|month|year|dat[ae]|canale|channel|profil\w*|panoramica)\b/i;
+const METRIC_WORD = /\b(avg|average|medi[aeo]|total[ei]?|sum|somma|rate|tasso|perc|engagement|impression\w*|reach|follower\w*|iscritti|subscriber\w*|like|dislike|preferiti|reaction\w*|reazion\w*|comment\w*|rispost\w*|repl\w*|condivision\w*|share\w*|reshare\w*|repost|retweet|update\w*|post|stor(y|ies|ia|ie)|reel\w*|video|view\w*|visualizzazion\w*|spettatori|interazion\w*|interaction\w*|clic\w*|click\w*|copertura|salvataggi|segnalibri|bookmark\w*|durata|tempo|watch\w*|delta|count|rank\w*|mes[ei]|ann[oi]|month|year|dat[ae]|canale|channel|profil\w*|panoramica|pubblicazion\w*|contenut\w*|articol\w*|menzion\w*|citazion\w*|uscite|crescita|audience|pubblico|punteggi\w*|frequenza|ritmo|performance|attivit\w*|risultat\w*|obiettiv\w*|budget|spesa|costo|valore|volum\w*)\b/i;
 
 export function looksLikePerson(name: string): boolean {
   const s = name.trim();

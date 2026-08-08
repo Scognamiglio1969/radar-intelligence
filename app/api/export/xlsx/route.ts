@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { getCurrentProject } from '@/lib/data';
-import { collectExportData, parseExportOptions, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
+import { collectExportData, parseExportOptions, parseStudioIds, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
+import { resolveStudioBlocks } from '@/lib/studio';
 import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
 
 export const maxDuration = 60;
@@ -26,9 +27,13 @@ function sheet(wb: ExcelJS.Workbook, name: string, columns: { header: string; ke
 export async function GET(req: Request) {
   const project = await getCurrentProject();
   if (!project) return NextResponse.json({ error: 'no project' }, { status: 404 });
-  const { sections, days } = parseExportOptions(new URL(req.url));
+  const url = new URL(req.url);
+  const { sections, days } = parseExportOptions(url);
   const has = (s: string) => sections.has(s as never);
-  const data = await collectExportData(project, days);
+  const [data, studio] = await Promise.all([
+    collectExportData(project, days),
+    resolveStudioBlocks(project.id, parseStudioIds(url)),
+  ]);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Radar By Scognamiglio 2026';
@@ -385,6 +390,75 @@ export async function GET(req: Request) {
     const row = wsBr.addRow({ d: b.briefDate, b: b.content });
     row.getCell('b').alignment = { wrapText: true, vertical: 'top' };
   }
+  }
+
+  // ── Persone (personal branding): un foglio per la classifica e uno per le
+  // schede. Mancavano del tutto: sceglierle e non trovarle era peggio che non
+  // poterle scegliere.
+  const ppl = data.people;
+  if (has('people') && ppl.ranking.length > 1) {
+    const ws = sheet(wb, 'People', [
+      { header: 'Person', key: 'name', width: 30 },
+      { header: 'Audience', key: 'followers', width: 14 },
+      { header: 'Posts / month', key: 'perMonth', width: 14 },
+      { header: 'Avg engagement', key: 'engagement', width: 16 },
+    ]);
+    for (const r of ppl.ranking) {
+      ws.addRow({
+        name: r.name,
+        followers: r.followers ?? '',
+        perMonth: r.perMonth ?? '',
+        engagement: r.engagement === null ? '' : Math.round(r.engagement),
+      });
+    }
+  }
+  if ((has('peopleGrowth') || has('peopleDetail')) && ppl.cards.length) {
+    const ws = sheet(wb, 'Person cards', [
+      { header: 'Person', key: 'name', width: 30 },
+      { header: 'Followers now', key: 'latest', width: 15 },
+      { header: 'Gained', key: 'gained', width: 12 },
+      { header: 'From', key: 'from', width: 12 },
+      { header: 'To', key: 'to', width: 12 },
+      { header: 'Posts / month', key: 'perMonth', width: 14 },
+      { header: 'Trend %', key: 'trend', width: 10 },
+      { header: 'Best format', key: 'format', width: 26 },
+      { header: 'Audience split', key: 'audience', width: 46 },
+    ]);
+    for (const c of ppl.cards) {
+      const a = c.audience[0];
+      ws.addRow({
+        name: c.name,
+        latest: c.followers?.latest ?? '',
+        gained: c.followers?.gained ?? '',
+        from: c.followers?.from ?? '',
+        to: c.followers?.to ?? '',
+        perMonth: c.rhythm?.perMonth ?? '',
+        trend: c.rhythm?.trend ?? '',
+        format: c.formats[0] ? `${c.formats[0].name} (${c.formats[0].avgEngagement})` : '',
+        audience: a ? `${a.dimension}: ${a.rows.slice(0, 4).map((r) => `${r.name} ${(r.share * 100).toFixed(0)}%`).join(', ')}` : '',
+      });
+    }
+  }
+
+  // Un foglio per ogni grafico di Studio Graph, in forma lunga: chi apre un
+  // Excel vuole i dati per rifarci sopra una pivot, non un'immagine.
+  const usedNames = new Set(wb.worksheets.map((w) => w.name.toLowerCase()));
+  for (const [id, chart] of studio) {
+    // I nomi dei fogli Excel non ammettono : \\ / ? * [ ] e si fermano a 31 caratteri.
+    const base = (chart.title.replace(/[:\\/?*[\]]/g, ' ').trim() || `Grafico ${id}`).slice(0, 28);
+    let name = base;
+    for (let i = 2; usedNames.has(name.toLowerCase()); i++) name = `${base.slice(0, 26)} ${i}`;
+    usedNames.add(name.toLowerCase());
+
+    const ws = sheet(wb, name, [
+      { header: chart.xLabel || 'X', key: 'x', width: 34 },
+      ...(chart.zLabel ? [{ header: chart.zLabel, key: 'z', width: 24 }] : []),
+      { header: chart.yLabel || 'Valore', key: 'y', width: 18 },
+    ]);
+    for (const r of chart.rows) ws.addRow({ x: r.x, z: r.z ?? '', y: r.y });
+    // Il periodo del grafico è suo, non del report: va scritto dove sta il dato.
+    const note = ws.addRow([`Periodo del grafico: ultimi ${chart.days} giorni · generato il ${new Date().toLocaleDateString('it-IT')}`]);
+    note.font = { color: { argb: 'FF64748B' }, size: 9 };
   }
 
   // Se nessun foglio è stato aggiunto, evita un file corrotto

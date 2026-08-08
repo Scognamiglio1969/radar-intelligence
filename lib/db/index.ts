@@ -372,6 +372,15 @@ const DDL = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`,
   `CREATE INDEX IF NOT EXISTS periodic_reports_project ON periodic_reports (project_id, cadence, created_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS studio_charts (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    spec JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS studio_charts_project ON studio_charts (project_id)`,
   `ALTER TABLE periodic_reports ADD COLUMN IF NOT EXISTS pov JSONB`,
 ];
 

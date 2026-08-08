@@ -17,6 +17,17 @@ test('una metrica non è una persona', () => {
   }
 });
 
+test('una colonna di metrica in italiano non è una persona', () => {
+  // "Pubblicazioni" è comparso come scheda persona in una verifica vera: nei
+  // fogli larghi il nome della metrica sta dove starebbe il nome, e senza
+  // questo elenco diventa un manager che non esiste.
+  for (const m of ['Pubblicazioni', 'Contenuti', 'Menzioni', 'Citazioni', 'Crescita',
+    'Audience', 'Pubblico', 'Punteggio', 'Frequenza', 'Performance', 'Volume',
+    'Attività', 'Risultati', 'Valore']) {
+    assert.equal(looksLikePerson(m), false, `"${m}" non deve passare per una persona`);
+  }
+});
+
 test('un nome di persona viene riconosciuto', () => {
   for (const n of ['Donnet', 'Marco Sesana', 'Philippe Donnet', 'Anchustegui',
     'Gurtler', 'Riccardo Acquaviva', "Cécile Paillard"]) {

@@ -24,3 +24,50 @@ export const OVERFLOW_COLOR = '#64748b';
 /** Colore di un'entità per POSIZIONE STABILE (ordine di creazione), non per
  *  rango: un filtro che cambia la classifica non deve ricolorare chi resta. */
 export const entityColor = (i: number): string => ENTITY_COLORS[i] ?? OVERFLOW_COLOR;
+
+// ---------------------------------------------------------------------------
+// Le palette di Studio Graph.
+//
+// Non sono "temi" estetici: sono i tre MESTIERI che il colore può fare, e la
+// scelta giusta dipende dalla domanda, non dal gusto.
+//
+// Una nota che vale più di tutte: la palette categorica è validata NELL'ORDINE
+// in cui è scritta. Riordinarla la rompe — le stesse otto tinte in ordine
+// diverso mettono vicini rosa e verde, che per un daltonico deuteranope
+// distano ΔE 1,6, cioè sono lo stesso colore. Per questo non esiste
+// un'opzione "cambia ordine": sarebbe un modo silenzioso di rendere il
+// grafico illeggibile a una persona su dodici.
+// ---------------------------------------------------------------------------
+
+export type PaletteId = 'categorical' | 'sequential' | 'diverging';
+
+export const PALETTES: Record<PaletteId, {
+  label: string; use: string; colors: string[];
+}> = {
+  categorical: {
+    label: 'Identità',
+    use: 'Serie diverse fra loro: canali, persone, temi. Il colore dice CHI, non quanto.',
+    colors: ENTITY_COLORS,
+  },
+  sequential: {
+    label: 'Intensità',
+    use: 'Una sola grandezza che cresce: classifiche, volumi. Dal chiaro allo scuro.',
+    colors: ['#c6e0f9', '#a3cbf4', '#7fb5ef', '#5c9fea', '#3987e5', '#2e6bb0'],
+  },
+  diverging: {
+    label: 'Polarità',
+    use: 'Qualcosa che ha due versi opposti attorno a uno zero: sentiment, variazioni.',
+    colors: ['#d24b3f', '#e0836f', '#94a3b8', '#5bb98c', '#199e70'],
+  },
+};
+
+/** Il colore di una serie dentro una palette, senza mai ciclare le tinte. */
+export function paletteColor(palette: PaletteId, i: number, total = 1): string {
+  const c = PALETTES[palette].colors;
+  if (palette === 'categorical') return c[i] ?? OVERFLOW_COLOR;
+  // Le rampe si campionano sull'intera estensione: con tre serie si prendono
+  // il primo, il centrale e l'ultimo, non i primi tre passi quasi identici.
+  if (total <= 1) return c[Math.floor(c.length / 2)];
+  const pos = Math.round((i / (total - 1)) * (c.length - 1));
+  return c[Math.min(c.length - 1, Math.max(0, pos))];
+}
