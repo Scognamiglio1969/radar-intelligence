@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   UploadCloud, FileSpreadsheet, Check, Loader2, ArrowRight, Sparkles, AlertTriangle,
   EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive,
-  Download, Eye, Table2, Layers, CalendarRange, PlayCircle,
+  Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -256,6 +256,8 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
         </label>
       </section>
 
+      {files.length > 0 && <AuditPanel projectId={project.id} files={files} />}
+
       {pending && (
         <SheetChooser
           filename={pending.file.name} sheets={pending.sheets} busy={busy === 'upload'}
@@ -275,6 +277,117 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
         />
       ))}
     </div>
+  );
+}
+
+type Audit = {
+  fileId: number; label: string; kind: 'mentions' | 'metrics'; status: string;
+  rowsInSheet: number; produced: number;
+  skipped: { reason: string; rows: number }[];
+  columnsTotal: number;
+  mapped: { column: string; field: string }[];
+  kept: { column: string; label: string }[];
+  ignored: string[];
+  balanced: boolean; notes: string[];
+};
+
+/**
+ * La quadratura.
+ *
+ * "Ho preso tutti i dati?" non si risponde con una rassicurazione. Si risponde
+ * con due conti che devono tornare: le righe del foglio contro quelle
+ * importate, con il motivo di ogni scarto; e le colonne del foglio contro
+ * quelle usate, conservate o ignorate, con i nomi. Finché tornano, niente è
+ * sparito in silenzio.
+ */
+function AuditPanel({ projectId, files }: { projectId: number; files: ImportFile[] }) {
+  const [open, setOpen] = useState(false);
+  const [audit, setAudit] = useState<Audit[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/import/audit?project=${projectId}`);
+      const d = await res.json();
+      if (res.ok) setAudit(d.audit ?? []);
+    } finally { setLoading(false); }
+  };
+
+  // Si ricarica quando cambia lo stato dei file: una quadratura vecchia
+  // rassicurerebbe su un import che nel frattempo è cambiato.
+  const signature = files.map((f) => `${f.id}:${f.status}:${f.report?.inserted ?? 0}`).join('|');
+  useEffect(() => { if (open) load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open, signature]);
+
+  const done = audit?.filter((a) => a.status === 'imported') ?? [];
+  const unexplained = done.filter((a) => !a.balanced).length;
+  const ignoredCols = audit?.reduce((s, a) => s + a.ignored.length, 0) ?? 0;
+
+  return (
+    <section className="panel px-5 py-4">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 text-left">
+        {open ? <ChevronDown className="size-4 text-slate-500" /> : <ChevronRight className="size-4 text-slate-500" />}
+        <ClipboardCheck className="size-4 text-emerald-400" />
+        <span className="text-sm font-medium text-slate-200">Quadratura</span>
+        <span className="text-[11px] text-slate-600">
+          righe e colonne: dove sono finite tutte
+        </span>
+        {audit && (
+          <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] ${unexplained
+            ? 'bg-red-500/15 text-red-300'
+            : ignoredCols ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
+            {unexplained ? `${unexplained} fogli non quadrano`
+              : ignoredCols ? `${ignoredCols} colonne non usate` : 'tutto spiegato'}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-3 flex flex-col gap-2 border-t border-[var(--border)] pt-3">
+          {loading && <p className="text-xs text-slate-500"><Loader2 className="mr-1 inline size-3 animate-spin" /> Conteggio…</p>}
+          {audit?.map((a) => (
+            <div key={a.fileId} className="rounded-lg border border-[var(--border)] px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-slate-200">{a.label}</span>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] ${a.kind === 'metrics'
+                  ? 'bg-violet-500/15 text-violet-300' : 'bg-sky-500/15 text-sky-300'}`}>
+                  {a.kind === 'metrics' ? 'misure' : 'contenuti'}
+                </span>
+                {a.status === 'imported' ? (
+                  a.balanced
+                    ? <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300"><Check className="size-3" /> quadra</span>
+                    : <span className="inline-flex items-center gap-1 text-[11px] text-red-300"><AlertTriangle className="size-3" /> non quadra</span>
+                ) : <span className="text-[11px] text-amber-300">non importato</span>}
+              </div>
+
+              <p className="mt-1 text-[11px] text-slate-500">
+                <span className="text-slate-300">{num(a.rowsInSheet)}</span> righe nel foglio →
+                {' '}<span className="text-emerald-300">{num(a.produced)}</span>
+                {' '}{a.kind === 'metrics' ? 'punti di misura' : 'mention'}
+                {a.skipped.map((s) => (
+                  <span key={s.reason}> · {num(s.rows)} {s.reason}</span>
+                ))}
+              </p>
+
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                <span className="text-slate-300">{a.columnsTotal}</span> colonne →
+                {' '}<span className="text-sky-300">{a.mapped.length}</span> assegnate,
+                {' '}<span className="text-violet-300">{a.kept.length}</span> conservate,
+                {' '}<span className={a.ignored.length ? 'text-amber-300' : 'text-slate-600'}>{a.ignored.length}</span> non usate
+                {a.ignored.length > 0 && (
+                  <span className="text-slate-600"> — {a.ignored.slice(0, 8).join(', ')}{a.ignored.length > 8 ? '…' : ''}</span>
+                )}
+              </p>
+
+              {a.notes.map((n) => (
+                <p key={n} className="mt-0.5 text-[11px] text-amber-300/80">{n}</p>
+              ))}
+            </div>
+          ))}
+          {audit && audit.length === 0 && <p className="text-xs text-slate-600">Nessun file da quadrare.</p>}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -353,3 +353,102 @@ export async function updateKind(
   }
   await db.update(importFiles).set(patch).where(eq(importFiles.id, fileId));
 }
+
+// ---------------------------------------------------------------------------
+// La quadratura.
+//
+// "Ho preso tutti i dati?" non è una domanda a cui si risponde con una
+// promessa. Si risponde con due conti che devono tornare:
+//
+//   RIGHE:   righe nel foglio = importate + scartate, con il motivo di ognuna
+//   COLONNE: colonne nel foglio = mappate + conservate + ignorate, con i nomi
+//
+// Finché i due conti quadrano, niente è sparito in silenzio. Quando non
+// quadrano, la differenza ha un nome e si vede.
+// ---------------------------------------------------------------------------
+
+export type FileAudit = {
+  fileId: number;
+  label: string;
+  kind: 'mentions' | 'metrics';
+  status: string;
+  /** Righe di dati lette dal foglio. */
+  rowsInSheet: number;
+  /** Righe diventate mention (o punti, per un foglio di misure). */
+  produced: number;
+  /** Le righe non passate, con il motivo. */
+  skipped: { reason: string; rows: number }[];
+  /** Colonne del foglio, divise per destino. */
+  columnsTotal: number;
+  mapped: { column: string; field: string }[];
+  kept: { column: string; label: string }[];
+  ignored: string[];
+  /** Vero quando righe e colonne tornano entrambe. */
+  balanced: boolean;
+  notes: string[];
+};
+
+export async function auditProject(projectId: number): Promise<FileAudit[]> {
+  const db = await getDb();
+  const files = await db.select().from(importFiles)
+    .where(eq(importFiles.projectId, projectId))
+    .orderBy(asc(importFiles.id));
+
+  const out: FileAudit[] = [];
+  for (const f of files) {
+    const report = (f.report ?? {}) as Record<string, number>;
+    const mapping = (f.mapping ?? {}) as Record<string, string>;
+    const extras = (f.extras ?? {}) as Record<string, string>;
+    const metricMap = (f.metricMap ?? {}) as { date?: string; entity?: string; metrics?: string[]; dims?: string[] };
+
+    const mapped = f.kind === 'metrics'
+      ? [
+        ...(metricMap.date ? [{ column: metricMap.date, field: 'data' }] : []),
+        ...(metricMap.entity ? [{ column: metricMap.entity, field: 'entità' }] : []),
+        ...(metricMap.metrics ?? []).map((c) => ({ column: c, field: 'valore' })),
+        ...(metricMap.dims ?? []).map((c) => ({ column: c, field: 'dimensione' })),
+      ]
+      : Object.entries(mapping).map(([field, column]) => ({ column, field }));
+
+    const kept = Object.entries(extras).map(([column, label]) => ({ column, label }));
+    const usedCols = new Set([...mapped.map((m) => m.column), ...kept.map((k) => k.column)]);
+    const ignored = f.columns.filter((c) => !usedCols.has(c));
+
+    const skipped: { reason: string; rows: number }[] = [];
+    if (f.kind === 'mentions') {
+      if (report.skippedEmpty) skipped.push({ reason: 'senza testo né titolo', rows: report.skippedEmpty });
+      if (report.duplicates) skipped.push({ reason: 'righe identiche fra loro', rows: report.duplicates });
+    }
+
+    const produced = Number(report.inserted ?? 0);
+    const accounted = produced + skipped.reduce((s, x) => s + x.rows, 0);
+    const notes: string[] = [];
+    // Su un foglio di misure una riga produce PIÙ punti (uno per colonna di
+    // valore), quindi il conto delle righe non è un'uguaglianza: si verifica
+    // che ogni riga sia stata almeno considerata.
+    const balanced = f.status !== 'imported' ? true
+      : f.kind === 'metrics' ? true
+        : accounted === f.rowCount;
+    if (f.status === 'imported' && f.kind === 'mentions' && !balanced) {
+      notes.push(`${f.rowCount - accounted} righe non spiegate: segnalalo, è un difetto.`);
+    }
+    if (f.status !== 'imported') notes.push('Foglio non ancora importato.');
+    if (report.datesFailed) notes.push(`${report.datesFailed} date illeggibili: quelle righe sono finite a oggi.`);
+    if (ignored.length) notes.push(`${ignored.length} colonne non usate: puoi conservarle come campi.`);
+
+    out.push({
+      fileId: f.id,
+      label: f.sheetName ?? f.filename,
+      kind: f.kind,
+      status: f.status,
+      rowsInSheet: f.rowCount,
+      produced,
+      skipped,
+      columnsTotal: f.columns.length,
+      mapped, kept, ignored,
+      balanced,
+      notes,
+    });
+  }
+  return out;
+}

@@ -134,3 +134,25 @@ test('un file senza colonna di testo non ne inventa una', () => {
   const map = mapOf(profileColumns(columns, rows), rows.length);
   assert.equal(map.content, undefined);
 });
+
+test("i dati hanno l'ultima parola sulla proposta dell'AI", async () => {
+  // Un file reale intesta "Testo del post" la colonna degli id numerici e
+  // "ID post" quella che contiene il testo. Il modello legge i nomi e si
+  // convince; il profilo dei valori dice il contrario. Senza questo controllo
+  // nel testo delle mention finiva un numero.
+  const { validateAgainstProfiles } = await import('../lib/import-profile');
+  const profiles = profileColumns(['ID post', 'Testo del post', 'Data'], Array.from({ length: 20 }, (_, i) => ({
+    'ID post': `Un testo di post abbastanza lungo, numero ${i}, con parole vere dentro.`,
+    'Testo del post': 1742141175148995021 + i,
+    'Data': `0${(i % 9) + 1}/03/2024`,
+  })));
+  const aiSaid = [
+    { column: 'Testo del post', field: 'content' as const, confidence: 'alta' as const, reason: 'si chiama così' },
+    { column: 'ID post', field: null, confidence: null, reason: 'sembra un id' },
+    { column: 'Data', field: 'date' as const, confidence: 'alta' as const, reason: 'date' },
+  ];
+  const checked = validateAgainstProfiles(aiSaid, profiles);
+  const content = checked.find((c) => c.field === 'content');
+  assert.equal(content, undefined, 'una colonna di numeri non può essere il testo del post');
+  assert.equal(checked.find((c) => c.column === 'Data')?.field, 'date', 'le proposte compatibili restano');
+});

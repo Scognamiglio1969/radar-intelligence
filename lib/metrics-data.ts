@@ -226,3 +226,20 @@ export async function performanceByCustom(
       avgEngagement: Math.round(Number(r.engagement) / Math.max(1, Number(r.posts))),
     }));
 }
+
+/**
+ * Le fonti realmente presenti nel progetto, non quelle teoricamente possibili.
+ *
+ * Il filtro delle fonti nascondeva tutto ciò che arriva dai file: l'elenco era
+ * quello dei connettori, e "linkedin" o "instagram-feed" importati da un foglio
+ * non comparivano. Un filtro che non elenca ciò che hai è un filtro rotto.
+ */
+export async function projectSources(projectId: number): Promise<{ id: string; count: number }[]> {
+  const db = await getDb();
+  const rows = await db.select({
+    id: mentions.source, count: sql<number>`count(*)`,
+  }).from(mentions)
+    .where(eq(mentions.projectId, projectId))
+    .groupBy(mentions.source).orderBy(sql`count(*) desc`);
+  return rows.map((r) => ({ id: r.id, count: Number(r.count) }));
+}

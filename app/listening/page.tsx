@@ -4,6 +4,7 @@ import { getCurrentProject, listeningData } from '@/lib/data';
 import { PageHeader, MentionCard, EmptyState, fmtNum } from '@/components/ui';
 import { articleCoverage } from '@/lib/article-enrich';
 import { getT } from '@/lib/i18n';
+import { projectSources } from '@/lib/metrics-data';
 import { SOURCE_META } from '@/lib/connectors';
 import { SearchBox } from '@/components/search-box';
 import { TranslateBar } from '@/components/translate-bar';
@@ -22,6 +23,11 @@ function buildQS(params: Record<string, string | number | undefined>) {
   }
   const s = qs.toString();
   return s ? `?${s}` : '';
+}
+
+/** Da slug a etichetta leggibile per le fonti che arrivano dai file. */
+function prettySource(id: string): string {
+  return id.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export const metadata = { title: 'Listening' };
@@ -48,6 +54,10 @@ export default async function ListeningPage({ searchParams }: {
   };
   const data = await listeningData(project.id, filters);
   const coverage = await articleCoverage(project.id);
+  // Le fonti del FILTRO sono quelle che il progetto contiene davvero: un
+  // progetto nato da file ha 'linkedin' o 'instagram-feed', che nell'elenco
+  // dei connettori non esistono e restavano invisibili.
+  const sources = await projectSources(project.id);
 
   // Reading language chosen by the user: translates the current page (cached in DB)
   const readLang = (await cookies()).get('sr_translate')?.value ?? null;
@@ -81,7 +91,7 @@ export default async function ListeningPage({ searchParams }: {
           { value: 'article', label: t('ui.articles', 'articles') },
           { value: 'post', label: t('ui.posts', 'posts') },
         ]} param="tipo" current={current} />
-        <FilterGroup label={t('ui.source', 'Source')} items={Object.entries(SOURCE_META).map(([id, m]) => ({ value: id, label: m.label }))}
+        <FilterGroup label={t('ui.source', 'Source')} items={sources.map((s) => ({ value: s.id, label: SOURCE_META[s.id]?.label ?? prettySource(s.id) }))}
           param="fonte" current={current} />
         <FilterGroup label={t('ui.sentiment', 'Sentiment')} items={SENTIMENTS.map((s) => ({ value: s, label: s }))}
           param="sentiment" current={current} />

@@ -299,12 +299,42 @@ export function heuristicMapping(profiles: ColumnProfile[], rowCount: number): F
 }
 
 /** Base deterministica + raffinamento AI quando disponibile. */
+/**
+ * I DATI hanno l'ultima parola sul modello.
+ *
+ * Un file reale intesta "Testo del post" una colonna che contiene gli id
+ * numerici e "ID post" quella che contiene il testo. Il modello legge i nomi e
+ * si convince; il profilo dei valori dice il contrario. Senza questo controllo
+ * l'AI sovrascriveva un riconoscimento corretto, e nel testo delle mention
+ * finiva un numero.
+ */
+export function validateAgainstProfiles(
+  proposal: FieldProposal[], profiles: ColumnProfile[],
+): FieldProposal[] {
+  const kindOf = new Map(profiles.map((p) => [p.name, p.kind] as const));
+  return proposal.map((a): FieldProposal => {
+    if (!a.field) return a;
+    const kind = kindOf.get(a.column);
+    const expected = EXPECTED_KIND[a.field];
+    const incompatible = (expected && kind && !expected.includes(kind))
+      // Il testo da analizzare non può stare in una colonna di numeri.
+      || ((a.field === 'content' || a.field === 'title') && kind === 'number');
+    if (!incompatible) return a;
+    return {
+      column: a.column, field: null, confidence: null,
+      reason: `Proposta scartata: la colonna contiene valori di tipo ${kind}, incompatibili con "${a.field}".`,
+    };
+  });
+}
+
 export async function buildProposal(
   profiles: ColumnProfile[], rowCount: number,
 ): Promise<{ proposal: FieldProposal[]; usedAi: boolean }> {
   const base = heuristicMapping(profiles, rowCount);
-  const ai = await proposeMapping(profiles).catch(() => null);
-  if (!ai) return { proposal: base, usedAi: false };
+  const raw = await proposeMapping(profiles).catch(() => null);
+  if (!raw) return { proposal: base, usedAi: false };
+
+  const ai = validateAgainstProfiles(raw, profiles);
 
   // L'AI vince dove si esprime; dove tace resta la base — così il modello può
   // solo migliorare il risultato, mai peggiorarlo azzerando un riconoscimento
