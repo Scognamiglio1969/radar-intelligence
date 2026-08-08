@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
   try {
     const data = await collectExportData(project, days);
-    const { comments, synthesis, empty, available } = await generateComments(data, sections, role);
+    const { comments, synthesis, empty, available, noFacts } = await generateComments(data, sections, role);
     if (!available) {
       // `empty` viaggia anche qui: sapere QUALI grafici sono senza dati resta
       // un'informazione utile pure quando il motore AI è spento.
@@ -40,6 +40,12 @@ export async function POST(req: Request) {
         error: 'Motore AI non disponibile: manca la chiave o il tetto di spesa è stato raggiunto. Puoi comunque scrivere il commento a mano.',
         empty,
       }, { status: 503 });
+    }
+    if (noFacts) {
+      return NextResponse.json({
+        error: 'I grafici scelti non hanno dati da descrivere nel periodo impostato: aggiungi un grafico con dei numeri, o allarga il periodo del report.',
+        empty,
+      }, { status: 400 });
     }
     return NextResponse.json({ comments, synthesis, empty });
   } catch (e) {

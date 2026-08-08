@@ -226,6 +226,41 @@ export function sectionFacts(d: ExportData, id: SectionId): string {
       return d.briefs[0] ? d.briefs[0].content.slice(0, 2500) : '';
     case 'mentions':
       return `${d.allMentions.length} mention nel periodo, dalla più recente del ${d.allMentions[0] ? new Date(d.allMentions[0].publishedAt).toLocaleDateString('it-IT') : 'n/d'}`;
+
+    case 'people':
+      return d.people.ranking.map((r) => [
+        `${r.name}:`,
+        r.followers === null ? null : `${r.followers.toLocaleString('it-IT')} follower`,
+        r.perMonth === null ? null : `${r.perMonth} contenuti al mese`,
+        r.engagement === null ? null : `engagement medio ${Math.round(r.engagement)}`,
+      ].filter(Boolean).join(' ')).join('\n');
+
+    case 'peopleGrowth':
+      return d.people.cards.filter((p) => p.followers).map((p) => {
+        const f = p.followers!;
+        const start = f.latest - f.gained;
+        const pct = start > 0 ? Math.round((f.gained / start) * 100) : null;
+        return `${p.name}: da ${start.toLocaleString('it-IT')} a ${f.latest.toLocaleString('it-IT')} follower `
+          + `(${f.gained >= 0 ? '+' : ''}${f.gained.toLocaleString('it-IT')}${pct === null ? '' : `, ${pct >= 0 ? '+' : ''}${pct}%`}) `
+          + `fra il ${f.from} e il ${f.to}`;
+      }).join('\n');
+
+    case 'peopleDetail':
+      return d.people.cards.map((p) => {
+        const bits: string[] = [];
+        if (p.rhythm) {
+          bits.push(`pubblica ${p.rhythm.perMonth} volte al mese su ${p.rhythm.months} mesi`
+            + (p.rhythm.trend === null ? '' : `, tendenza ${p.rhythm.trend >= 0 ? '+' : ''}${p.rhythm.trend}%`));
+        }
+        for (const a of p.averages.slice(0, 3)) bits.push(`${a.metric} ${a.value}`);
+        if (p.formats[0]) bits.push(`formato che rende di più: ${p.formats[0].name} (engagement medio ${p.formats[0].avgEngagement} su ${p.formats[0].posts} contenuti)`);
+        if (p.audience[0]) {
+          bits.push(`pubblico per ${p.audience[0].dimension}: `
+            + p.audience[0].rows.slice(0, 3).map((r) => `${r.name} ${(r.share * 100).toFixed(0)}%`).join(', '));
+        }
+        return bits.length ? `${p.name}: ${bits.join(' · ')}` : '';
+      }).filter(Boolean).join('\n');
+
     default:
       return '';
   }
@@ -310,6 +345,8 @@ export async function generateComments(
 ): Promise<{
   comments: Record<string, GeneratedComment>; synthesis?: string;
   empty: SectionId[]; available: boolean;
+  /** Nessuna sezione aveva cifre da descrivere: il modello non è stato chiamato. */
+  noFacts?: boolean;
 }> {
   const empty: SectionId[] = [];
   const parts: string[] = [];
@@ -318,7 +355,10 @@ export async function generateComments(
     if (!facts.trim()) { empty.push(id); continue; }
     parts.push(`### ${id} — ${SECTION_LABEL.get(id) ?? id}\n${facts}`);
   }
-  if (!parts.length) return { comments: {}, empty, available: true };
+  // Nessun fatto da mandare: NON si chiama il modello, e non gli si dà la
+  // colpa. Dire "il modello non ha risposto" per una chiamata mai partita
+  // manda l'utente a premere "riprova" all'infinito.
+  if (!parts.length) return { comments: {}, empty, available: true, noFacts: true };
 
   const user = `Progetto: ${data.project.name}\nTema seguito: ${data.project.keywords.join(', ')}\n\n${parts.join('\n\n')}`;
   // La sintesi è un testo solo: non serve lo stesso tetto di token dei
