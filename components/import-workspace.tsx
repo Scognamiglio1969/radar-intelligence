@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   UploadCloud, FileSpreadsheet, Check, Loader2, ArrowRight, Sparkles, AlertTriangle,
   EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive,
-  Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck,
+  Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart,
 } from 'lucide-react';
+import { TopProgress, creepingProgress } from './top-progress';
 
 // ---------------------------------------------------------------------------
 // Il distillatore di file.
@@ -93,6 +94,10 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
   const [analyzeMsg, setAnalyzeMsg] = useState('');
   /** File caricato in attesa che l'utente scelga quali fogli importare. */
   const [pending, setPending] = useState<{ file: File; sheets: SheetInfo[] } | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState('');
+  /** Il log si apre da solo appena finisce un import: è il momento in cui serve. */
+  const [showLog, setShowLog] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/import/files?project=${project.id}`);
@@ -110,6 +115,14 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
    */
   const upload = async (f: File, sheets?: string[]) => {
     setBusy('upload'); setError('');
+    // Leggere e profilare venti fogli richiede minuti: senza un segno di vita
+    // in cima allo schermo l'utente crede che sia bloccato e ricarica la
+    // pagina, interrompendo davvero l'operazione.
+    setProgress(2);
+    setPhase(sheets?.length
+      ? `Lettura di ${sheets.length} fogli: righe, colonne e riconoscimento…`
+      : 'Apertura del file e inventario dei fogli…');
+    const timer = creepingProgress(setProgress);
     try {
       const fd = new FormData();
       fd.append('file', f);
@@ -122,12 +135,16 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
       setPending(null);
       await load();
       if (d.fileId) setOpen(d.fileId);
+      if (d.imported) setShowLog(true);
     } catch (e) { setError((e as Error).message); }
-    finally { setBusy(''); }
+    finally { clearInterval(timer); setProgress(0); setBusy(''); }
   };
 
   const act = async (fileId: number, action: string, payload?: Record<string, unknown>) => {
     setBusy(`${action}-${fileId}`); setError('');
+    const heavy = action === 'derive';
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (heavy) { setProgress(2); setPhase('Lettura delle righe e scrittura in archivio…'); timer = creepingProgress(setProgress); }
     try {
       const res = await fetch('/api/import/files', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -136,8 +153,9 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
       const d = await res.json();
       if (!res.ok) { setError(d.error ?? 'Operazione fallita'); return; }
       await load();
+      if (heavy) setShowLog(true);
     } catch (e) { setError((e as Error).message); }
-    finally { setBusy(''); }
+    finally { if (timer) clearInterval(timer); setProgress(0); setBusy(''); }
   };
 
   /** Importa in fila tutti i file che hanno già il testo assegnato. */
@@ -146,16 +164,22 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     const todo = files.filter((f) => !f.rawPurged && f.status !== 'imported' && isReady(f));
     if (!todo.length) return;
     setBusy('all'); setError('');
+    setProgress(2);
     try {
+      let done = 0;
       for (const f of todo) {
+        setPhase(`Import di ${f.sheetName ?? f.filename} (${done + 1} di ${todo.length})…`);
         const res = await fetch('/api/import/files', {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ projectId: project.id, fileId: f.id, action: 'derive', kind: f.kind }),
         });
         if (!res.ok) { setError(`${f.filename}: ${(await res.json()).error ?? 'import fallito'}`); break; }
+        done++;
+        setProgress(Math.round((done / todo.length) * 100));
       }
       await load();
-    } finally { setBusy(''); }
+      setShowLog(true);
+    } finally { setProgress(0); setBusy(''); }
   };
 
   const analyzeNow = async () => {
@@ -177,7 +201,8 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     const imported = files.filter((f) => f.status === 'imported');
     return {
       rawRows: files.reduce((s, f) => s + f.rowCount, 0),
-      mentions: files.reduce((s, f) => s + (f.report?.inserted ?? 0), 0),
+      mentions: files.filter((f) => f.kind === 'mentions').reduce((s, f) => s + (f.report?.inserted ?? 0), 0),
+      points: files.filter((f) => f.kind === 'metrics').reduce((s, f) => s + (f.report?.inserted ?? 0), 0),
       pending: files.filter((f) => f.status !== 'imported').length,
       ready: files.filter((f) => !f.rawPurged && f.status !== 'imported' && isReady(f)).length,
       importedCount: imported.length,
@@ -187,8 +212,85 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     };
   }, [files]);
 
+  /**
+   * Che cosa deve fare l'utente ADESSO.
+   *
+   * L'ordine dei casi è l'ordine in cui vanno risolti: prima si finisce quello
+   * che è in corso, poi si sistema ciò che è bloccato, poi si importa ciò che
+   * è pronto. Solo quando non resta niente si dice che è finita.
+   */
+  const next: Next = (() => {
+    if (busy) {
+      return {
+        mood: 'me',
+        title: busy === 'upload' ? 'Sto leggendo il file' : 'Sto lavorando',
+        text: phase || 'Non serve che tu faccia niente: quando ho finito te lo dico qui. Puoi lasciare la pagina aperta.',
+      };
+    }
+    if (pending) {
+      return {
+        mood: 'you',
+        did: `Ho aperto ${pending.file.name}: contiene ${pending.sheets.length} fogli.`,
+        title: 'Scegli quali fogli importare',
+        text: 'Qui sotto trovi cosa c’è dentro ciascuno — righe, colonne e le prime intestazioni. Ho già spuntato quelli visibili con dei dati: togli o aggiungi quello che vuoi e conferma.',
+      };
+    }
+    if (files.length === 0) {
+      return {
+        mood: 'you',
+        title: 'Carica il primo file',
+        text: 'Excel o CSV, quanti ne vuoi. Non serve prepararli né rinominare le colonne: li leggo come sono, capisco cosa contengono e te lo faccio vedere prima di importare niente.',
+      };
+    }
+
+    const notReady = files.filter((f) => !f.rawPurged && !isReady(f));
+    if (notReady.length) {
+      const one = notReady[0];
+      return {
+        mood: 'you',
+        did: `Ho letto ${files.length} fogli e capito da solo cosa contengono.`,
+        title: notReady.length === 1
+          ? `Manca una cosa su “${one.sheetName ?? one.filename}”`
+          : `Mancano un paio di scelte su ${notReady.length} fogli`,
+        text: one.kind === 'metrics'
+          ? 'Su un foglio di misure mi servono la colonna della data e almeno una colonna di valori. Aprilo qui sotto: te le ho già proposte, devi solo confermare.'
+          : 'Mi serve sapere qual è la colonna del testo. Aprilo qui sotto: se il foglio è fatto di numeri e non di contenuti, puoi anche dirmi che è di misure.',
+        action: { label: `Apri ${one.sheetName ?? one.filename}`, onClick: () => setOpen(one.id) },
+      };
+    }
+
+    const ready = files.filter((f) => !f.rawPurged && f.status !== 'imported' && isReady(f));
+    if (ready.length) {
+      return {
+        mood: 'you',
+        did: `Ho capito tutti i ${files.length} fogli: colonne assegnate e campi da conservare.`,
+        title: `Sei pronto: importo ${ready.length} ${ready.length === 1 ? 'foglio' : 'fogli'}?`,
+        text: 'Prima di premere puoi aprire un foglio e usare “Verifica il risultato”: ti mostro le prime righe esattamente come verranno salvate, senza scrivere ancora niente in archivio.',
+        action: { label: `Importa ${ready.length} ${ready.length === 1 ? 'foglio' : 'fogli'}`, onClick: importAll },
+      };
+    }
+
+    const imported = files.filter((f) => f.status === 'imported');
+    const rows = imported.reduce((s, f) => s + (f.report?.inserted ?? 0), 0);
+    return {
+      mood: 'done',
+      did: `${num(rows)} righe importate da ${imported.length} fogli.`,
+      title: 'I tuoi dati sono dentro',
+      text: 'Da qui in poi non serve fare altro: i dati sono già nei grafici. Se vuoi controllare cosa ho letto, apri “Cosa ho letto dai tuoi file” qui sotto — e se qualcosa non ti torna, cambia l’assegnazione di un foglio e reimportalo: il file resta, non devi ricaricarlo.',
+      links: [
+        { label: 'Vedi le misure', href: '/measures' },
+        { label: 'Vedi le persone', href: '/people' },
+        { label: 'Costruisci un report', href: '/report' },
+      ],
+    };
+  })();
+
   return (
     <div className="flex flex-col gap-4">
+      {progress > 0 && <TopProgress progress={progress} phase={phase} />}
+
+      <NextStep n={next} />
+
       {/* Il quadro del progetto: N file che diventano un archivio solo. */}
       {files.length > 0 && (
         <section className="panel px-5 py-4">
@@ -197,9 +299,15 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
               <Stat icon={Layers} label="File" value={num(files.length)}
                 hint={stats.pending ? `${stats.pending} da importare` : 'tutti importati'} />
               <Stat icon={Table2} label="Righe grezze" value={num(stats.rawRows)} hint="conservate, rimappabili" />
-              <Stat icon={Check} label="Mention derivate" value={num(stats.mentions)}
-                hint={stats.withSentiment ? `${num(stats.withSentiment)} con sentiment dal file` : 'dalla mappatura corrente'}
-                tone={stats.mentions > 0 ? 'ok' : undefined} />
+              {stats.mentions > 0 && (
+                <Stat icon={Check} label="Contenuti" value={num(stats.mentions)}
+                  hint={stats.withSentiment ? `${num(stats.withSentiment)} con sentiment dal file` : 'righe con un testo'}
+                  tone="ok" />
+              )}
+              {stats.points > 0 && (
+                <Stat icon={LineChart} label="Misure" value={num(stats.points)}
+                  hint="punti di serie storica" tone="ok" />
+              )}
               {stats.datesFailed > 0 && (
                 <Stat icon={CalendarRange} label="Date illeggibili" value={num(stats.datesFailed)}
                   hint="finite a oggi: controlla la colonna data" tone="warn" />
@@ -256,7 +364,10 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
         </label>
       </section>
 
-      {files.length > 0 && <AuditPanel projectId={project.id} files={files} />}
+      {files.length > 0 && (
+        <ImportLog projectId={project.id} files={files} open={showLog}
+          onToggle={() => setShowLog((v) => !v)} />
+      )}
 
       {pending && (
         <SheetChooser
@@ -291,103 +402,193 @@ type Audit = {
   balanced: boolean; notes: string[];
 };
 
+
+type Next = {
+  mood: 'you' | 'me' | 'done';
+  /** Cosa è appena successo: la conferma che quello che hai fatto è andato. */
+  did?: string;
+  title: string;
+  text: string;
+  action?: { label: string; onClick: () => void; disabled?: boolean };
+  links?: { label: string; href: string }[];
+};
+
 /**
- * La quadratura.
+ * "Ora fai questo."
  *
- * "Ho preso tutti i dati?" non si risponde con una rassicurazione. Si risponde
- * con due conti che devono tornare: le righe del foglio contro quelle
- * importate, con il motivo di ogni scarto; e le colonne del foglio contro
- * quelle usate, conservate o ignorate, con i nomi. Finché tornano, niente è
- * sparito in silenzio.
+ * Non una guida da leggere: UNA cosa da fare, scritta grande, con il tasto
+ * accanto. E quando non tocca all'utente lo si dice — "ci penso io" è
+ * un'informazione, non un vuoto da riempire con una barra che gira.
+ *
+ * Il pannello è sempre lo stesso: cambia solo il momento. Così chi torna dopo
+ * una settimana non deve ricostruirsi dove era rimasto.
  */
-function AuditPanel({ projectId, files }: { projectId: number; files: ImportFile[] }) {
-  const [open, setOpen] = useState(false);
+function NextStep({ n }: { n: Next }) {
+  const tone = n.mood === 'you'
+    ? { ring: 'border-sky-500/50 bg-sky-500/[0.06]', label: 'ORA TOCCA A TE', color: 'text-sky-300', icon: ArrowRight }
+    : n.mood === 'me'
+      ? { ring: 'border-violet-500/40 bg-violet-500/[0.05]', label: 'CI PENSO IO', color: 'text-violet-300', icon: Loader2 }
+      : { ring: 'border-emerald-500/40 bg-emerald-500/[0.05]', label: 'TUTTO FATTO', color: 'text-emerald-300', icon: Check };
+  const Icon = tone.icon;
+
+  return (
+    <section className={`panel border ${tone.ring} px-6 py-5`}>
+      {n.did && (
+        <p className="mb-2 flex items-center gap-1.5 text-xs text-emerald-300">
+          <Check className="size-3.5 shrink-0" /> {n.did}
+        </p>
+      )}
+      <p className={`mb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-widest ${tone.color}`}>
+        <Icon className={`size-3.5 ${n.mood === 'me' ? 'animate-spin' : ''}`} /> {tone.label}
+      </p>
+      <h2 className="text-xl font-semibold text-slate-100 sm:text-2xl">{n.title}</h2>
+      <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-400">{n.text}</p>
+
+      {(n.action || n.links) && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {n.action && (
+            <button onClick={n.action.onClick} disabled={n.action.disabled}
+              className="inline-flex items-center gap-2 rounded-lg bg-sky-500/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-sky-400 disabled:opacity-50">
+              <ArrowRight className="size-4" /> {n.action.label}
+            </button>
+          )}
+          {n.links?.map((l) => (
+            <a key={l.href} href={l.href}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2 text-sm text-slate-300 hover:bg-white/5">
+              {l.label} →
+            </a>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Il log: cosa è stato letto, detto a parole.
+ *
+ * "Ho preso tutti i dati?" non si risponde con una rassicurazione né con una
+ * tabella di conteggi. Si risponde raccontando, foglio per foglio: quante
+ * righe sono entrate, cosa è stato scartato e perché, quali colonne sono
+ * finite dove, e quali non sono state usate. Finché i conti tornano, niente è
+ * sparito in silenzio; quando non tornano, lo si dice.
+ */
+function ImportLog({ projectId, files, open, onToggle }: {
+  projectId: number; files: ImportFile[]; open: boolean; onToggle: () => void;
+}) {
   const [audit, setAudit] = useState<Audit[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/import/audit?project=${projectId}`);
-      const d = await res.json();
-      if (res.ok) setAudit(d.audit ?? []);
-    } finally { setLoading(false); }
-  };
-
-  // Si ricarica quando cambia lo stato dei file: una quadratura vecchia
-  // rassicurerebbe su un import che nel frattempo è cambiato.
   const signature = files.map((f) => `${f.id}:${f.status}:${f.report?.inserted ?? 0}`).join('|');
-  useEffect(() => { if (open) load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open, signature]);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/import/audit?project=${projectId}`)
+      .then((r) => r.json())
+      .then((d) => { if (alive) setAudit(d.audit ?? []); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, signature, projectId]);
 
   const done = audit?.filter((a) => a.status === 'imported') ?? [];
   const unexplained = done.filter((a) => !a.balanced).length;
   const ignoredCols = audit?.reduce((s, a) => s + a.ignored.length, 0) ?? 0;
+  const totalRows = done.reduce((s, a) => s + a.produced, 0);
 
   return (
     <section className="panel px-5 py-4">
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 text-left">
+      <button onClick={onToggle} className="flex w-full flex-wrap items-center gap-2 text-left">
         {open ? <ChevronDown className="size-4 text-slate-500" /> : <ChevronRight className="size-4 text-slate-500" />}
         <ClipboardCheck className="size-4 text-emerald-400" />
-        <span className="text-sm font-medium text-slate-200">Quadratura</span>
-        <span className="text-[11px] text-slate-600">
-          righe e colonne: dove sono finite tutte
-        </span>
+        <span className="text-sm font-medium text-slate-200">Cosa ho letto dai tuoi file</span>
         {audit && (
           <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] ${unexplained
             ? 'bg-red-500/15 text-red-300'
             : ignoredCols ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
-            {unexplained ? `${unexplained} fogli non quadrano`
+            {unexplained ? `${unexplained} fogli non tornano`
               : ignoredCols ? `${ignoredCols} colonne non usate` : 'tutto spiegato'}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="mt-3 flex flex-col gap-2 border-t border-[var(--border)] pt-3">
+        <div className="mt-3 flex flex-col gap-2.5 border-t border-[var(--border)] pt-3">
           {loading && <p className="text-xs text-slate-500"><Loader2 className="mr-1 inline size-3 animate-spin" /> Conteggio…</p>}
-          {audit?.map((a) => (
-            <div key={a.fileId} className="rounded-lg border border-[var(--border)] px-3 py-2.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium text-slate-200">{a.label}</span>
-                <span className={`rounded px-1.5 py-0.5 text-[10px] ${a.kind === 'metrics'
-                  ? 'bg-violet-500/15 text-violet-300' : 'bg-sky-500/15 text-sky-300'}`}>
-                  {a.kind === 'metrics' ? 'misure' : 'contenuti'}
-                </span>
-                {a.status === 'imported' ? (
-                  a.balanced
-                    ? <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300"><Check className="size-3" /> quadra</span>
-                    : <span className="inline-flex items-center gap-1 text-[11px] text-red-300"><AlertTriangle className="size-3" /> non quadra</span>
-                ) : <span className="text-[11px] text-amber-300">non importato</span>}
-              </div>
 
-              <p className="mt-1 text-[11px] text-slate-500">
-                <span className="text-slate-300">{num(a.rowsInSheet)}</span> righe nel foglio →
-                {' '}<span className="text-emerald-300">{num(a.produced)}</span>
-                {' '}{a.kind === 'metrics' ? 'punti di misura' : 'mention'}
-                {a.skipped.map((s) => (
-                  <span key={s.reason}> · {num(s.rows)} {s.reason}</span>
-                ))}
-              </p>
+          {audit && done.length > 0 && (
+            <p className="text-xs text-slate-400">
+              In tutto ho messo in archivio <span className="text-emerald-300">{num(totalRows)}</span> righe
+              da <span className="text-slate-200">{done.length}</span> fogli.
+              {unexplained === 0 && ' Ogni riga del file o è entrata, o so dirti perché no.'}
+            </p>
+          )}
 
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                <span className="text-slate-300">{a.columnsTotal}</span> colonne →
-                {' '}<span className="text-sky-300">{a.mapped.length}</span> assegnate,
-                {' '}<span className="text-violet-300">{a.kept.length}</span> conservate,
-                {' '}<span className={a.ignored.length ? 'text-amber-300' : 'text-slate-600'}>{a.ignored.length}</span> non usate
-                {a.ignored.length > 0 && (
-                  <span className="text-slate-600"> — {a.ignored.slice(0, 8).join(', ')}{a.ignored.length > 8 ? '…' : ''}</span>
-                )}
-              </p>
-
-              {a.notes.map((n) => (
-                <p key={n} className="mt-0.5 text-[11px] text-amber-300/80">{n}</p>
-              ))}
-            </div>
-          ))}
-          {audit && audit.length === 0 && <p className="text-xs text-slate-600">Nessun file da quadrare.</p>}
+          {audit?.map((a) => <LogEntry key={a.fileId} a={a} />)}
+          {audit && audit.length === 0 && <p className="text-xs text-slate-600">Nessun file ancora.</p>}
         </div>
       )}
     </section>
+  );
+}
+
+/** Una riga di log: la storia di un foglio, in italiano. */
+function LogEntry({ a }: { a: Audit }) {
+  if (a.status !== 'imported') {
+    return (
+      <p className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs text-slate-500">
+        <span className="font-medium text-slate-300">{a.label}</span> — non ancora importato.
+      </p>
+    );
+  }
+  const skippedText = a.skipped.length
+    ? a.skipped.map((s) => `${num(s.rows)} ${s.reason}`).join(' e ')
+    : null;
+
+  // Su un foglio di misure i campi si chiamano tutti "valore": elencarli uno
+  // per uno dà "valore, valore, valore…" dieci volte. Si raccontano invece
+  // per quello che sono — una data, un'entità, N colonne di numeri.
+  const fields = a.kind === 'metrics'
+    ? (() => {
+      const by = new Map<string, string[]>();
+      for (const m of a.mapped) {
+        if (!by.has(m.field)) by.set(m.field, []);
+        by.get(m.field)!.push(m.column);
+      }
+      return [...by.entries()].map(([field, cols]) => (cols.length === 1
+        ? `${field} (${cols[0]})`
+        : `${cols.length} colonne di ${field}`));
+    })()
+    : [...new Set(a.mapped.map((m) => FIELD_LABEL[m.field] ?? m.field))];
+
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 ${a.balanced ? 'border-[var(--border)]' : 'border-red-500/30 bg-red-500/[0.04]'}`}>
+      <p className="text-xs text-slate-300">
+        {a.balanced
+          ? <Check className="mr-1 inline size-3 text-emerald-400" />
+          : <AlertTriangle className="mr-1 inline size-3 text-red-400" />}
+        <span className="font-medium">{a.label}</span>
+        <span className="text-slate-500">
+          {' '}— ho letto {num(a.rowsInSheet)} righe e ne ho create{' '}
+          <span className="text-emerald-300">{num(a.produced)}</span>
+          {' '}{a.kind === 'metrics' ? 'misure' : 'contenuti'}
+          {skippedText ? `. Ho lasciato fuori ${skippedText}` : ''}.
+        </span>
+      </p>
+
+      <p className="mt-1 text-[11px] text-slate-600">
+        {fields.length > 0 && <>Ho riconosciuto: <span className="text-sky-300">{fields.join(', ')}</span>. </>}
+        {a.kept.length > 0 && <>Ho tenuto da parte: <span className="text-violet-300">{[...new Set(a.kept.map((k) => k.label))].join(', ')}</span>. </>}
+        {a.ignored.length > 0 && (
+          <>Non ho usato <span className="text-amber-300">{a.ignored.length} colonne</span>
+            {' '}({a.ignored.slice(0, 6).join(', ')}{a.ignored.length > 6 ? '…' : ''}):
+            {' '}se ti servono, aprile qui sopra e aggiungile ai campi conservati.</>
+        )}
+      </p>
+
+      {a.notes.map((n) => <p key={n} className="mt-0.5 text-[11px] text-amber-300/80">{n}</p>)}
+    </div>
   );
 }
 
