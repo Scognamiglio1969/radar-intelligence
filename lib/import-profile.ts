@@ -234,6 +234,14 @@ function scoreField(field: TargetField, p: ColumnProfile, rowCount: number): num
   // Il testo del post: lungo e quasi sempre presente. Un testo MOLTO lungo
   // (centinaia di caratteri) è quasi certamente il contenuto, anche quando la
   // colonna si chiama in un modo che nessun dizionario prevede.
+  // Una colonna di sole cifre non è un testo, comunque si chiami. Nel file
+  // vero di X le intestazioni sono sfalsate di uno: "Testo del post" contiene
+  // gli ID dei tweet e "ID post" contiene il testo. Senza questa penalità il
+  // nome vince sul contenuto e in archivio finiscono righe di numeri.
+  const soloCifre = p.samples.length > 0
+    && p.samples.filter((s) => /^\d{6,}$/.test(s.trim())).length >= Math.ceil(p.samples.length * 0.8);
+  if ((field === 'content' || field === 'title') && (p.kind === 'number' || soloCifre)) score -= 150;
+
   if (field === 'content' && p.kind === 'text' && p.avgLength >= 40) score += 40;
   if (field === 'content' && p.kind === 'text' && p.avgLength >= 200 && p.filled >= 60) score += 30;
   if (field === 'title' && p.kind === 'text' && p.avgLength >= 12 && p.avgLength < 90) score += 15;

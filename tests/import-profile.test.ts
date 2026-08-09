@@ -156,3 +156,26 @@ test("i dati hanno l'ultima parola sulla proposta dell'AI", async () => {
   assert.equal(content, undefined, 'una colonna di numeri non può essere il testo del post');
   assert.equal(checked.find((c) => c.column === 'Data')?.field, 'date', 'le proposte compatibili restano');
 });
+
+test('una colonna di soli ID non diventa il contenuto, anche se si chiama così', () => {
+  // Il caso vero: nel foglio X di un export social le intestazioni sono
+  // sfalsate di uno. "Testo del post" contiene gli ID dei tweet e "ID post"
+  // contiene il testo. Se vince il nome, in archivio finiscono righe di numeri.
+  const profiles = profileColumns(
+    ['Canale', 'ID post', 'Testo del post', 'Link post', 'Mi piace'],
+    Array.from({ length: 20 }, (_, i) => ({
+      'Canale': 'X',
+      'ID post': `📰 Un post vero con hashtag #GruppoFS e una frase abbastanza lunga da sembrare quello che è, cioè il contenuto pubblicato numero ${i}.`,
+      'Testo del post': `17421411751489950${String(i).padStart(2, '0')}`,
+      'Link post': `https://twitter.com/tale/status/17421411751489950${i}`,
+      'Mi piace': String(3 + i),
+    })),
+  );
+
+  const map = mapOf(profiles, 20);
+
+  assert.equal(map.content, 'ID post',
+    `il contenuto deve venire dalla colonna che contiene testo, non da quella che si chiama così (ricevuto: ${map.content})`);
+  assert.notEqual(map.title, 'Testo del post', 'nemmeno come titolo');
+  assert.equal(map.url, 'Link post');
+});

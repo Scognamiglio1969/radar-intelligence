@@ -187,13 +187,29 @@ export async function updateImportProject(formData: FormData) {
   revalidatePath('/', 'layout');
 }
 
-export async function deleteProject(formData: FormData) {
+/**
+ * Cancella un progetto e tutto quello che ci sta dentro.
+ *
+ * Chiede la password dell'account, come il reset della spesa: è l'unica azione
+ * dell'app che non si può annullare — mention, misure, file caricati, report e
+ * grafici se ne vanno insieme al progetto. Una conferma a clic si dà per
+ * distrazione; una password no.
+ */
+export async function deleteProject(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, msg: 'Not signed in.' };
   const db = await getDb();
   const id = Number(formData.get('id'));
-  if (id && !(await assertCanEdit(id))) return;
-  if (!id) return;
+  if (!id) return { ok: false, msg: 'No project selected.' };
+  if (!(await assertCanEdit(id))) return { ok: false, msg: 'You cannot edit this project.' };
+
+  const password = String(formData.get('password') ?? '');
+  if (!password) return { ok: false, msg: 'Enter your account password to confirm.' };
+  if (!verifyPasswordHash(password, user.passwordHash)) return { ok: false, msg: 'Incorrect password. Nothing was deleted.' };
+
   const all = await db.select({ id: projects.id }).from(projects);
-  if (all.length <= 1) return; // mai lasciare l'app senza progetti
+  if (all.length <= 1) return { ok: false, msg: 'This is the only project: Radar needs at least one.' };
+
   await db.delete(projects).where(eq(projects.id, id));
   revalidatePath('/', 'layout');
   redirect('/settings');

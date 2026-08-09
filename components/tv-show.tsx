@@ -6,6 +6,7 @@ import { Flame, GitBranch, Bell, X, AlertTriangle, Globe2, Users, Clock, HeartPu
 import { VolumeChart, SentimentPie } from './charts';
 import { ParticleField } from './particle-field';
 import { SOURCE_META } from '@/lib/connectors';
+import { prettySource } from '@/lib/source-label';
 import { APP_BYLINE } from './brand';
 import {
   CountUp, SolarSystem, EmotionRadar, HealthRing, GeoBars, AuthorPyramidChart, HeatGrid,
@@ -498,7 +499,7 @@ function buildSlides(p: Props): Slide[] {
                   <div className="flex items-center gap-2">
                     <span className="rounded-full px-2.5 py-0.5 text-xs font-medium"
                       style={{ backgroundColor: `${meta?.color ?? '#64748b'}22`, color: meta?.color ?? '#94a3b8' }}>
-                      {meta?.label ?? m.source}
+                      {meta?.label ?? prettySource(m.source)}
                     </span>
                     {m.community && <span className="text-xs text-slate-600">{m.community}</span>}
                     {m.sentiment && (

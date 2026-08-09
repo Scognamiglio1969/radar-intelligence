@@ -356,7 +356,7 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     <div className="flex flex-col gap-4">
       {progress > 0 && <TopProgress progress={progress} phase={phase} />}
 
-      <NextStep n={next} />
+      <NextStep n={next} projectId={project.id} />
 
       {/* Il quadro del progetto: N file che diventano un archivio solo. */}
       {files.length > 0 && (
@@ -531,7 +531,7 @@ type Next = {
  * Il pannello è sempre lo stesso: cambia solo il momento. Così chi torna dopo
  * una settimana non deve ricostruirsi dove era rimasto.
  */
-function NextStep({ n }: { n: Next }) {
+function NextStep({ n, projectId }: { n: Next; projectId: number }) {
   const tone = n.mood === 'you'
     ? { ring: 'border-sky-500/50 bg-sky-500/[0.06]', label: 'ORA TOCCA A TE', color: 'text-sky-300', icon: ArrowRight }
     : n.mood === 'me'
@@ -561,13 +561,18 @@ function NextStep({ n }: { n: Next }) {
             </button>
           )}
           {n.go && (
+            // Uscire dall'import significa entrare NEL progetto: il selettore
+            // in alto deve trovarcisi già dentro, altrimenti si atterra sui
+            // dati di un altro progetto senza capire perché.
             <a href={n.go.href} title={n.go.hint}
+              onClick={() => { document.cookie = `sr_project=${projectId};path=/;max-age=31536000`; }}
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-500/90 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">
               <Rocket className="size-4" /> {n.go.label}
             </a>
           )}
           {n.links?.map((l) => (
             <a key={l.href} href={l.href}
+              onClick={() => { document.cookie = `sr_project=${projectId};path=/;max-age=31536000`; }}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2 text-sm text-slate-300 hover:bg-white/5">
               {l.label} →
             </a>

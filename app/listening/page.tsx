@@ -6,7 +6,6 @@ import { articleCoverage } from '@/lib/article-enrich';
 import { getT } from '@/lib/i18n';
 import { projectSources } from '@/lib/metrics-data';
 import { sourceLabel } from '@/lib/source-label';
-import { SOURCE_META } from '@/lib/connectors';
 import { SearchBox } from '@/components/search-box';
 import { TranslateBar } from '@/components/translate-bar';
 import { translateMentions, TRANSLATE_LANGS, type Translated } from '@/lib/translate';
@@ -104,7 +103,10 @@ export default async function ListeningPage({ searchParams }: {
           <Link href={`/source/${sp.fonte}`}
             className="flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 font-semibold text-sky-300 transition hover:bg-sky-500/25"
             title={`Full channel analysis of ${sourceLabel(sp.fonte)}: volume, sentiment, topics and authors compared with the whole project`}>
-            🔬 {t('listening.deepdive', 'Deep-dive')} {SOURCE_META[sp.fonte].label} →
+            {/* Il nome va preso dal vocabolario, non dal catalogo dei connettori:
+                una fonte arrivata da un foglio Excel non ha una voce lì, e
+                leggerla faceva cadere l'intera pagina. */}
+            🔬 {t('listening.deepdive', 'Deep-dive')} {sourceLabel(sp.fonte)} →
           </Link>
         )}
         {sp.autore && (

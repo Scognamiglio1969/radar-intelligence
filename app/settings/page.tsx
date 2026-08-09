@@ -4,6 +4,7 @@ import { and, eq, gte } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { shareLinks } from '@/lib/db/schema';
 import { CopyButton } from '@/components/copy-button';
+import { DeleteProject } from '@/components/delete-project';
 import { SubmitButton } from '@/components/submit-button';
 import { getBenchmarkEntities, getCurrentProject, getProjects } from '@/lib/data';
 import { PageHeader, EmptyState } from '@/components/ui';
@@ -11,7 +12,7 @@ import { getT } from '@/lib/i18n';
 import type { projects as projectsTable } from '@/lib/db/schema';
 import { EditableEntity } from '@/components/editable-entity';
 import {
-  addEntity, createProject, createImportProject, createShareLink, deleteEntity, deleteProject,
+  addEntity, createProject, createImportProject, createShareLink, deleteEntity,
   revokeShareLink, saveAndExpandProject, setOwnBrand, updateEntity, updateProject, updateImportProject,
 } from './actions';
 
@@ -254,13 +255,7 @@ export default async function SettingsPage({ searchParams }: {
 
                 {allProjects.length > 1 && (
                   <div className="mt-6 border-t border-red-500/20 pt-4">
-                    <form action={deleteProject}>
-                      <input type="hidden" name="id" value={selected.id} />
-                      <button type="submit" className="flex items-center gap-2 rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-400/90 transition hover:bg-red-500/10">
-                        <Trash2 className="size-4" />
-                        Delete “{selected.name}” and all its data
-                      </button>
-                    </form>
+                    <DeleteProject id={selected.id} name={selected.name} />
                   </div>
                 )}
               </>
