@@ -219,6 +219,48 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     finally { setBusy(''); }
   };
 
+  // Un foglio porta nel nome il file da cui viene: "database.xlsx › X". Serve
+  // per rimettere insieme i fogli di uno stesso caricamento: chi torna sul
+  // progetto dopo un mese deve sapere su quali file poggia, non solo che
+  // esiste un foglio chiamato "X".
+  const originOf = (f: ImportFile) => f.filename.split(' › ')[0].trim();
+
+  /** Le sorgenti del progetto: un file caricato, con i suoi fogli. */
+  const sources = useMemo(() => {
+    const map = new Map<string, { name: string; files: ImportFile[] }>();
+    for (const f of files) {
+      const name = originOf(f);
+      if (!map.has(name)) map.set(name, { name, files: [] });
+      map.get(name)!.files.push(f);
+    }
+    return [...map.values()].map((s2) => ({
+      ...s2,
+      sizeBytes: Math.max(...s2.files.map((f) => f.sizeBytes)),
+      uploadedAt: s2.files.map((f) => f.createdAt).sort()[0],
+      rawRows: s2.files.reduce((n, f) => n + f.rowCount, 0),
+      mentions: s2.files.filter((f) => f.kind === 'mentions').reduce((n, f) => n + f.inArchive, 0),
+      points: s2.files.filter((f) => f.kind === 'metrics').reduce((n, f) => n + f.inArchive, 0),
+      pending: s2.files.filter((f) => f.status !== 'imported').length,
+    }));
+  }, [files]);
+
+  /** Toglie un intero file caricato: tutti i suoi fogli e i dati che ne derivano. */
+  const removeSource = async (name: string) => {
+    const target = files.filter((f) => originOf(f) === name);
+    setBusy(`source-${name}`); setError('');
+    try {
+      for (const f of target) {
+        const res = await fetch('/api/import/files', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: project.id, fileId: f.id, action: 'delete' }),
+        });
+        if (!res.ok) { setError((await res.json()).error ?? 'Eliminazione fallita'); break; }
+      }
+      await load();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(''); }
+  };
+
   const stats = useMemo(() => {
     const imported = files.filter((f) => f.status === 'imported');
     return {
@@ -444,15 +486,40 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
         />
       )}
 
+      {sources.length > 0 && (
+        // La domanda "su quali file poggia questo progetto?" arriva mesi dopo,
+        // da chi non era presente al caricamento. La risposta sta in alto,
+        // anche quando il file è uno solo.
+        <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 px-1 text-[11px] text-slate-500">
+          <span className="text-slate-600">{sources.length === 1 ? 'Il progetto viene da:' : 'Il progetto viene da:'}</span>
+          {sources.map((s2, i) => (
+            <span key={s2.name} className="text-slate-400">
+              <span className="text-slate-300">{s2.name}</span>
+              <span className="text-slate-600"> ({s2.files.length === 1 ? '1 foglio' : `${s2.files.length} fogli`})</span>
+              {i < sources.length - 1 && <span className="text-slate-700"> ·</span>}
+            </span>
+          ))}
+        </p>
+      )}
+
       {error && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">{error}</p>}
 
-      {files.map((f) => (
-        <FileCard
-          key={f.id} file={f} busy={busy} projectId={project.id}
-          expanded={open === f.id}
-          onToggle={() => setOpen(open === f.id ? null : f.id)}
-          onAct={act}
-        />
+      {sources.map((src) => (
+        <div key={src.name} className="flex flex-col gap-2">
+          <SourceHeader
+            src={src} busy={busy}
+            onRemove={() => removeSource(src.name)}
+            multi={sources.length > 1}
+          />
+          {src.files.map((f) => (
+            <FileCard
+              key={f.id} file={f} busy={busy} projectId={project.id}
+              expanded={open === f.id}
+              onToggle={() => setOpen(open === f.id ? null : f.id)}
+              onAct={act}
+            />
+          ))}
+        </div>
       ))}
     </div>
   );
@@ -872,6 +939,87 @@ function Steps({ step, hasContent }: { step: number; hasContent: boolean }) {
   );
 }
 
+type Source = {
+  name: string; files: ImportFile[]; sizeBytes: number; uploadedAt: string;
+  rawRows: number; mentions: number; points: number; pending: number;
+};
+
+/**
+ * L'intestazione di una sorgente: quale file, caricato quando, cosa ne è nato.
+ *
+ * Serve a una domanda che arriva dopo, non durante: "su che cosa poggia questo
+ * progetto?". Chi ci torna fra un mese, o chi eredita il lavoro, non deve
+ * dedurlo dai nomi dei fogli — che dicono "X", "LK", "FOLLOWER" e non dicono
+ * da quale cartella di lavoro vengano.
+ *
+ * Toglierla porta via anche i dati che ne derivano, e lo dice prima con i
+ * numeri esatti: un progetto svuotato per sbaglio non si ricostruisce.
+ */
+function SourceHeader({ src, busy, onRemove, multi }: {
+  src: Source; busy: string; onRemove: () => void; multi: boolean;
+}) {
+  const [asking, setAsking] = useState(false);
+  const kb = src.sizeBytes >= 1_048_576
+    ? `${(src.sizeBytes / 1_048_576).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(src.sizeBytes / 1024))} KB`;
+  const quando = new Date(src.uploadedAt).toLocaleDateString('it-IT', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const busyHere = busy === `source-${src.name}`;
+
+  const cosa = [
+    src.mentions ? `${num(src.mentions)} contenuti` : null,
+    src.points ? `${num(src.points)} misure` : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <div className="mt-2 rounded-xl border border-[var(--border)] bg-white/[0.02] px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Archive className="size-4 shrink-0 text-slate-500" />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200" title={src.name}>
+          {src.name}
+        </span>
+        <span className="shrink-0 text-[11px] text-slate-500">
+          {src.files.length === 1 ? '1 foglio' : `${src.files.length} fogli`} · {num(src.rawRows)} righe · {kb}
+        </span>
+        <button onClick={() => setAsking(true)} disabled={!!busy}
+          title="Togli questo file dal progetto, insieme ai dati che ne derivano"
+          className="shrink-0 rounded-lg p-1.5 text-slate-600 transition hover:text-red-400 disabled:opacity-50">
+          {busyHere ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        </button>
+      </div>
+      <p className="mt-0.5 text-[11px] text-slate-600">
+        Caricato il {quando}
+        {cosa && <> · nel progetto ci sono {cosa} che vengono da qui</>}
+        {src.pending > 0 && <> · {src.pending === 1 ? 'un foglio non è ancora importato' : `${src.pending} fogli non sono ancora importati`}</>}
+      </p>
+
+      {asking && (
+        <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/[0.05] px-3.5 py-3">
+          <p className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-red-300">
+            <AlertTriangle className="size-4 shrink-0" /> Togliere “{src.name}”?
+          </p>
+          <p className="mb-2.5 text-xs leading-relaxed text-slate-400">
+            Spariscono {src.files.length === 1 ? 'il foglio' : `i suoi ${src.files.length} fogli`}, il materiale grezzo
+            {cosa ? <> e {cosa} in archivio</> : null}
+            {multi ? ' — gli altri file restano dove sono.' : '.'} Per riaverli va ricaricato il file.
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => { setAsking(false); onRemove(); }} disabled={!!busy}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/90 px-3.5 py-1.5 text-xs font-medium text-slate-950 hover:bg-red-400 disabled:opacity-50">
+              <Trash2 className="size-3.5" /> Togli tutto
+            </button>
+            <button onClick={() => setAsking(false)}
+              className="rounded-lg border border-[var(--border)] px-3.5 py-1.5 text-xs text-slate-300 hover:bg-white/5">
+              Annulla
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
   file: ImportFile; busy: string; projectId: number; expanded: boolean;
   onToggle: () => void;
@@ -881,6 +1029,7 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
   const [preview, setPreview] = useState<{ rows: PreviewRow[]; report: Report } | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [previewErr, setPreviewErr] = useState('');
+  const [confirmDel, setConfirmDel] = useState(false);
 
   // Se il file cambia sotto (ricaricato dopo un'azione) la bozza locale si allinea.
   useEffect(() => { setMap(file.mapping); }, [file.mapping]);
@@ -936,13 +1085,39 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
               {file.status === 'imported' ? 'Reimporta' : 'Importa'}
             </button>
           )}
-          <button onClick={() => onAct(file.id, 'delete')} disabled={!!busy}
-            title="Elimina il file e le mention che ne derivano"
+          <button onClick={() => setConfirmDel(true)} disabled={!!busy}
+            title="Togli questo foglio e i dati che ne derivano"
             className="rounded-lg p-1.5 text-slate-600 hover:text-red-400 disabled:opacity-50">
             <Trash2 className="size-4" />
           </button>
         </div>
       </div>
+
+      {confirmDel && (
+        // Il cestino toglie righe vere dall'archivio, non una scheda dalla
+        // pagina: va detto quante, prima.
+        <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/[0.05] px-3.5 py-3">
+          <p className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-red-300">
+            <AlertTriangle className="size-4 shrink-0" /> Togliere il foglio “{file.sheetName ?? file.filename}”?
+          </p>
+          <p className="mb-2.5 text-xs leading-relaxed text-slate-400">
+            {file.inArchive > 0
+              ? <>Spariscono dall’archivio {num(file.inArchive)} {file.kind === 'metrics' ? 'misure' : 'contenuti'} che vengono da questo foglio, insieme alle sue righe grezze.</>
+              : <>Questo foglio non ha ancora dati in archivio: sparisce solo il materiale grezzo.</>}
+            {' '}Per riaverlo va ricaricato il file.
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => { setConfirmDel(false); onAct(file.id, 'delete'); }} disabled={!!busy}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/90 px-3.5 py-1.5 text-xs font-medium text-slate-950 hover:bg-red-400 disabled:opacity-50">
+              <Trash2 className="size-3.5" /> Togli il foglio
+            </button>
+            <button onClick={() => setConfirmDel(false)}
+              className="rounded-lg border border-[var(--border)] px-3.5 py-1.5 text-xs text-slate-300 hover:bg-white/5">
+              Annulla
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-2"><Steps step={st.step} hasContent={isReady(file)} /></div>
 
