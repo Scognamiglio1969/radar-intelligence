@@ -4,6 +4,7 @@ import { claudeAvailable } from '@/lib/claude';
 import { PageHeader, EmptyState } from '@/components/ui';
 import { getT } from '@/lib/i18n';
 import { TimelineView } from '@/components/timeline-view';
+import { SectionTabs } from '@/components/section-tabs';
 
 export const metadata = { title: 'Timeline' };
 
@@ -15,6 +16,7 @@ export default async function TimelinePage() {
 
   return (
     <>
+      <SectionTabs group="story" />
       <PageHeader
         title={t('page.timeline.title', 'Timeline')}
         subtitle={t('page.timeline.subtitle', 'The historical memory of your monitoring: salient events, extracted daily by AI. It grows on its own over time.')}

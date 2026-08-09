@@ -3,6 +3,7 @@ import { getCurrentProject } from '@/lib/data';
 import { PageHeader, EmptyState } from '@/components/ui';
 import { detectPeople, personCard, peopleRanking, personSeries } from '@/lib/people-insights';
 import { PersonCards, PeopleLeaderboard } from '@/components/people-charts';
+import { SectionTabs } from '@/components/section-tabs';
 
 export const metadata = { title: 'People' };
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,7 @@ export default async function PeoplePage() {
   if (!names.length) {
     return (
       <>
+        <SectionTabs group="data" />
         <PageHeader title="People"
           subtitle="Personal branding: how each person is growing, publishing and being followed." />
         <EmptyState message="Nessuna persona rilevata in questo progetto. Compare da sola quando importi fogli che seguono manager o portavoce — Radar li riconosce dalla forma del file." />
@@ -46,6 +48,7 @@ export default async function PeoplePage() {
 
   return (
     <>
+      <SectionTabs group="data" />
       <PageHeader
         title="People"
         subtitle="Personal branding: how each person is growing, publishing and being followed."

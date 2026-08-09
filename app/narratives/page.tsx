@@ -4,6 +4,7 @@ import { getCurrentProject } from '@/lib/data';
 import { getNarratives } from '@/lib/narratives';
 import { PageHeader, EmptyState, fmtDate } from '@/components/ui';
 import { getT } from '@/lib/i18n';
+import { SectionTabs } from '@/components/section-tabs';
 
 const STANCE_STYLE: Record<string, string> = {
   positive: 'bg-emerald-500/15 text-emerald-400',
@@ -29,6 +30,7 @@ export default async function NarrativesPage() {
 
   return (
     <>
+      <SectionTabs group="story" />
       <PageHeader
         title={t('page.narratives.title', 'Narratives')}
         subtitle={t('page.narratives.subtitle', 'Who is pushing what: clusters of messages supporting the same thesis, flagging coordinated patterns')}

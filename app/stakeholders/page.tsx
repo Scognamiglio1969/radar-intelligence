@@ -4,6 +4,7 @@ import { getCurrentProject } from '@/lib/data';
 import { PageHeader, EmptyState } from '@/components/ui';
 import { getT } from '@/lib/i18n';
 import { StakeholderMap } from '@/components/stakeholder-map';
+import { SectionTabs } from '@/components/section-tabs';
 
 export const metadata = { title: 'Mappa attori' };
 
@@ -55,6 +56,7 @@ export default async function StakeholdersPage() {
 
   return (
     <>
+      <SectionTabs group="story" />
       <PageHeader
         title={t('page.stakeholders.title', 'Stakeholder map')}
         subtitle="Who matters in the conversation: size = weight, color = sentiment. The most influential are at the center."

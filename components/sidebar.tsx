@@ -3,18 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  Radar, LayoutDashboard, Ear, Newspaper, BarChart3, Users,
-  Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
-  Diff, PenLine, Menu, X, MonitorPlay, Network, History,
-  UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb, MessageSquareQuote, Euro, Award, Trophy, FileClock,
-  BookOpen, LineChart, UserRound,
-  Shapes,
-} from 'lucide-react';
+import { Settings, Menu, X, UserCog, LogOut, UserCircle2 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
 import { LocaleSwitch } from './locale-switch';
 import { tFor, type Locale } from '@/lib/i18n-dict';
+import { NAV, type NavItem } from '@/lib/nav';
+import { CommandPalette, CommandHint } from './command-palette';
 
 // Menu organizzato per INTENZIONE (cosa stai facendo), non per tecnologia:
 // monitorare → analizzare → interpretare → produrre → configurare.
@@ -31,46 +26,7 @@ const ACCENT: Record<string, string> = {
   wikipedia: 'text-slate-400',
 };
 
-type NavItem =
-  | { href: string; label: string; key: string; icon: typeof Radar; accent?: keyof typeof ACCENT }
-  | { section: string; key: string };
 
-const NAV: NavItem[] = [
-  { section: 'Monitor', key: 'nav.monitor' },
-  { href: '/', label: 'Dashboard', key: 'nav.dashboard', icon: LayoutDashboard },
-  { href: '/listening', label: 'Listening', key: 'nav.listening', icon: Ear },
-  { href: '/media', label: 'Media', key: 'nav.media', icon: Newspaper },
-  { href: '/alerts', label: 'Alerts', key: 'nav.alerts', icon: Bell },
-  { href: '/changes', label: 'What changed', key: 'nav.changes', icon: Diff },
-  { section: 'Analyze', key: 'nav.analyze' },
-  { href: '/audience', label: 'Audience', key: 'nav.audience', icon: Users },
-  { href: '/benchmark', label: 'Benchmark', key: 'nav.benchmark', icon: BarChart3 },
-  { href: '/content', label: 'Top content', key: 'nav.content', icon: Star },
-  { href: '/messages', label: 'Message pull-through', key: 'nav.messages', icon: MessageSquareQuote },
-  { href: '/emv', label: 'Media value', key: 'nav.emv', icon: Euro },
-  { href: '/insights', label: 'Explore insights', key: 'nav.insights', icon: LayoutGrid },
-  { href: '/measures', label: 'Measures', key: 'nav.measures', icon: LineChart },
-  { href: '/people', label: 'People', key: 'nav.people', icon: UserRound },
-  { href: '/graph', label: 'Studio Graph', key: 'nav.graph', icon: Shapes },
-  { section: 'Interpret', key: 'nav.interpret' },
-  { href: '/pov', label: 'Point of View', key: 'nav.pov', icon: Lightbulb },
-  { href: '/narratives', label: 'Narratives', key: 'nav.narratives', icon: GitBranch },
-  { href: '/timeline', label: 'Timeline', key: 'nav.timeline', icon: History },
-  { href: '/stakeholders', label: 'Stakeholder map', key: 'nav.stakeholders', icon: Network },
-  { href: '/ask', label: 'Ask the data', key: 'nav.ask', icon: MessageSquareText },
-  { section: 'Create', key: 'nav.create' },
-  { href: '/studio', label: 'Content Studio', key: 'nav.studio', icon: PenLine },
-  { href: '/brief', label: 'Daily brief', key: 'nav.brief', icon: FileText },
-  { href: '/report', label: 'Custom report', key: 'nav.report', icon: BookOpen },
-  { href: '/tv', label: 'War Room', key: 'nav.tv', icon: MonitorPlay },
-  { section: 'Setup', key: 'nav.setup' },
-  { href: '/settings', label: 'Projects', key: 'nav.settings', icon: Settings },
-  { section: '', key: '' },
-  { section: 'Beyond mentions', key: 'nav.beyondSection' },
-  { href: '/reviews', label: 'Reviews', key: 'nav.reviews', icon: Award, accent: 'reviews' },
-  { href: '/sport', label: 'Sport', key: 'nav.sport', icon: Trophy, accent: 'sport' },
-  { href: '/wikipedia', label: 'Wikipedia', key: 'nav.wikipedia', icon: FileClock, accent: 'wikipedia' },
-];
 
 type Props = {
   projects: { id: number; name: string }[];
@@ -121,6 +77,8 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
 
   return (
     <>
+      <CommandPalette locale={locale} />
+
       {/* Header mobile/tablet (sotto lg) */}
       <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-[var(--border)] bg-[#0c1226]/95 px-4 py-2.5 backdrop-blur lg:hidden">
         <button onClick={() => setOpen(true)} aria-label="Open menu"
@@ -146,6 +104,7 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
                 <X className="size-5" />
               </button>
             </div>
+            <CommandHint locale={locale} />
             <NavLinks pathname={pathname} alertCount={alertCount} t={t} onNavigate={() => setOpen(false)} />
             {userBlock}
             <FooterBlock lastIngest={lastIngest} />
@@ -159,6 +118,7 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
           <Brand />
         </div>
         <ProjectSelect projects={projects} currentId={currentId} />
+        <CommandHint locale={locale} />
         <NavLinks pathname={pathname} alertCount={alertCount} t={t} />
         <div className="mt-auto flex flex-col gap-3">
           {userBlock}
@@ -192,36 +152,59 @@ function ProjectSelect({ projects, currentId, compact }: {
   );
 }
 
+/**
+ * Il menù, letto per PESO.
+ *
+ * Le voci non sono tutte uguali: quattro si aprono ogni giorno, le altre una
+ * volta al mese. Un elenco che le disegna identiche costringe a leggerle tutte
+ * per trovarne una. Qui le principali sono più grandi e con l'icona; le altre
+ * restano al loro posto, più piccole e in grigio. Non si nasconde niente e non
+ * serve un clic in più: cambia solo quanto pesano sull'occhio.
+ */
 function NavLinks({ pathname, alertCount = 0, t, onNavigate }: {
   pathname: string; alertCount?: number; t: (k: string, f: string) => string; onNavigate?: () => void;
 }) {
   return (
-    <nav className="flex flex-col gap-0.5 overflow-y-auto">
+    <nav className="flex flex-col gap-px overflow-y-auto">
       {NAV.map((item, i) => {
         if ('section' in item) {
           return item.section
-            ? <p key={i} className="mt-3 mb-0.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">{t(item.key, item.section)}</p>
+            ? <p key={i} className="mb-1 mt-4 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">{t(item.key, item.section)}</p>
             : <hr key={i} className="my-2 border-[var(--border)]" />;
         }
-        const { href, label, key, icon: Icon } = item;
+        const { href, label, key, icon: Icon, primary } = item;
         const accent = 'accent' in item ? item.accent : undefined;
-        // L'hub resta evidenziato anche quando sei dentro un singolo insight.
+        // L'hub resta evidenziato anche quando sei dentro un singolo insight,
+        // e una scheda accende la voce della famiglia a cui appartiene.
         const active = href === '/insights'
           ? pathname.startsWith('/insights')
-          : pathname === href;
+          : href === '/story'
+            ? ['/narratives', '/timeline', '/stakeholders', '/messages'].includes(pathname)
+            : href === '/measures'
+              ? pathname === '/measures' || pathname === '/people'
+              : pathname === href;
+
         return (
           <Link
             key={href}
             href={href}
             onClick={onNavigate}
-            className={`flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+            className={`flex items-center gap-2.5 rounded-lg transition-colors ${
+              primary ? 'px-3 py-1.5 text-[15px]' : 'py-1 pl-3 pr-3 text-[13px]'
+            } ${
               active
-                ? 'bg-sky-500/15 text-sky-300 font-medium'
-                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                ? 'bg-sky-500/15 font-medium text-sky-300'
+                : primary
+                  ? 'text-slate-300 hover:bg-white/5 hover:text-slate-100'
+                  : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
             }`}
           >
-            <Icon className={`size-4 ${!active && accent ? ACCENT[accent] : ''}`} />
-            {t(key, label)}
+            {primary || accent
+              ? <Icon className={`size-4 shrink-0 ${!active && accent ? ACCENT[accent] : ''}`} />
+              // Le voci di tutti i giorni portano l'icona; le altre no. Con
+              // venti icone tutte accese nessuna aiuta più a distinguere.
+              : <span className="ml-[3px] mr-[7px] size-[3px] shrink-0 rounded-full bg-current opacity-40" />}
+            <span className="truncate">{t(key, label)}</span>
             {href === '/alerts' && alertCount > 0 && (
               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[11px] font-bold text-white">
                 {alertCount > 9 ? '9+' : alertCount}

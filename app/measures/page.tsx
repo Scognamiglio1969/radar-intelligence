@@ -8,6 +8,7 @@ import {
   performanceByCustom, projectArchetypes, rankEntities, seriesByMetric,
 } from '@/lib/metrics-data';
 import { CustomPerformance, MixChart, RankChart, TrendChart } from '@/components/metric-charts';
+import { SectionTabs } from '@/components/section-tabs';
 
 export const metadata = { title: 'Measures' };
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,7 @@ export default async function MeasuresPage() {
   if (!catalog.length) {
     return (
       <>
+        <SectionTabs group="data" />
         <PageHeader
           title="Measures"
           subtitle="Series imported from spreadsheets: followers, publications, averages — everything that isn't a post."
@@ -106,6 +108,7 @@ export default async function MeasuresPage() {
 
   return (
     <>
+      <SectionTabs group="data" />
       <PageHeader
         title="Measures"
         subtitle="Series imported from spreadsheets: followers, publications, averages — everything that isn't a post."

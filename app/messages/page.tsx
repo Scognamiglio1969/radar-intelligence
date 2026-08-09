@@ -8,6 +8,7 @@ import { getT } from '@/lib/i18n';
 import { sourceLabel } from '@/lib/export-data';
 import { saveKeyMessages } from './actions';
 import { SubmitButton } from '@/components/submit-button';
+import { SectionTabs } from '@/components/section-tabs';
 
 export const metadata = { title: 'Message pull-through' };
 
@@ -26,6 +27,7 @@ export default async function MessagesPage() {
 
   return (
     <>
+      <SectionTabs group="story" />
       <PageHeader
         title={t('page.messages.title', 'Message pull-through')}
         info="Whether the messages YOU want to land are actually being picked up. You write your key messages; each one is expanded once into the words journalists and users would really use, and from then on the matching is pure database work — every count is verifiable and costs nothing to refresh. Period: last 30 days."
