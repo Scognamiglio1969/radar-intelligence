@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import type ExcelJS from 'exceljs';
 import { getDb } from '@/lib/db';
 import { importFiles, importRows, mentions, metricPoints } from '@/lib/db/schema';
 import { parseSheet, type ColumnMap, type ImportReport, type SheetIssues } from '@/lib/import';
@@ -55,12 +56,14 @@ export type ImportFileRow = {
 /** Legge il foglio, ne conserva le righe grezze e chiede all'AI una proposta. */
 export async function registerFile(
   projectId: number, buffer: Buffer, filename: string, sheetName?: string,
+  /** Cartella già caricata: importare N fogli non deve rileggere N volte il file. */
+  workbook?: ExcelJS.Workbook,
 ): Promise<{
   fileId: number; columns: string[]; profiles: ColumnProfile[]; proposal: FieldProposal[];
   usedAi: boolean; total: number; issues: SheetIssues; kind: 'mentions' | 'metrics';
   archetype: string; people: boolean;
 }> {
-  const { columns, rows, issues } = await parseSheet(buffer, filename, { sheet: sheetName });
+  const { columns, rows, issues } = await parseSheet(buffer, filename, { sheet: sheetName, workbook });
   if (columns.length === 0) throw new Error('Il foglio non ha colonne leggibili');
 
   const profiles = profileColumns(columns, rows);

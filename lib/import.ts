@@ -358,6 +358,8 @@ export type ParseOptions = {
   sheet?: string | number;
   /** Riga d'intestazione forzata (1-based); assente = rilevata. */
   headerRow?: number;
+  /** Cartella di lavoro già caricata: evita di rileggerla per ogni foglio. */
+  workbook?: ExcelJS.Workbook;
 };
 
 /** Che fogli contiene il file, senza importarne nessuno. */
@@ -401,6 +403,19 @@ export async function listSheets(buffer: Buffer, filename: string): Promise<Shee
 }
 
 /** Legge un buffer .xlsx/.csv e restituisce colonne + righe (oggetti per header). */
+/**
+ * Carica una cartella di lavoro una volta sola.
+ *
+ * Serve perché importare 43 fogli chiamando parseSheet 43 volte significa
+ * rileggere 43 volte lo stesso file da quattro megabyte: la richiesta muore
+ * prima di finire, e l'utente vede solo un errore del browser.
+ */
+export async function loadWorkbook(buffer: Buffer): Promise<ExcelJS.Workbook> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+  return wb;
+}
+
 export async function parseSheet(
   buffer: Buffer, filename: string, opts: ParseOptions = {},
 ): Promise<ParsedSheet> {
@@ -412,8 +427,7 @@ export async function parseSheet(
   if (isCsv) {
     g = parseCsv(decodeText(buffer));
   } else {
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    const wb = opts.workbook ?? await loadWorkbook(buffer);
     const ws = typeof opts.sheet === 'number' ? wb.worksheets[opts.sheet]
       : opts.sheet ? wb.getWorksheet(opts.sheet)
         : (wb.worksheets.find((w) => w.state === 'visible') ?? wb.worksheets[0]);

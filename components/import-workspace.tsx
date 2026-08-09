@@ -27,6 +27,16 @@ type Profile = { name: string; kind: string; filled: number; distinct: number; s
 type Proposal = { column: string; field: string | null; confidence: 'alta' | 'media' | 'bassa' | null; reason: string };
 type Report = { total: number; inserted: number; skippedEmpty: number; duplicates: number; datesFailed: number; sentimentImported: number };
 type Issues = { formulas: number; formulaErrors: number; formulaNoValue: number };
+/** La risposta del caricamento: inventario dei fogli, oppure esito. */
+type UploadReply = {
+  needsChoice?: boolean;
+  sheets?: SheetInfo[];
+  fileId?: number;
+  imported?: number;
+  failed?: { sheet: string; reason: string }[];
+  error?: string;
+};
+
 type ImportFile = {
   id: number; filename: string; sizeBytes: number; rowCount: number;
   columns: string[]; profiles: Profile[]; proposal: Proposal[] | null;
@@ -141,25 +151,75 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     // in cima allo schermo l'utente crede che sia bloccato e ricarica la
     // pagina, interrompendo davvero l'operazione.
     setProgress(2);
-    setPhase(sheets?.length
-      ? `Lettura di ${sheets.length} fogli: righe, colonne e riconoscimento…`
-      : 'Apertura del file e inventario dei fogli…');
-    const timer = creepingProgress(setProgress);
+    const timer = sheets?.length ? null : creepingProgress(setProgress);
     try {
-      const fd = new FormData();
-      fd.append('file', f);
-      fd.append('projectId', String(project.id));
-      if (sheets?.length) fd.append('sheets', sheets.join('\n'));
-      const res = await fetch('/api/import/files', { method: 'POST', body: fd });
-      const d = await res.json();
-      if (!res.ok) { setError(d.error ?? "Errore nell'upload"); return; }
-      if (d.needsChoice) { setPending({ file: f, sheets: d.sheets }); return; }
+      if (!sheets?.length) {
+        setPhase('Apertura del file e inventario dei fogli…');
+        const d = await post(f, []);
+        if (!d) return;
+        if (d.needsChoice && d.sheets) { setPending({ file: f, sheets: d.sheets }); return; }
+        setPending(null);
+        await load();
+        if (d.fileId) setOpen(d.fileId);
+        return;
+      }
+
+      // I fogli vanno a piccoli gruppi. Ogni foglio va letto, profilato e
+      // proposto all'AI: chiederne quaranta in una richiesta sola significa
+      // superare il tempo massimo e far morire tutto insieme — e all'utente
+      // arriva un errore del browser invece di una spiegazione.
+      const CHUNK = 4;
+      let done = 0;
+      let firstId: number | undefined;
+      const failed: { sheet: string; reason: string }[] = [];
+
+      for (let i = 0; i < sheets.length; i += CHUNK) {
+        const group = sheets.slice(i, i + CHUNK);
+        setPhase(`Lettura dei fogli ${done + 1}–${Math.min(done + group.length, sheets.length)} di ${sheets.length}: righe, colonne e riconoscimento…`);
+        const d = await post(f, group);
+        if (!d) return;
+        firstId ??= d.fileId;
+        if (Array.isArray(d.failed)) failed.push(...d.failed);
+        done += group.length;
+        setProgress(Math.round((done / sheets.length) * 100));
+      }
+
       setPending(null);
       await load();
-      if (d.fileId) setOpen(d.fileId);
-      if (d.imported) setShowLog(true);
+      if (firstId) setOpen(firstId);
+      setShowLog(true);
+      if (failed.length) {
+        setError(`${failed.length} fogli non sono entrati: ${failed.map((x) => `${x.sheet} (${x.reason})`).join('; ')}. Gli altri ${done - failed.length} sì.`);
+      }
     } catch (e) { setError((e as Error).message); }
-    finally { clearInterval(timer); setProgress(0); setBusy(''); }
+    finally { if (timer) clearInterval(timer); setProgress(0); setBusy(''); }
+  };
+
+  /**
+   * Una richiesta di caricamento. Restituisce null quando è andata male,
+   * avendo già scritto il motivo: una risposta che non è JSON — un timeout del
+   * server, una pagina di errore della piattaforma — non deve arrivare
+   * all'utente come "The string did not match the expected pattern".
+   */
+  const post = async (f: File, sheets: string[]): Promise<UploadReply | null> => {
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('projectId', String(project.id));
+    if (sheets.length) fd.append('sheets', sheets.join('\n'));
+
+    const res = await fetch('/api/import/files', { method: 'POST', body: fd });
+    const text = await res.text();
+    let d: UploadReply | null = null;
+    try { d = JSON.parse(text); } catch { /* non era JSON */ }
+
+    if (!d) {
+      setError(res.status === 413
+        ? 'Il file è troppo grande per essere caricato in una volta.'
+        : `Il server non ha risposto (${res.status}). Se il file ha molti fogli, importane qualcuno per volta.`);
+      return null;
+    }
+    if (!res.ok) { setError(d.error ?? "Errore nell'upload"); return null; }
+    return d;
   };
 
   const act = async (fileId: number, action: string, payload?: Record<string, unknown>) => {

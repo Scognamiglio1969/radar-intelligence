@@ -7,7 +7,7 @@ import {
   deleteFile, deriveMentions, deriveMetricPoints, listFiles, purgeRaw, registerFile,
   updateExtras, updateKind, updateMapping, updateMetricMap,
 } from '@/lib/import-store';
-import { listSheets } from '@/lib/import';
+import { listSheets, loadWorkbook } from '@/lib/import';
 
 export const runtime = 'nodejs';
 // Un file grande va letto, profilato, proposto all'AI e archiviato riga per
@@ -59,11 +59,28 @@ export async function POST(req: Request) {
       return NextResponse.json(await registerFile(projectId, buf, file.name, only));
     }
 
+    // Un foglio alla volta significava rileggere l'intero file per ognuno: su
+    // una cartella da 56 fogli la richiesta moriva prima di finire, e al
+    // browser arrivava una risposta che JSON non era. Ora si legge una volta
+    // sola, e il client manda i fogli a piccoli gruppi.
+    const isCsv = /\.csv$/i.test(file.name);
+    const workbook = isCsv ? undefined : await loadWorkbook(buf);
+
     const results = [];
+    const failed: { sheet: string; reason: string }[] = [];
     for (const sheet of chosen) {
-      results.push(await registerFile(projectId, buf, `${file.name} › ${sheet}`, sheet));
+      try {
+        results.push(await registerFile(projectId, buf, `${file.name} › ${sheet}`, sheet, workbook));
+      } catch (e) {
+        // Un foglio illeggibile non deve far fallire gli altri quaranta: si
+        // annota e si va avanti, e alla fine si dice quali non sono entrati.
+        failed.push({ sheet, reason: (e as Error).message });
+      }
     }
-    return NextResponse.json({ imported: results.length, fileId: results[0]?.fileId });
+    return NextResponse.json({
+      imported: results.length, fileId: results[0]?.fileId,
+      ...(failed.length ? { failed } : {}),
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
