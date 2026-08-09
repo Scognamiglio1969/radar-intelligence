@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -9,7 +9,7 @@ import {
   Diff, PenLine, Menu, X, MonitorPlay, Network, History,
   UserCog, LogOut, UserCircle2, LayoutGrid, Lightbulb, MessageSquareQuote, Euro, Award, Trophy, FileClock,
   BookOpen, LineChart, UserRound,
-  Shapes,
+  Shapes, ChevronRight,
 } from 'lucide-react';
 import { RefreshButton } from './refresh-button';
 import { Brand } from './brand';
@@ -192,42 +192,123 @@ function ProjectSelect({ projects, currentId, compact }: {
   );
 }
 
+/**
+ * Il menu a fisarmonica.
+ *
+ * Le voci sono cresciute fino a non stare più in una schermata, e un elenco che
+ * non si legge tutto non è più un elenco: diventa una lista da scorrere. Qui
+ * ogni gruppo si apre e si chiude, e la regola è che il gruppo della pagina in
+ * cui ti trovi è sempre aperto — non si può nascondere a qualcuno dove si trova.
+ *
+ * "Setup" resta sempre aperto: sono due voci, e sono quelle che si cercano
+ * quando qualcosa non va. Nasconderle dietro un clic non fa guadagnare spazio,
+ * fa perdere tempo nel momento sbagliato.
+ */
+
+type NavLink = Extract<NavItem, { href: string }>;
+type Group = { key: string; label: string; items: NavLink[]; collapsible: boolean; ruleBefore: boolean };
+
+/** Da elenco piatto a gruppi. Il separatore vuoto diventa una riga sopra il gruppo. */
+function groupNav(): Group[] {
+  const groups: Group[] = [];
+  let rule = false;
+  for (const item of NAV) {
+    if ('section' in item) {
+      if (!item.section) { rule = true; continue; }
+      groups.push({
+        key: item.key, label: item.section, items: [],
+        collapsible: item.key !== 'nav.setup',
+        ruleBefore: rule,
+      });
+      rule = false;
+      continue;
+    }
+    groups[groups.length - 1]?.items.push(item);
+  }
+  return groups;
+}
+
+const GROUPS = groupNav();
+const STORE_KEY = 'sr_nav_open';
+
 function NavLinks({ pathname, alertCount = 0, t, onNavigate }: {
   pathname: string; alertCount?: number; t: (k: string, f: string) => string; onNavigate?: () => void;
 }) {
+  const isActive = (href: string) => (href === '/insights'
+    ? pathname.startsWith('/insights')
+    : pathname === href);
+
+  // Il gruppo della pagina corrente: si apre da sé, e non si può chiudere
+  // lasciando l'utente senza il riferimento di dove si trova.
+  const activeKey = GROUPS.find((g) => g.items.some((i) => isActive(i.href)))?.key;
+
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null');
+      if (saved && typeof saved === 'object') setOpen(saved as Record<string, boolean>);
+    } catch { /* prima visita */ }
+  }, []);
+
+  const toggle = (key: string) => setOpen((prev) => {
+    const next = { ...prev, [key]: !(prev[key] ?? key === activeKey) };
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(next)); } catch { /* niente */ }
+    return next;
+  });
+
   return (
     <nav className="flex flex-col gap-0.5 overflow-y-auto">
-      {NAV.map((item, i) => {
-        if ('section' in item) {
-          return item.section
-            ? <p key={i} className="mt-3 mb-0.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">{t(item.key, item.section)}</p>
-            : <hr key={i} className="my-2 border-[var(--border)]" />;
-        }
-        const { href, label, key, icon: Icon } = item;
-        const accent = 'accent' in item ? item.accent : undefined;
-        // L'hub resta evidenziato anche quando sei dentro un singolo insight.
-        const active = href === '/insights'
-          ? pathname.startsWith('/insights')
-          : pathname === href;
+      {GROUPS.map((g) => {
+        const isOpen = !g.collapsible || g.key === activeKey || (open[g.key] ?? false);
+        // Quando un gruppo è chiuso, le notifiche che contiene devono restare
+        // visibili sulla sua intestazione: un avviso nascosto è un avviso perso.
+        const hidden = !isOpen && g.items.some((i) => i.href === '/alerts') ? alertCount : 0;
+
         return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            className={`flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
-              active
-                ? 'bg-sky-500/15 text-sky-300 font-medium'
-                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-            }`}
-          >
-            <Icon className={`size-4 ${!active && accent ? ACCENT[accent] : ''}`} />
-            {t(key, label)}
-            {href === '/alerts' && alertCount > 0 && (
-              <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[11px] font-bold text-white">
-                {alertCount > 9 ? '9+' : alertCount}
-              </span>
+          <div key={g.key} className={g.ruleBefore ? 'mt-2 border-t border-[var(--border)] pt-2' : ''}>
+            {g.collapsible ? (
+              <button onClick={() => toggle(g.key)} aria-expanded={isOpen}
+                className="mb-0.5 mt-3 flex w-full items-center gap-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600 transition hover:text-slate-400">
+                <ChevronRight className={`size-3 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                {t(g.key, g.label)}
+                {hidden > 0 && (
+                  <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500/90 px-1 text-[10px] font-bold text-white">
+                    {hidden > 9 ? '9+' : hidden}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <p className="mb-0.5 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+                {t(g.key, g.label)}
+              </p>
             )}
-          </Link>
+
+            {isOpen && g.items.map((item) => {
+              const { href, label, key, icon: Icon } = item;
+              const accent = 'accent' in item ? item.accent : undefined;
+              const active = isActive(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={onNavigate}
+                  className={`flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                    active
+                      ? 'bg-sky-500/15 text-sky-300 font-medium'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                  }`}
+                >
+                  <Icon className={`size-4 ${!active && accent ? ACCENT[accent] : ''}`} />
+                  {t(key, label)}
+                  {href === '/alerts' && alertCount > 0 && (
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[11px] font-bold text-white">
+                      {alertCount > 9 ? '9+' : alertCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
         );
       })}
     </nav>

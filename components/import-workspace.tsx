@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   UploadCloud, FileSpreadsheet, Check, Loader2, ArrowRight, Sparkles, AlertTriangle,
   EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive,
-  Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart, Info,
+  Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart, Info, Rocket,
 } from 'lucide-react';
 import { SpotCheck } from '@/components/import-spotcheck';
 import { TopProgress, creepingProgress } from './top-progress';
@@ -36,6 +36,8 @@ type ImportFile = {
   kind: 'mentions' | 'metrics';
   metricMap: MetricMap | null;
   extras: Record<string, string>;
+  /** Il foglio parla di persone (personal branding), non di canali. */
+  people?: boolean;
   /** Righe di questo file davvero presenti in archivio adesso. */
   inArchive: number;
   createdAt: string; importedAt: string | null;
@@ -320,16 +322,33 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
       };
     }
 
+    // Finito l'import, l'utente resta su una pagina che non serve più. La cosa
+    // che gli manca non è un'altra spiegazione: è sapere che può andarsene, e
+    // dove. La destinazione la decide quello che il file conteneva davvero.
+    const hasContent = stats.mentions > 0;
+    // "Persone" solo se un foglio è davvero di personal branding: offrire una
+    // pagina che si aprirà vuota è peggio che non offrirla.
+    const hasPeople = files.some((f) => f.status === 'imported' && f.people);
+
+    const go = hasContent
+      ? { label: 'Apri il progetto', href: '/listening', hint: `${num(stats.mentions)} contenuti da leggere, filtrare e analizzare` }
+      : { label: 'Vai alle misure', href: '/measures', hint: `${num(stats.points)} punti di serie storica, già in grafico` };
+
+    const links = [
+      ...(hasContent ? [{ label: 'Dashboard', href: '/' }] : []),
+      ...(stats.points > 0 ? [{ label: 'Misure', href: '/measures' }] : []),
+      ...(hasPeople ? [{ label: 'Persone', href: '/people' }] : []),
+      { label: 'Costruisci un grafico', href: '/graph' },
+      { label: 'Costruisci un report', href: '/report' },
+    ];
+
     return {
       mood: 'done',
       did: `${num(rows)} righe in archivio da ${imported.length} fogli.`,
-      title: 'I tuoi dati sono dentro',
-      text: 'Da qui in poi non serve fare altro: i dati sono già nei grafici. Se vuoi essere sicuro che sia andata bene, apri “Cosa ho letto dai tuoi file” qui sotto e usa “Controlla tre righe a campione”: ti faccio vedere righe del tuo foglio accanto a quello che ho in archivio, così confronti con il file aperto davanti.',
-      links: [
-        { label: 'Vedi le misure', href: '/measures' },
-        { label: 'Vedi le persone', href: '/people' },
-        { label: 'Costruisci un report', href: '/report' },
-      ],
+      title: 'Il progetto è pronto',
+      text: 'Qui hai finito: da adesso i dati sono nei grafici, negli insight e nei report come quelli raccolti da Radar stesso. Se prima vuoi essere sicuro che sia andata bene, apri “Cosa ho letto dai tuoi file” qui sotto e usa “Controlla tre righe a campione”.',
+      go,
+      links,
     };
   })();
 
@@ -497,6 +516,8 @@ type Next = {
   title: string;
   text: string;
   action?: { label: string; onClick: () => void; disabled?: boolean };
+  /** L'azione principale quando è un ANDARE, non un fare: chiude l'import. */
+  go?: { label: string; href: string; hint?: string };
   links?: { label: string; href: string }[];
 };
 
@@ -531,13 +552,19 @@ function NextStep({ n }: { n: Next }) {
       <h2 className="text-xl font-semibold text-slate-100 sm:text-2xl">{n.title}</h2>
       <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-400">{n.text}</p>
 
-      {(n.action || n.links) && (
+      {(n.action || n.go || n.links) && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {n.action && (
             <button onClick={n.action.onClick} disabled={n.action.disabled}
               className="inline-flex items-center gap-2 rounded-lg bg-sky-500/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-sky-400 disabled:opacity-50">
               <ArrowRight className="size-4" /> {n.action.label}
             </button>
+          )}
+          {n.go && (
+            <a href={n.go.href} title={n.go.hint}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-500/90 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">
+              <Rocket className="size-4" /> {n.go.label}
+            </a>
           )}
           {n.links?.map((l) => (
             <a key={l.href} href={l.href}
@@ -547,6 +574,8 @@ function NextStep({ n }: { n: Next }) {
           ))}
         </div>
       )}
+
+      {n.go?.hint && <p className="mt-2 text-[11px] text-slate-500">{n.go.hint}</p>}
     </section>
   );
 }
