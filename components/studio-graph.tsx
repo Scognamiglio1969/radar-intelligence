@@ -95,7 +95,25 @@ const fmt = (n: number) => {
  * i nomi e con i numeri, così una mappa vuota si capisce invece di sembrare
  * rotta.
  */
-function NoCountries({ unplaced }: { unplaced: { n: number; sources: { source: string; n: number }[] } }) {
+function NoCountries({ unplaced, onRecovered }: {
+  unplaced: { n: number; sources: { source: string; n: number }[] };
+  onRecovered: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const recover = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const res = await fetch('/api/studio/countries', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) { setMsg(d.error ?? 'Non riuscito'); return; }
+      if (d.recovered > 0) { onRecovered(); return; }
+      setMsg('Nessun paese da ricavare: in queste mention non c’è un indirizzo o un dominio che lo dica.');
+    } catch (e) { setMsg((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div className="px-6 py-10 text-center">
       <Globe className="mx-auto mb-3 size-7 text-slate-700" />
@@ -109,10 +127,18 @@ function NoCountries({ unplaced }: { unplaced: { n: number; sources: { source: s
         scrive chi pubblica, e ricavarlo dalla lingua sarebbe inventare: lo spagnolo si parla a
         Madrid come a Città del Messico.
       </p>
-      <p className="mx-auto mb-3 max-w-md text-xs leading-relaxed text-slate-500">
-        Se hai notizie in archivio raccolte prima d’ora, premi <span className="text-slate-300">Aggiorna ora</span>:
-        Radar ripassa quelle già prese e ne ricava il paese dal dominio della testata.
-      </p>
+      <div className="mb-3 flex flex-col items-center gap-1.5">
+        <button onClick={recover} disabled={busy}
+          title="Ripassa le mention già in archivio e ricava il paese dal dominio della testata. Non raccoglie niente di nuovo e non consuma quota AI."
+          className="inline-flex items-center gap-2 rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-sm text-sky-200 transition hover:bg-sky-500/20 disabled:opacity-50">
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Globe className="size-4" />}
+          Ricava i paesi da quello che ho già
+        </button>
+        <span className="text-[11px] text-slate-600">
+          Legge solo l’archivio: non raccoglie niente di nuovo, non consuma quota.
+        </span>
+        {msg && <span className="max-w-md text-[11px] text-amber-300/90">{msg}</span>}
+      </div>
       <div className="mx-auto flex max-w-md flex-wrap justify-center gap-1.5">
         {unplaced.sources.map((s) => (
           <span key={s.source} className="rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] text-slate-500">
@@ -368,7 +394,7 @@ export function StudioGraph({ initial, preset }: {
             ? <Chart spec={spec} result={result} />
             : !busy && (
               spec.chart === 'map' && result?.unplaced?.n
-                ? <NoCountries unplaced={result.unplaced} />
+                ? <NoCountries unplaced={result.unplaced} onRecovered={() => setSpec({ ...spec })} />
                 : <p className="py-10 text-center text-xs text-slate-600">
                   Nessun dato con queste scelte nel periodo impostato.
                 </p>
