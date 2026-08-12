@@ -68,11 +68,15 @@ export type StudioResult = {
   zLabel?: string;
   total: number;
   /**
-   * Righe che l'asse X non sa collocare: su una mappa sono le mention di cui
-   * non si conosce il paese. Sparivano in silenzio, e un totale che non torna
-   * è il modo più veloce per perdere fiducia in un grafico.
+   * Le righe che l'asse X non sa collocare — su una mappa, le mention di cui
+   * non si conosce il paese — e da dove vengono.
+   *
+   * Sparivano in silenzio. Ma il paese non è un dato che manca per sbaglio:
+   * manca perché le piattaforme social non dicono da dove scrive chi pubblica.
+   * Dirlo con i nomi delle fonti è l'unico modo perché una mappa quasi vuota
+   * si capisca invece di sembrare rotta.
    */
-  unplaced?: number;
+  unplaced?: { n: number; sources: { source: string; n: number }[] };
   /** Avvertenze oneste sulla combinazione scelta. */
   warnings: string[];
 };
@@ -316,12 +320,19 @@ export async function runStudio(projectId: number, spec: StudioSpec): Promise<St
   // Quante righe l'asse X non colloca: si conta solo dove la domanda ha senso
   // (il paese), perché è lì che il vuoto è un'informazione e non rumore.
   if (spec.x === 'country') {
-    const [miss] = (await db.execute(sql`
-      select count(*)::int as n from ${table}
+    const miss = (await db.execute(sql`
+      select source, count(*)::int as n from ${table}
       where project_id = ${projectId} and ${dateCol} >= ${since.toISOString()}
         and (country is null or country = '')
-    `)).rows as { n: number }[];
-    result.unplaced = Number(miss?.n ?? 0);
+      group by 1 order by 2 desc limit 6
+    `)).rows as { source: string; n: number }[];
+    const n = miss.reduce((s2, r) => s2 + Number(r.n), 0);
+    if (n) {
+      result.unplaced = {
+        n,
+        sources: miss.map((r) => ({ source: sourceLabel(r.source), n: Number(r.n) })),
+      };
+    }
   }
 
   result.warnings = specWarnings(spec, result);

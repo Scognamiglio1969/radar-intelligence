@@ -105,6 +105,23 @@ export function countryFromUrl(url: string | null | undefined): string | null {
   return A2_NAME[a2] ? a2 : null;
 }
 
+/**
+ * Il paese da una stringa che ASSOMIGLIA a un dominio.
+ *
+ * Serve perché la testata non sta sempre nell'indirizzo: GDELT mette il
+ * dominio in "autore" (`in.gr`, `zn.ua`, `sol.iol.pt`) e Google News a volte
+ * ci scrive il nome con il suffisso (`Ad-hoc-news.de`). Sono gli unici punti
+ * in cui, per una notizia, il paese è davvero scritto da qualche parte.
+ */
+export function countryFromDomain(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim().toLowerCase();
+  // Una frase con degli spazi non è un dominio: "Quiver Quantitative" no.
+  if (!s || /\s/.test(s)) return null;
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(s)) return null;
+  return countryFromUrl(`https://${s}/`);
+}
+
 /** Nomi con cui i dati chiamano un paese, oltre a quello canonico. */
 const ALIASES: Record<string, string> = {
   'united states of america': 'us', usa: 'us', 'u.s.': 'us', 'u.s.a.': 'us', america: 'us',
@@ -160,23 +177,26 @@ export function toCountryCode(raw: string | null | undefined): string | null {
 // raccolta ne recupera un pezzo senza pesare, finché non ne restano.
 // ---------------------------------------------------------------------------
 
-export async function backfillCountries(projectId: number, limit = 3000): Promise<number> {
+export async function backfillCountries(projectId: number, limit = 25000): Promise<number> {
   const { getDb } = await import('@/lib/db');
   const { sql } = await import('drizzle-orm');
   const db = await getDb();
 
   const rows = (await db.execute(sql`
-    SELECT id, url FROM mentions
-    WHERE project_id = ${projectId} AND country IS NULL AND url IS NOT NULL AND url <> ''
+    SELECT id, url, author FROM mentions
+    WHERE project_id = ${projectId} AND country IS NULL
+      AND ((url IS NOT NULL AND url <> '') OR (author IS NOT NULL AND author <> ''))
     LIMIT ${limit}
-  `)).rows as { id: number; url: string }[];
+  `)).rows as { id: number; url: string | null; author: string | null }[];
   if (!rows.length) return 0;
 
   // Un solo UPDATE per paese: con duemila righe e venti paesi sono venti
   // istruzioni, non duemila.
   const byCountry = new Map<string, number[]>();
   for (const r of rows) {
-    const a2 = countryFromUrl(r.url);
+    // Prima l'indirizzo, poi l'autore: per una notizia di GDELT l'autore È il
+    // dominio della testata, ed è l'unico posto in cui il paese è scritto.
+    const a2 = countryFromUrl(r.url) ?? countryFromDomain(r.author);
     if (!a2) continue;
     (byCountry.get(a2) ?? byCountry.set(a2, []).get(a2)!).push(r.id);
   }

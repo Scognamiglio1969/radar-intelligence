@@ -39,7 +39,9 @@ type Spec = {
 type Result = {
   rows: { x: string; y: number; z?: string; size?: number; code?: string }[];
   series: string[]; xLabel: string; yLabel: string; zLabel?: string;
-  total: number; unplaced?: number; warnings: string[];
+  total: number;
+  unplaced?: { n: number; sources: { source: string; n: number }[] };
+  warnings: string[];
 };
 type Saved = { id: number; title: string; spec: Spec };
 
@@ -83,6 +85,44 @@ const fmt = (n: number) => {
   if (a > 0 && a < 1) return n.toFixed(2);
   return String(Math.round(n));
 };
+
+/**
+ * La mappa senza paesi.
+ *
+ * "Nessun dato" sarebbe falso: i dati ci sono, è il PAESE che quelle fonti non
+ * dicono. Un post su Bluesky o su Hacker News non porta con sé da dove scrive
+ * chi lo ha scritto, e dedurlo dalla lingua sarebbe inventare. Qui si dice con
+ * i nomi e con i numeri, così una mappa vuota si capisce invece di sembrare
+ * rotta.
+ */
+function NoCountries({ unplaced }: { unplaced: { n: number; sources: { source: string; n: number }[] } }) {
+  return (
+    <div className="px-6 py-10 text-center">
+      <Globe className="mx-auto mb-3 size-7 text-slate-700" />
+      <p className="mb-1 text-sm text-slate-300">
+        Di queste {unplaced.n.toLocaleString('it-IT')} mention non si sa il paese.
+      </p>
+      <p className="mx-auto mb-3 max-w-md text-xs leading-relaxed text-slate-500">
+        Il paese si conosce quando la fonte lo dichiara (le notizie di GDELT) o quando
+        l’indirizzo ha un dominio nazionale (<span className="text-slate-400">.it</span>,{' '}
+        <span className="text-slate-400">.co.uk</span>). Le piattaforme social non dicono da dove
+        scrive chi pubblica, e ricavarlo dalla lingua sarebbe inventare: lo spagnolo si parla a
+        Madrid come a Città del Messico.
+      </p>
+      <p className="mx-auto mb-3 max-w-md text-xs leading-relaxed text-slate-500">
+        Se hai notizie in archivio raccolte prima d’ora, premi <span className="text-slate-300">Aggiorna ora</span>:
+        Radar ripassa quelle già prese e ne ricava il paese dal dominio della testata.
+      </p>
+      <div className="mx-auto flex max-w-md flex-wrap justify-center gap-1.5">
+        {unplaced.sources.map((s) => (
+          <span key={s.source} className="rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] text-slate-500">
+            {s.source} <span className="text-slate-600">{s.n.toLocaleString('it-IT')}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Un campo scelto porta con sé la spiegazione di cosa succede se lo scegli. */
 function Tip({ text }: { text: string }) {
@@ -326,9 +366,13 @@ export function StudioGraph({ initial, preset }: {
 
           {result && result.rows.length > 0
             ? <Chart spec={spec} result={result} />
-            : !busy && <p className="py-10 text-center text-xs text-slate-600">
-              Nessun dato con queste scelte nel periodo impostato.
-            </p>}
+            : !busy && (
+              spec.chart === 'map' && result?.unplaced?.n
+                ? <NoCountries unplaced={result.unplaced} />
+                : <p className="py-10 text-center text-xs text-slate-600">
+                  Nessun dato con queste scelte nel periodo impostato.
+                </p>
+            )}
 
           {result && result.rows.length > 0 && (
             <div className="mt-3 rounded-xl border border-[var(--border)] bg-white/[0.02] px-4 py-3">
@@ -474,7 +518,7 @@ function Chart({ spec, result }: { spec: Spec; result: Result }) {
     return (
       <StudioMap
         rows={rows} yLabel={result.yLabel} zLabel={result.zLabel}
-        palette={spec.palette} diverging={diverging} unplaced={result.unplaced}
+        palette={spec.palette} diverging={diverging} unplaced={result.unplaced?.n}
       />
     );
   }

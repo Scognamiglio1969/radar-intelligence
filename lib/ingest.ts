@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { getDb, setMeta, getMeta } from '@/lib/db';
-import { backfillCountries, countryFromUrl, toCountryCode } from '@/lib/country-codes';
+import { backfillCountries, countryFromDomain, countryFromUrl, toCountryCode } from '@/lib/country-codes';
 import { mentions, projects, benchmarkEntities } from '@/lib/db/schema';
 import { CONNECTORS, kindOf } from '@/lib/connectors';
 import { setTelegramChannels } from '@/lib/connectors/telegram';
@@ -252,7 +252,7 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
         // Il paese: quello dichiarato dalla fonte se c'è, altrimenti quello
         // che dice il dominio nazionale dell'indirizzo. Se non lo dice
         // nessuno resta vuoto: la lingua non è il paese.
-        country: toCountryCode(m.country) ?? countryFromUrl(m.url),
+        country: toCountryCode(m.country) ?? countryFromUrl(m.url) ?? countryFromDomain(m.author),
         engagement: m.engagement,
         engagementScore: rawEngagementScore(m),
         reach: m.reach,
