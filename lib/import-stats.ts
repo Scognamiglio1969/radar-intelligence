@@ -64,6 +64,16 @@ export type ColumnStats = {
   /** Testo: quanto è lungo in media. */
   avgLength?: number;
   samples: string[];
+  /**
+   * I valori distinti, fino a un tetto.
+   *
+   * Servono a una domanda che nessuna statistica di colonna può porre da sola:
+   * questi due fogli parlano delle STESSE cose? Otto nomi di manager che
+   * ricorrono in due tabelle diverse dicono che le due tabelle si possono
+   * mettere in relazione — ed è la prima cosa che si chiede chi ha davanti
+   * più tabelle.
+   */
+  values?: string[];
 };
 
 export type SheetStats = {
@@ -167,6 +177,18 @@ export async function sheetStats(fileId: number, sample = 2000): Promise<SheetSt
       constant: distinct === 1 ? String(present[0]).slice(0, 60) : null,
       samples: present.slice(0, 3).map((v) => String(v).slice(0, 80)),
     };
+
+    // Le etichette si raccolgono, i testi lunghi e i numeri no: confrontare
+    // sessanta post fra loro non dice niente, confrontare otto nomi sì.
+    if ((reads === 'text' || reads === 'mixed') && distinct > 1 && distinct <= 200) {
+      const set = new Set<string>();
+      for (const v of present) {
+        const t = String(v).trim();
+        if (t.length <= 60) set.add(t);
+        if (set.size >= 200) break;
+      }
+      if (set.size > 1) stats.values = [...set];
+    }
 
     if (reads === 'number' && nums.length) {
       stats.min = Math.min(...nums);

@@ -5,6 +5,7 @@ import { callClaudeDetailed, MODELS, type AiFailure } from '@/lib/claude';
 import type { ColumnProfile } from '@/lib/import-profile';
 import type { MetricMap } from '@/lib/import-metrics';
 import { sheetStats, type SheetStats } from '@/lib/import-stats';
+import { sheetRelations, type Relation } from '@/lib/import-relations';
 
 // ---------------------------------------------------------------------------
 // L'agente che legge il file.
@@ -59,6 +60,8 @@ export type Dossier = {
   projectId: number;
   sheets: SheetDossier[];
   groups: SheetGroup[];
+  /** Come si parlano le tabelle fra loro: dove si duplicano, dove si legano. */
+  relations: Relation[];
   totalRows: number;
 };
 
@@ -169,6 +172,7 @@ export async function buildDossier(projectId: number, deep = false): Promise<Dos
     projectId,
     sheets,
     groups,
+    relations: deep ? sheetRelations(sheets, groups) : [],
     totalRows: sheets.reduce((n, s) => n + s.rows, 0),
   };
 }
@@ -244,6 +248,20 @@ Leggi la scheda come la leggerebbe un analista esperto, cioè guardando i NUMERI
   foglio scrive 0 dove il dato manca: va detto, perché falsa ogni media.
 - Colonne quasi vuote, duplicati, date che coprono un periodo diverso dagli altri fogli: se
   cambiano il modo di leggere il file, dillo.
+
+Nella sezione "COME SI PARLANO LE TABELLE" trovi le relazioni fra i fogli, già calcolate. Sono le
+tre cose che rovinano un'analisi senza che nessuno se ne accorga, e vanno dette per prime:
+- "doppio-caricamento": lo stesso foglio risulta caricato due volte. Ogni conto viene doppio, e
+  nella pagina i due fogli si chiamano uguale, quindi non si nota. Dillo per primo e proponi di
+  toglierne uno.
+- "scala-diversa": la stessa metrica scritta in unità diverse in due fogli. Confrontarli mette un
+  canale mille volte sopra gli altri e il grafico sembra perfetto. È l'avviso più urgente.
+- "stesso-periodo": due fogli con le stesse colonne che coprono lo stesso tempo. Se sono la stessa
+  misura vista due volte, sommarli raddoppia tutto.
+- "periodi-consecutivi": la stessa serie divisa per periodo, da mettere in fila.
+- "stessi-soggetti": due tabelle che parlano delle stesse persone o degli stessi canali. Tenerle
+  separate butta via l'analisi più interessante che il file conteneva: dillo, e proponi di
+  marcare il soggetto.
 
 Il tuo compito è DOPPIO:
 
@@ -366,10 +384,15 @@ function brief(d: Dossier): string {
     fogli_con_le_stesse_colonne: g.sheets,
     la_parte_che_cambia_nel_nome: g.varyingPart,
   }));
+  const relazioni = d.relations.map((r) => ({ fra: [r.a, r.b], che_cosa: r.kind, nota: r.note }));
+
   const note = omitted > 0
     ? `\n\nNOTA: ti ho dato ${picked.length} fogli su ${d.sheets.length}; gli altri hanno le stesse colonne di uno di questi. Non parlare dei fogli che non hai visto.`
     : '';
-  return `FOGLI:\n${JSON.stringify(sheets, null, 1)}\n\nGRUPPI:\n${JSON.stringify(groups, null, 1)}${note}`;
+  return `FOGLI:\n${JSON.stringify(sheets, null, 1)}`
+    + `\n\nGRUPPI:\n${JSON.stringify(groups, null, 1)}`
+    + (relazioni.length ? `\n\nCOME SI PARLANO LE TABELLE:\n${JSON.stringify(relazioni, null, 1)}` : '')
+    + note;
 }
 
 const ACTIONS = new Set(['kind', 'entityFromSheet', 'dateColumn', 'contentColumn', 'skip', 'nothing']);

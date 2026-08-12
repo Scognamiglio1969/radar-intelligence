@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Brain, Loader2, Check, ArrowRight, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { Brain, Loader2, Check, ArrowRight, AlertTriangle, FileSpreadsheet, Link2 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // L'agente che legge il file, e le sue domande.
@@ -28,6 +28,10 @@ type Reading = {
   sheets: { sheet: string; what: string }[];
   questions: Question[];
 };
+type Relation = {
+  kind: 'doppio-caricamento' | 'stessi-soggetti' | 'stesso-periodo' | 'periodi-consecutivi' | 'scala-diversa';
+  a: string; b: string; note: string;
+};
 
 export function ImportAgentPanel({ projectId, onApplied, onRead, highlight }: {
   projectId: number;
@@ -38,6 +42,7 @@ export function ImportAgentPanel({ projectId, onApplied, onRead, highlight }: {
   highlight?: boolean;
 }) {
   const [reading, setReading] = useState<Reading | null>(null);
+  const [relations, setRelations] = useState<Relation[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [answered, setAnswered] = useState<Record<string, string>>({});
@@ -45,13 +50,15 @@ export function ImportAgentPanel({ projectId, onApplied, onRead, highlight }: {
   const [notes, setNotes] = useState<Record<string, string>>({});
 
   const read = async () => {
-    setBusy(true); setError(''); setReading(null); setAnswered({}); setNotes({});
+    setBusy(true); setError(''); setReading(null); setRelations([]); setAnswered({}); setNotes({});
     try {
       const res = await fetch('/api/import/agent', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId }),
       });
       const d = await res.json();
+      // Le relazioni sono calcolate: arrivano anche quando il modello no.
+      if (Array.isArray(d.relations)) setRelations(d.relations);
       if (!res.ok) { setError(d.error ?? 'Lettura non riuscita'); return; }
       setReading(d.reading);
       onRead?.();
@@ -97,6 +104,42 @@ export function ImportAgentPanel({ projectId, onApplied, onRead, highlight }: {
       </div>
 
       {error && <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] px-3.5 py-2.5 text-xs text-amber-200">{error}</p>}
+
+      {relations.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+            Come si parlano le tabelle
+            <span className="ml-1.5 normal-case tracking-normal text-slate-600">— calcolato dai numeri, non dedotto</span>
+          </p>
+          <ul className="flex flex-col gap-1.5">
+            {relations.map((r, i) => (
+              <li key={i} className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] ${
+                r.kind === 'doppio-caricamento'
+                  ? 'border-red-500/40 bg-red-500/[0.06] text-red-200'
+                  : r.kind === 'scala-diversa'
+                    ? 'border-amber-500/30 bg-amber-500/[0.05] text-amber-200'
+                    : r.kind === 'stesso-periodo'
+                      ? 'border-amber-500/20 bg-amber-500/[0.03] text-slate-300'
+                      : 'border-[var(--border)] text-slate-400'
+              }`}>
+                {r.kind === 'doppio-caricamento' || r.kind === 'scala-diversa' || r.kind === 'stesso-periodo'
+                  ? <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                  : <Link2 className="mt-0.5 size-3 shrink-0 text-slate-600" />}
+                <span>
+                  <span className="text-slate-300">{r.a}</span>
+                  {r.a !== r.b && (
+                    <>
+                      <span className="mx-1 text-slate-600">↔</span>
+                      <span className="text-slate-300">{r.b}</span>
+                    </>
+                  )}
+                  <span className="text-slate-500"> — {r.note}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {reading && (
         <div className="mt-4 flex flex-col gap-4">

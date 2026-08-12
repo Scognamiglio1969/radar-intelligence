@@ -552,8 +552,7 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
           ))}
         </div>
       ))}
-    </div>
-  );{files.length > 0 && (
+{files.length > 0 && (
         <ImportAgentPanel
           projectId={project.id}
           highlight={here.id === 'scienza'}
@@ -642,8 +641,8 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
           {analyzeMsg && <p className="w-full text-xs text-slate-400">{analyzeMsg}</p>}
         </section>
       )}
-
-
+    </div>
+  );
 }
 
 /**
