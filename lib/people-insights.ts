@@ -1,7 +1,46 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { importFiles, mentions, metricPoints } from '@/lib/db/schema';
-import { looksLikePerson } from '@/lib/sheet-archetype';
+import { looksLikePerson, personFromSheetName, PERSON_FIELD } from '@/lib/sheet-archetype';
+
+/**
+ * Rimette il nome della persona nelle righe che l'hanno perso.
+ *
+ * I file importati prima che Radar leggesse il nome dal titolo del foglio
+ * hanno centinaia di post senza autore: la persona c'è, ma nessuna riga lo
+ * dice, e la sua scheda risulta vuota. Rifare l'import a mano sarebbe la
+ * risposta sbagliata a un difetto che non ha commesso l'utente.
+ *
+ * È idempotente e si accorge subito quando non c'è niente da fare: la seconda
+ * volta il file ha già la costante e non viene nemmeno toccato.
+ */
+async function attachSheetPeople(projectId: number): Promise<void> {
+  const db = await getDb();
+  const files = await db.select({
+    id: importFiles.id, sheetName: importFiles.sheetName,
+    kind: importFiles.kind, constants: importFiles.constants,
+  }).from(importFiles)
+    .where(and(eq(importFiles.projectId, projectId), eq(importFiles.people, 1)));
+
+  for (const f of files) {
+    const constants = (f.constants ?? {}) as Record<string, string>;
+    if (constants[PERSON_FIELD]) continue;
+    const person = personFromSheetName(f.sheetName ?? '');
+    if (!person) continue;
+
+    await db.update(importFiles)
+      .set({ constants: { ...constants, [PERSON_FIELD]: person } })
+      .where(eq(importFiles.id, f.id));
+
+    // Solo le righe rimaste senza autore: dove il foglio aveva una colonna
+    // autore quello è il dato vero e non si tocca.
+    if (f.kind === 'mentions') {
+      await db.update(mentions)
+        .set({ author: person })
+        .where(and(eq(mentions.importFileId, f.id), sql`${mentions.author} is null`));
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Personal branding: la scheda di una persona.
@@ -41,9 +80,20 @@ export type PersonCard = {
 export async function detectPeople(projectId: number): Promise<string[]> {
   const db = await getDb();
 
-  const flagged = await db.select({ id: importFiles.id }).from(importFiles)
+  await attachSheetPeople(projectId);
+
+  const flagged = await db.select({ id: importFiles.id, sheetName: importFiles.sheetName })
+    .from(importFiles)
     .where(and(eq(importFiles.projectId, projectId), eq(importFiles.people, 1)));
   const names = new Set<string>();
+
+  // Il nome scritto nel nome del foglio. Un foglio di post per manager non ha
+  // una colonna con la persona: se non lo si legge da qui, quella persona non
+  // esiste per nessuna delle pagine che vengono dopo.
+  for (const f of flagged) {
+    const p = personFromSheetName(f.sheetName ?? '');
+    if (p) names.add(p);
+  }
 
   if (flagged.length) {
     const rows = await db.select({ entity: metricPoints.entity }).from(metricPoints)
@@ -207,6 +257,28 @@ export async function personCard(projectId: number, person: string): Promise<Per
     eq(mentions.projectId, projectId),
     sql`(${mentions.author} ilike ${'%' + person + '%'} or ${mentions.community} ilike ${'%' + person + '%'})`,
   ));
+
+  // Il ritmo, quando nessun foglio lo dichiara, lo dicono i post stessi.
+  // Contarli è più preciso che leggerlo da una serie "pubblicazioni": è il
+  // dato di partenza invece del suo riassunto, e non richiede che il file
+  // contenga anche un rendiconto mensile.
+  if (!rhythm && posts.length >= 2) {
+    const mesi = new Set(posts.map((p) => p.publishedAt.toISOString().slice(0, 7)));
+    const ordinati = [...posts].sort((a, b) => a.publishedAt.getTime() - b.publishedAt.getTime());
+    const meta = Math.floor(ordinati.length / 2);
+    const primaMeta = new Set(ordinati.slice(0, meta).map((p) => p.publishedAt.toISOString().slice(0, 7))).size;
+    const secondaMeta = new Set(ordinati.slice(meta).map((p) => p.publishedAt.toISOString().slice(0, 7))).size;
+    // La tendenza confronta due RITMI, non due conteggi: metà periodo può
+    // durare tre mesi e l'altra otto, e allora i totali non si confrontano.
+    const r1 = meta / Math.max(1, primaMeta);
+    const r2 = (ordinati.length - meta) / Math.max(1, secondaMeta);
+    rhythm = {
+      total: posts.length,
+      months: mesi.size,
+      perMonth: Math.round((posts.length / Math.max(1, mesi.size)) * 10) / 10,
+      trend: r1 > 0 ? Math.round(((r2 - r1) / r1) * 100) : null,
+    };
+  }
 
   const byFormat = new Map<string, { posts: number; eng: number }>();
   for (const p of posts) {

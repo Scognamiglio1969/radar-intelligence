@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  UploadCloud, FileSpreadsheet, Check, Loader2, ArrowRight, Sparkles, AlertTriangle, EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive, Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart, Info, Rocket, ShieldCheck,
+  UploadCloud, FileSpreadsheet, Check, Loader2, ArrowRight, Sparkles, AlertTriangle, EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive, Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart, Info, Rocket, ShieldCheck, User,
 } from 'lucide-react';
 import { SpotCheck } from '@/components/import-spotcheck';
 import { ImportAgentPanel } from '@/components/import-agent-panel';
@@ -49,6 +49,8 @@ type ImportFile = {
   extras: Record<string, string>;
   /** Il foglio parla di persone (personal branding), non di canali. */
   people?: boolean;
+  /** La persona a cui il foglio è intestato, letta dal nome del foglio. */
+  person?: string | null;
   /** Righe di questo file davvero presenti in archivio adesso. */
   inArchive: number;
   createdAt: string; importedAt: string | null;
@@ -489,6 +491,13 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     // "Persone" solo se un foglio è davvero di personal branding: offrire una
     // pagina che si aprirà vuota è peggio che non offrirla.
     const hasPeople = files.some((f) => f.status === 'imported' && f.people);
+    // Le persone riconosciute vanno DETTE. Il nome sta nel titolo del foglio e
+    // non in una colonna: è una lettura di Radar, e se resta muta l'utente
+    // scopre solo per caso che il suo file di personal branding è stato capito
+    // — o, peggio, crede che non lo sia stato.
+    const persone = [...new Set(files
+      .filter((f) => f.status === 'imported' && f.person)
+      .map((f) => f.person as string))];
 
     const go = hasContent
       ? { label: 'Apri il progetto', href: '/listening', hint: `${num(stats.mentions)} contenuti da leggere, filtrare e analizzare` }
@@ -504,7 +513,10 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
 
     return {
       mood: 'done',
-      did: `${num(rows)} righe in archivio da ${imported.length} fogli.`,
+      did: `${num(rows)} righe in archivio da ${imported.length} fogli.`
+        + (persone.length
+          ? ` Riconosciut${persone.length === 1 ? 'a' : 'e'} ${persone.length === 1 ? 'una persona' : `${persone.length} persone`} dal nome dei fogli: ${persone.slice(0, 6).join(', ')}${persone.length > 6 ? ` e altre ${persone.length - 6}` : ''}.`
+          : ''),
       title: 'Il progetto è pronto',
       text: 'Qui hai finito: da adesso i dati sono nei grafici, negli insight e nei report come quelli raccolti da Radar stesso. Se prima vuoi essere sicuro che sia andata bene, apri “Cosa ho letto dai tuoi file” qui sotto e usa “Controlla tre righe a campione”.',
       go,
@@ -1274,6 +1286,12 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
           <FileSpreadsheet className="size-4 shrink-0 text-slate-500" />
           <span className="truncate text-sm font-medium text-slate-200">{file.sheetName ?? file.filename}</span>
           <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${file.kind === 'metrics' ? 'bg-violet-500/15 text-violet-300' : 'bg-sky-500/15 text-sky-300'}`}>{file.kind === 'metrics' ? 'misure' : 'contenuti'}</span>
+          {file.person && (
+            <span title={`Il foglio si chiama come una persona: ogni riga risulta sua. Senza questo, ${file.person} non comparirebbe da nessuna parte.`}
+              className="inline-flex shrink-0 items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
+              <User className="size-3" />{file.person}
+            </span>
+          )}
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${st.cls}`}>{st.label}</span>
           <span className="shrink-0 text-[11px] text-slate-600">
             {num(file.rowCount)} righe · {file.columns.length} colonne

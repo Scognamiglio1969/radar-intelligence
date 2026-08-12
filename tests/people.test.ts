@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifySheet, looksLikePerson, ARCHETYPE_LABEL } from '../lib/sheet-archetype';
+import { classifySheet, looksLikePerson, personFromSheetName, ARCHETYPE_LABEL } from '../lib/sheet-archetype';
+import { deriveRows } from '../lib/import-derive';
 import { mergeSamePerson } from '../lib/people-insights';
 import { profileColumns } from '../lib/import-profile';
 
@@ -111,4 +112,67 @@ test('un canale composto non è una persona', () => {
     'Risposte', 'Segnalibri', 'Salvataggi', 'Panoramica', 'Spettatori unici']) {
     assert.equal(looksLikePerson(x), false, `"${x}" non è una persona`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// La persona scritta nel nome del foglio.
+//
+// È il difetto che ha fatto sparire tre manager da un progetto vero: i loro
+// fogli di post non hanno una colonna "autore" — l'autore è il titolo della
+// scheda — e quel nome non entrava da nessuna parte. Risultato: seicento post
+// di nessuno, schede vuote, persone assenti dall'elenco.
+// ---------------------------------------------------------------------------
+
+test('il nome del foglio è il nome della persona', () => {
+  const casi: [string, string | null][] = [
+    ['Fancel', 'Fancel'],
+    ['Donnet', 'Donnet'],
+    ['Paolo_Ribotta', 'Paolo Ribotta'],
+    ['SESANA_mensile', 'Sesana'],
+    ['BOREAN_mensile', 'Borean'],
+    ['Acquaviva_Aud', 'Acquaviva'],
+    ['acquaviva audience', 'Acquaviva'],
+  ];
+  for (const [sheet, atteso] of casi) {
+    assert.equal(personFromSheetName(sheet), atteso, `foglio "${sheet}"`);
+  }
+});
+
+test('un foglio che non è una persona non ne inventa una', () => {
+  // Inventare un autore è peggio che non trovarlo: attribuisce righe vere a
+  // qualcuno che non esiste, e il numero risultante sembra credibile.
+  for (const sheet of [
+    'LK_Followers', 'YT_bestvideo2024YTD', 'Social Listening Demo', 'Dati totali canale',
+    'Riepilogo Generale', 'Benchmark Competitor', 'Export Instagram', 'Foglio1',
+    'Rilevazione LinkedIn Ottobre Novembre', 'Test', 'Engagement Rate',
+  ]) {
+    assert.equal(personFromSheetName(sheet), null, `"${sheet}" non è una persona`);
+  }
+});
+
+test('il foglio di una persona porta il suo nome in ogni riga', () => {
+  // Senza la costante, deriveRows scrive autore nullo e la scheda personale —
+  // che cerca i post per autore — resta vuota anche avendo i post in archivio.
+  const righe = [
+    { Data: '2024-03-01', Testo: 'Primo post', Like: '10' },
+    { Data: '2024-03-08', Testo: 'Secondo post', Like: '4' },
+  ];
+  const map = {
+    date: 'Data', content: 'Testo', likes: 'Like',
+    constants: { Persona: 'Paolo Ribotta' },
+  } as unknown as Parameters<typeof deriveRows>[1];
+  const { rows } = deriveRows(righe, map, 7);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((r) => r.author), ['Paolo Ribotta', 'Paolo Ribotta']);
+});
+
+test('la colonna autore vince sul nome del foglio', () => {
+  // La costante è un ripiego, non un'imposizione: dove il dato c'è per riga,
+  // sovrascriverlo cancellerebbe l'informazione più precisa delle due.
+  const righe = [{ Data: '2024-03-01', Testo: 'Post', Autore: 'Chi Scrive' }];
+  const map = {
+    date: 'Data', content: 'Testo', author: 'Autore',
+    constants: { Persona: 'Paolo Ribotta' },
+  } as unknown as Parameters<typeof deriveRows>[1];
+  assert.equal(deriveRows(righe, map, 7).rows[0].author, 'Chi Scrive');
 });

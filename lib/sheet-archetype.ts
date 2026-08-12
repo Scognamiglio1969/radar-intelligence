@@ -72,6 +72,50 @@ export function looksLikePerson(name: string): boolean {
   return words.every((w) => /^[A-ZÀ-Ý][A-Za-zà-ÿ'’.-]*$/.test(w));
 }
 
+/**
+ * Il campo con cui una riga dice di chi parla.
+ *
+ * Sta fra le costanti del foglio — quelle che valgono per ogni riga — così è
+ * visibile e correggibile nella pagina di import come qualsiasi altra scelta.
+ */
+export const PERSON_FIELD = 'Persona';
+
+/** Pezzi del nome di un foglio che non fanno parte del nome di nessuno. */
+const SHEET_NOISE = /^(mensile|mensili|monthly|mese|mesi|aud|audience|pubblico|dati|data|post|posts|contenut[io]|storico|serie|lk|li|linkedin|ig|instagram|fb|facebook|tw|twitter|yt|youtube|tt|tiktok|tot|totale|copia|copy|new|nuovo|old|final[ei]?|def|v\d*|\d+)$/i;
+
+/**
+ * Un foglio che si chiama come un'azienda, un'estrazione o una demo non si
+ * chiama come una persona — anche se le maiuscole sono al posto giusto.
+ */
+const NOT_A_PERSON_SHEET = /\b(demo|test|prova|esempio|sample|listening|social|media|report|analisi|analysis|export|estrazione|riepilogo|summary|foglio|sheet|tabella|elenco|lista|generale|overview|benchmark|competitor|concorrenti)\b/i;
+
+const capitalized = (w: string) => (
+  /^[A-Za-zÀ-ÿ]{2,3}$/.test(w) && w === w.toUpperCase()
+    ? w // sigle brevi e iniziali: "Di", no; "MC", sì com'è
+    : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+);
+
+/**
+ * Il nome della persona scritto nel nome del foglio.
+ *
+ * È il caso più comune dei file di personal branding, e il più facile da
+ * perdere: un foglio per manager non ha una colonna "autore" perché l'autore
+ * è il titolo della scheda. "BOREAN_mensile", "Paolo_Ribotta", "Acquaviva_Aud"
+ * sono tre modi di scrivere una persona, e finché quel nome resta nel nome del
+ * foglio non entra in nessun grafico: le righe risultano di nessuno.
+ *
+ * Meglio non riconoscere una persona che inventarne una: due parole al massimo
+ * (i nomi veri stanno lì), niente parole da rendiconto, niente demo.
+ */
+export function personFromSheetName(sheetName: string): string | null {
+  const base = sheetName.replace(/\.(xlsx?|csv)$/i, '').trim();
+  if (!base || NOT_A_PERSON_SHEET.test(base)) return null;
+  const parts = base.split(/[_\-\s.]+/).filter((p) => p && !SHEET_NOISE.test(p));
+  if (!parts.length || parts.length > 2) return null;
+  const name = parts.map(capitalized).join(' ');
+  return looksLikePerson(name) ? name : null;
+}
+
 export function classifySheet(
   profiles: ColumnProfile[], kind: 'mentions' | 'metrics',
   sheetName: string, metricMap?: MetricMap | null,
@@ -86,7 +130,7 @@ export function classifySheet(
     const authorCol = profiles.find((p) => /(autore|author|manager|persona)/i.test(p.name));
     const authorsArePeople = (authorCol?.samples ?? []).filter(looksLikePerson).length
       >= Math.max(1, Math.ceil((authorCol?.samples.length ?? 0) / 2));
-    const sheetIsPerson = looksLikePerson(sheetName.replace(/_/g, ' '));
+    const sheetIsPerson = personFromSheetName(sheetName) !== null;
 
     if (sheetIsPerson || (authorsArePeople && (authorCol?.distinct ?? 0) <= 5)) {
       return {

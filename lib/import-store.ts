@@ -10,7 +10,7 @@ import {
   deriveMetrics, looksLikeMetrics, proposeMetricMap, type MetricMap, type MetricReport,
 } from '@/lib/import-metrics';
 import { deriveRows } from '@/lib/import-derive';
-import { classifySheet } from '@/lib/sheet-archetype';
+import { classifySheet, personFromSheetName, PERSON_FIELD } from '@/lib/sheet-archetype';
 
 // ---------------------------------------------------------------------------
 // Ciclo di vita di un file importato.
@@ -40,6 +40,12 @@ export type ImportFileRow = {
   metricMap: Record<string, unknown> | null;
   extras: Record<string, string>;
   archetype: string | null; people: boolean;
+  /**
+   * La persona a cui il foglio è intestato, quando il nome è nel titolo del
+   * foglio invece che in una colonna. Va mostrata: è una deduzione di Radar
+   * su dati che l'utente non ha scritto, e va vista per poter essere smentita.
+   */
+  person: string | null;
   /**
    * Quante righe di questo file sono DAVVERO in archivio adesso.
    *
@@ -103,6 +109,13 @@ export async function registerFile(
   // Che tipo di foglio è: da qui nascono gli insight che potrà dare.
   const guess = classifySheet(profiles, kind, sheetName ?? filename, metricMap as MetricMap | null);
 
+  // Se la persona è nel NOME del foglio, quel nome è un dato di ogni riga.
+  // Senza questo passaggio un foglio "Fancel" produce cento post di nessuno:
+  // la scheda personale li cerca per autore e non trova niente, e la persona
+  // non compare nemmeno nell'elenco. Va fra le costanti, dove resta visibile
+  // e correggibile come ogni altra scelta di import.
+  const person = guess.people ? personFromSheetName(sheetName ?? filename) : null;
+
   const db = await getDb();
   const [file] = await db.insert(importFiles).values({
     projectId, filename, sizeBytes: buffer.length, rowCount: rows.length,
@@ -114,6 +127,7 @@ export async function registerFile(
       : Boolean(mapping.content)) ? 'mapped' : 'uploaded',
     issues, sheetName: sheetName ?? null, kind, metricMap, extras,
     archetype: guess.archetype, people: guess.people ? 1 : 0,
+    constants: person ? { [PERSON_FIELD]: person } : undefined,
   }).returning({ id: importFiles.id });
 
   for (let i = 0; i < rows.length; i += CHUNK) {
@@ -154,6 +168,8 @@ export async function listFiles(projectId: number): Promise<ImportFileRow[]> {
     rawPurged: r.rawPurged === 1, usedAi: r.usedAi === 1, issues: r.issues ?? null,
     sheetName: r.sheetName ?? null, kind: r.kind, metricMap: r.metricMap ?? null,
     archetype: r.archetype ?? null, people: r.people === 1,
+    person: ((r.constants ?? {}) as Record<string, string>)[PERSON_FIELD]
+      ?? (r.people === 1 ? personFromSheetName(r.sheetName ?? r.filename) : null),
     extras: r.extras ?? {},
     inArchive: archive.get(r.id) ?? 0,
     createdAt: r.createdAt, importedAt: r.importedAt,
@@ -181,12 +197,25 @@ export async function deriveMentions(fileId: number, projectId: number): Promise
   if (!file) throw new Error('File non trovato');
   if (file.rawPurged === 1) throw new Error('Le righe grezze di questo file sono state eliminate: non è più ri-derivabile');
 
+  // La persona a cui il foglio è intestato vale come costante di ogni riga, e
+  // si ricava qui e non solo al caricamento: i file registrati prima che Radar
+  // leggesse il nome dal titolo del foglio devono poterla ottenere al primo
+  // import, senza che nessuno li ricarichi.
+  const constants = (file.constants ?? {}) as Record<string, string>;
+  if (file.people === 1 && !constants[PERSON_FIELD]) {
+    const person = personFromSheetName(file.sheetName ?? file.filename);
+    if (person) {
+      constants[PERSON_FIELD] = person;
+      await db.update(importFiles).set({ constants }).where(eq(importFiles.id, fileId));
+    }
+  }
+
   // La mappatura dei campi e le colonne conservate vivono in due colonne
   // diverse ma sono un'unica istruzione di trasformazione.
   const map = {
     ...file.mapping,
     extras: file.extras ?? {},
-    constants: file.constants ?? {},
+    constants,
   } as unknown as ColumnMap;
   if (!map.content) throw new Error('Manca la colonna del testo');
 
@@ -332,7 +361,21 @@ export async function deriveMetricPoints(fileId: number, projectId: number): Pro
   const raw = await db.select({ data: importRows.data }).from(importRows)
     .where(eq(importRows.fileId, fileId)).orderBy(asc(importRows.rowIndex));
 
-  const label = map.entityLabel || file.sheetName || file.filename.replace(/\.(xlsx|csv)$/i, '');
+  // Di chi sono queste misure: se il foglio è intestato a una persona, la
+  // serie si chiama con il suo nome e non "SESANA_mensile". È lo stesso nome
+  // che portano i suoi post, e solo così le due tabelle parlano della stessa
+  // persona invece che di due.
+  const constants = (file.constants ?? {}) as Record<string, string>;
+  if (file.people === 1 && !constants[PERSON_FIELD]) {
+    const person = personFromSheetName(file.sheetName ?? file.filename);
+    if (person) {
+      constants[PERSON_FIELD] = person;
+      await db.update(importFiles).set({ constants }).where(eq(importFiles.id, fileId));
+    }
+  }
+
+  const label = map.entityLabel || constants[PERSON_FIELD]
+    || file.sheetName || file.filename.replace(/\.(xlsx|csv)$/i, '');
   const { points, report } = deriveMetrics(
     raw.map((r) => r.data as Record<string, unknown>), map, label,
   );
@@ -340,7 +383,6 @@ export async function deriveMetricPoints(fileId: number, projectId: number): Pro
   // I campi costanti del foglio valgono per ogni punto: sulle misure sono
   // dimensioni, ed è così che quarantatré fogli per manager diventano una
   // serie sola divisibile per manager.
-  const constants = (file.constants ?? {}) as Record<string, string>;
   for (let i = 0; i < points.length; i += 500) {
     await db.insert(metricPoints).values(points.slice(i, i + 500).map((p) => ({
       projectId, importFileId: fileId,

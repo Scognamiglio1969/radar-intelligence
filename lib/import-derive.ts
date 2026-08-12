@@ -3,6 +3,7 @@ import {
   cleanText, engagementScore, parseDateTime, parseLanguage, parseNumber, parseSentiment,
 } from '@/lib/import-normalize';
 import { countryFromUrl, toCountryCode } from '@/lib/country-codes';
+import { PERSON_FIELD } from '@/lib/sheet-archetype';
 
 // ---------------------------------------------------------------------------
 // La trasformazione riga → mention, isolata dal database.
@@ -121,7 +122,11 @@ export function deriveRows(
       if (v) custom[label || col] = v;
     }
 
-    const author = has(map.author) ? cleanText(get(row, map.author)) || null : null;
+    // L'autore: dalla colonna se c'è, altrimenti dalla persona a cui il foglio
+    // è intestato. Un foglio per manager non ha la colonna "autore" proprio
+    // perché l'autore è scritto una volta sola, nel titolo della scheda.
+    const author = (has(map.author) ? cleanText(get(row, map.author)) || null : null)
+      ?? custom[PERSON_FIELD] ?? null;
     // L'id include il file: due file diversi possono contenere legittimamente
     // lo stesso post (finestre temporali sovrapposte) e vanno tenuti distinti
     // per poter rimuovere un file senza cancellare le righe dell'altro.
