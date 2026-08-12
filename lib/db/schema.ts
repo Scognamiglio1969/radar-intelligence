@@ -91,6 +91,16 @@ export const mentions = pgTable('mentions', {
   publishedAt: timestamp('published_at', { withTimezone: true }).notNull(),
   fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
   language: text('language'),
+  /**
+   * Paese di provenienza (ISO alpha-2 minuscolo), quando si sa.
+   *
+   * Dichiarato dalla fonte quando la fonte lo dichiara (GDELT), altrimenti
+   * dedotto dal dominio nazionale dell'indirizzo (.it, .co.uk). Resta NULL
+   * quando non si sa: su una mappa un colore inventato è indistinguibile da
+   * uno vero, e la lingua NON è il paese — un post in spagnolo può venire da
+   * Madrid come da Città del Messico.
+   */
+  country: text('country'),
   engagement: jsonb('engagement').$type<Engagement>(),
   engagementScore: real('engagement_score').notNull().default(0),
   reach: integer('reach'),
@@ -495,6 +505,17 @@ export const studioCharts = pgTable('studio_charts', {
   title: text('title').notNull(),
   /** La specifica: sorgente, tipo, assi, aggregazioni, periodo, palette. */
   spec: jsonb('spec').$type<Record<string, unknown>>().notNull(),
+  /**
+   * Il commento scritto dall'AI su questo grafico, e quando.
+   *
+   * `commentFor` è l'impronta dei numeri che il commento descrive. Quando il
+   * grafico viene rieseguito e l'impronta non torna, il commento se ne va: un
+   * testo che parla di numeri che non ci sono più non è un commento vecchio,
+   * è un commento falso.
+   */
+  comment: text('comment'),
+  commentAt: timestamp('comment_at', { withTimezone: true }),
+  commentFor: text('comment_for'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

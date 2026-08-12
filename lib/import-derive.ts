@@ -2,6 +2,7 @@ import type { ColumnMap, ImportReport } from '@/lib/import';
 import {
   cleanText, engagementScore, parseDateTime, parseLanguage, parseNumber, parseSentiment,
 } from '@/lib/import-normalize';
+import { countryFromUrl, toCountryCode } from '@/lib/country-codes';
 
 // ---------------------------------------------------------------------------
 // La trasformazione riga → mention, isolata dal database.
@@ -26,6 +27,8 @@ export type NormalizedRow = {
   authorHandle: string | null;
   community: string | null;
   language: string | null;
+  /** Paese (ISO alpha-2): da una colonna del foglio, o dal dominio del link. */
+  country: string | null;
   url: string | null;
   sentiment: string | null;
   sentimentScore: number | null;
@@ -134,6 +137,10 @@ export function deriveRows(
       authorHandle: has(map.authorHandle) ? cleanText(get(row, map.authorHandle)) || null : null,
       community: has(map.community) ? cleanText(get(row, map.community)) || null : null,
       language: has(map.language) ? parseLanguage(get(row, map.language)) : null,
+      // Il paese: dalla colonna se il foglio ce l'ha (scritto come vuole —
+      // "Italia", "IT", "380"), altrimenti dal dominio nazionale del link.
+      country: (has(map.country) ? toCountryCode(cleanText(get(row, map.country))) : null)
+        ?? countryFromUrl(has(map.url) ? cleanText(get(row, map.url)) : null),
       url: has(map.url) ? cleanText(get(row, map.url)) || null : null,
       sentiment, sentimentScore: sentScore,
       reach: has(map.reach) ? Math.round(parseNumber(get(row, map.reach))) || null : null,

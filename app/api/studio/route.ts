@@ -4,7 +4,7 @@ import { getDb } from '@/lib/db';
 import { studioCharts } from '@/lib/db/schema';
 import { getCurrentProject } from '@/lib/data';
 import { getCurrentUser, isAdmin } from '@/lib/auth';
-import { runStudio, studioFields, type StudioSpec, type StudioSource } from '@/lib/studio';
+import { fingerprint, runStudio, studioFields, type StudioSpec, type StudioSource } from '@/lib/studio';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,7 +41,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Scegli almeno un campo per l’asse X e uno per l’asse Y' }, { status: 400 });
   }
   try {
-    return NextResponse.json(await runStudio(c.project.id, spec));
+    const result = await runStudio(c.project.id, spec);
+    // L'impronta viaggia col risultato: serve al client solo per chiedere se
+    // il commento salvato parla ancora di questi numeri.
+    return NextResponse.json({ ...result, fingerprint: fingerprint(spec, result) });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

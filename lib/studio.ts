@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { studioCharts } from '@/lib/db/schema';
 import { sourceLabel } from '@/lib/source-label';
+import { countryName } from '@/lib/country-codes';
 import { PALETTES, type PaletteId } from '@/lib/entity-colors';
 import type { StudioRendered } from '@/lib/report-pdf';
 
@@ -21,7 +22,7 @@ import type { StudioRendered } from '@/lib/report-pdf';
 
 export type StudioSource = 'mentions' | 'metrics';
 
-export type ChartKind = 'line' | 'area' | 'bar' | 'hbar' | 'scatter' | 'bubble' | 'pie';
+export type ChartKind = 'line' | 'area' | 'bar' | 'hbar' | 'scatter' | 'bubble' | 'pie' | 'map';
 
 export type Aggregation = 'count' | 'sum' | 'avg' | 'max' | 'min' | 'last';
 
@@ -54,13 +55,24 @@ export type StudioSpec = {
 
 export type StudioResult = {
   /** Righe già pronte per il grafico: x, valore, e la serie di appartenenza. */
-  rows: { x: string; y: number; z?: string; size?: number }[];
+  rows: {
+    x: string; y: number; z?: string; size?: number;
+    /** Codice del paese (ISO alpha-2), quando l'asse X è geografico: è la
+     *  chiave con cui la mappa trova il confine da colorare. */
+    code?: string;
+  }[];
   /** I nomi delle serie, nell'ordine in cui prendono i colori. */
   series: string[];
   xLabel: string;
   yLabel: string;
   zLabel?: string;
   total: number;
+  /**
+   * Righe che l'asse X non sa collocare: su una mappa sono le mention di cui
+   * non si conosce il paese. Sparivano in silenzio, e un totale che non torna
+   * è il modo più veloce per perdere fiducia in un grafico.
+   */
+  unplaced?: number;
   /** Avvertenze oneste sulla combinazione scelta. */
   warnings: string[];
 };
@@ -80,6 +92,10 @@ const MENTION_DIMENSIONS: Field[] = [
   { id: 'sentiment', label: 'Sentiment', role: 'dimension', hint: 'positivo / neutro / negativo' },
   { id: 'emotion', label: 'Emozione', role: 'dimension' },
   { id: 'kind', label: 'Tipo', role: 'dimension', hint: 'articolo o post' },
+  {
+    id: 'country', label: 'Paese', role: 'dimension',
+    hint: 'da dove viene: dichiarato dalla fonte o dedotto dal dominio nazionale del link. La lingua NON è il paese — lo spagnolo si parla a Madrid e a Città del Messico',
+  },
 ];
 
 const MENTION_MEASURES: Field[] = [
@@ -155,6 +171,7 @@ function dimExpr(source: StudioSource, id: string) {
     case 'sentiment': return sql`sentiment`;
     case 'emotion': return sql`emotion`;
     case 'kind': return sql`kind`;
+    case 'country': return sql`country`;
     case 'entity': return sql`entity`;
     case 'metric': return sql`metric`;
     default: return null;
@@ -216,6 +233,12 @@ export function specWarnings(spec: StudioSpec, result: { series: string[]; rows:
   if ((spec.chart === 'line' || spec.chart === 'area') && !/(day|week|month|hour)/.test(spec.x)) {
     w.push(`La linea suggerisce una continuità che "${fieldLabel(spec.source, spec.x)}" non ha: fra due categorie non c’è un percorso. Con le barre il confronto è corretto.`);
   }
+  if (spec.chart === 'map' && spec.x !== 'country') {
+    w.push(`Una mappa ha bisogno del PAESE sull'asse X: con "${fieldLabel(spec.source, spec.x)}" non c'è niente da colorare. Scegli "Paese", oppure un'altra forma.`);
+  }
+  if (spec.chart === 'map' && /(medi|avg|rate|%)/i.test(fieldLabel(spec.source, spec.y)) && spec.yAgg === 'sum') {
+    w.push('Su una mappa un tasso sommato colora di scuro i paesi con più righe, non quelli messi meglio.');
+  }
   if (result.series.length > 8) {
     w.push(`${result.series.length} serie: oltre otto i colori non si distinguono più. Le minori vengono raccolte in "Altro".`);
   }
@@ -259,7 +282,7 @@ export async function runStudio(projectId: number, spec: StudioSpec): Promise<St
   type Raw = { x: string; y: number; z?: string | number };
   const raw = (rows.rows as Raw[]).filter((r) => r.x !== null && r.y !== null);
 
-  const out = raw.map((r) => ({
+  const out: StudioResult['rows'] = raw.map((r) => ({
     x: String(r.x),
     y: Number(r.y),
     ...(z && !zIsSize ? { z: r.z === null || r.z === undefined ? '—' : String(r.z) } : {}),
@@ -274,6 +297,13 @@ export async function runStudio(projectId: number, spec: StudioSpec): Promise<St
   if (spec.x === 'source') for (const r of out) r.x = sourceLabel(r.x);
   if (spec.z === 'source') for (const r of out) if (r.z) r.z = sourceLabel(r.z);
 
+  // Il paese viaggia in due forme: il NOME per chi legge, il CODICE per la
+  // mappa, che con "Italia" non saprebbe quale confine colorare.
+  if (spec.x === 'country') {
+    for (const r of out) { r.code = r.x.toLowerCase(); r.x = countryName(r.code); }
+  }
+  if (spec.z === 'country') for (const r of out) if (r.z) r.z = countryName(r.z.toLowerCase());
+
   const result: StudioResult = {
     rows: out,
     series: spec.z === 'source' ? [...new Set(out.map((r) => r.z as string))] : series,
@@ -283,6 +313,17 @@ export async function runStudio(projectId: number, spec: StudioSpec): Promise<St
     total: out.reduce((s, r) => s + r.y, 0),
     warnings: [],
   };
+  // Quante righe l'asse X non colloca: si conta solo dove la domanda ha senso
+  // (il paese), perché è lì che il vuoto è un'informazione e non rumore.
+  if (spec.x === 'country') {
+    const [miss] = (await db.execute(sql`
+      select count(*)::int as n from ${table}
+      where project_id = ${projectId} and ${dateCol} >= ${since.toISOString()}
+        and (country is null or country = '')
+    `)).rows as { n: number }[];
+    result.unplaced = Number(miss?.n ?? 0);
+  }
+
   result.warnings = specWarnings(spec, result);
   return result;
 }
@@ -370,4 +411,76 @@ export function studioFacts(chart: StudioRendered): string {
     lines.push(`valore più basso — ${last.x}${last.z ? ` · ${last.z}` : ''}: ${n(last.y)}`);
   }
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Il commento al grafico, e la sua scadenza.
+//
+// Un commento parla di numeri precisi. Se i numeri si muovono — perché è
+// arrivata una raccolta, perché un file è stato reimportato, perché è passato
+// un giorno e il periodo scorre — quel testo non diventa vecchio: diventa
+// falso. Per questo insieme al commento si conserva l'IMPRONTA dei dati che
+// descriveva, e alla prima esecuzione in cui l'impronta non torna il commento
+// viene tolto, dicendo perché.
+// ---------------------------------------------------------------------------
+
+/** Impronta stabile dei numeri di un grafico. Cambia se cambia un valore. */
+export function fingerprint(spec: StudioSpec, result: StudioResult): string {
+  const body = [
+    spec.source, spec.chart, spec.x, spec.y, spec.yAgg, spec.z ?? '', spec.zAgg ?? '',
+    String(spec.days),
+    ...result.rows.map((r) => `${r.x}|${r.z ?? ''}|${Math.round(r.y * 1000) / 1000}`),
+  ].join('§');
+  // djb2: non serve una funzione crittografica, serve che due insiemi di
+  // numeri diversi diano stringhe diverse.
+  let h = 5381;
+  for (let i = 0; i < body.length; i++) h = ((h * 33) ^ body.charCodeAt(i)) >>> 0;
+  return `${h.toString(36)}-${result.rows.length}`;
+}
+
+export type ChartComment = {
+  text: string;
+  /** Quando è stato scritto. */
+  at: string;
+  /** I dati sono cambiati da allora: il commento non vale più. */
+  stale: boolean;
+};
+
+/**
+ * Il commento salvato di un grafico, se ancora valido.
+ *
+ * Quando non lo è lo cancella dall'archivio: lasciarlo lì "solo segnato come
+ * scaduto" significa che prima o poi qualcuno lo legge.
+ */
+export async function chartComment(
+  chartId: number, projectId: number, current: string,
+): Promise<ChartComment | null> {
+  const db = await getDb();
+  const [row] = await db.select().from(studioCharts)
+    .where(and(eq(studioCharts.id, chartId), eq(studioCharts.projectId, projectId)));
+  if (!row?.comment || !row.commentAt) return null;
+
+  if (row.commentFor !== current) {
+    await db.update(studioCharts)
+      .set({ comment: null, commentAt: null, commentFor: null })
+      .where(eq(studioCharts.id, chartId));
+    return { text: row.comment, at: row.commentAt.toISOString(), stale: true };
+  }
+  return { text: row.comment, at: row.commentAt.toISOString(), stale: false };
+}
+
+export async function saveChartComment(
+  chartId: number, projectId: number, text: string, forData: string,
+): Promise<string> {
+  const db = await getDb();
+  const at = new Date();
+  // Testo vuoto significa "togli": si svuota tutto, non si lascia una data
+  // senza un commento a cui appartenga.
+  const empty = !text.trim();
+  await db.update(studioCharts)
+    .set(empty
+      ? { comment: null, commentAt: null, commentFor: null }
+      : { comment: text, commentAt: at, commentFor: forData })
+    .where(and(eq(studioCharts.id, chartId), eq(studioCharts.projectId, projectId)));
+  return at.toISOString();
 }

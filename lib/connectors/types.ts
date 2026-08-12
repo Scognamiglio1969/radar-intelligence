@@ -23,6 +23,8 @@ export interface RawMention {
   community?: string;
   publishedAt: Date;
   language?: string;
+  /** Paese DICHIARATO dalla fonte (nome o codice): non una deduzione. */
+  country?: string;
   engagement?: Engagement;
   reach?: number;
 }

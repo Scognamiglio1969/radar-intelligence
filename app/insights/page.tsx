@@ -55,7 +55,6 @@ const GROUPS: {
     title: 'Context',
     hint: 'Where and when it happens',
     items: [
-      { href: '/insights/geo', label: 'Languages & geography', icon: Globe2, question: 'Which languages and areas are talking, and with what tone?' },
       { href: '/insights/heatmap', label: 'Hourly heatmap', icon: Grid3x3, question: 'Which days and hours does the conversation actually live?' },
     ],
   },

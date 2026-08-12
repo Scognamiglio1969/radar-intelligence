@@ -381,6 +381,11 @@ const DDL = [
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`,
   `CREATE INDEX IF NOT EXISTS studio_charts_project ON studio_charts (project_id)`,
+  `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS country TEXT`,
+  `CREATE INDEX IF NOT EXISTS mentions_country ON mentions (project_id, country)`,
+  `ALTER TABLE studio_charts ADD COLUMN IF NOT EXISTS comment TEXT`,
+  `ALTER TABLE studio_charts ADD COLUMN IF NOT EXISTS comment_at TIMESTAMPTZ`,
+  `ALTER TABLE studio_charts ADD COLUMN IF NOT EXISTS comment_for TEXT`,
   `ALTER TABLE periodic_reports ADD COLUMN IF NOT EXISTS pov JSONB`,
 ];
 

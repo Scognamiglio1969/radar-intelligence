@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 // ---------------------------------------------------------------------------
 
 export default async function GraphPage({ searchParams }: {
-  searchParams: Promise<{ chart?: string }>;
+  searchParams: Promise<{ chart?: string; preset?: string }>;
 }) {
   const project = await getCurrentProject();
   if (!project) {
@@ -41,7 +41,8 @@ export default async function GraphPage({ searchParams }: {
 
   // ?chart=<id> apre un grafico preciso: è il modo in cui ci si arriva
   // dall'hub degli insight, dove ogni scheda è un grafico salvato.
-  const wanted = Number((await searchParams).chart);
+  const sp = await searchParams;
+  const wanted = Number(sp.chart);
   const db = await getDb();
   const rows = await db.select().from(studioCharts)
     .where(eq(studioCharts.projectId, project.id))
@@ -54,7 +55,7 @@ export default async function GraphPage({ searchParams }: {
         title="Studio Graph"
         subtitle="Scegli i tre assi, la forma e il colore. I campi sono quelli del tuo progetto."
       />
-      <StudioGraph initial={saved[0]
+      <StudioGraph preset={sp.preset === 'map' ? 'map' : undefined} initial={saved[0]
         ? { id: saved[0].id, title: saved[0].title, spec: saved[0].spec as never }
         : undefined} />
     </div>

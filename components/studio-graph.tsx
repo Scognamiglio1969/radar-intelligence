@@ -8,8 +8,10 @@ import {
 } from 'recharts';
 import {
   Loader2, Save, Trash2, AlertTriangle, LineChart as LineIcon, BarChart3,
-  ScatterChart as ScatterIcon, PieChart as PieIcon, AreaChart as AreaIcon, Info, Plus,
+  ScatterChart as ScatterIcon, PieChart as PieIcon, AreaChart as AreaIcon, Info, Plus, Globe,
+  Sparkles, X,
 } from 'lucide-react';
+import { StudioMap } from '@/components/studio-map';
 import { PALETTES, paletteColor, OVERFLOW_COLOR, type PaletteId } from '@/lib/entity-colors';
 
 // ---------------------------------------------------------------------------
@@ -29,15 +31,15 @@ import { PALETTES, paletteColor, OVERFLOW_COLOR, type PaletteId } from '@/lib/en
 type Field = { id: string; label: string; role: 'dimension' | 'measure'; hint?: string };
 type Spec = {
   source: 'mentions' | 'metrics';
-  chart: 'line' | 'area' | 'bar' | 'hbar' | 'scatter' | 'bubble' | 'pie';
+  chart: 'line' | 'area' | 'bar' | 'hbar' | 'scatter' | 'bubble' | 'pie' | 'map';
   x: string; y: string; yAgg: string;
   z?: string; zAgg?: string;
   days: number; limit: number; palette: PaletteId;
 };
 type Result = {
-  rows: { x: string; y: number; z?: string; size?: number }[];
+  rows: { x: string; y: number; z?: string; size?: number; code?: string }[];
   series: string[]; xLabel: string; yLabel: string; zLabel?: string;
-  total: number; warnings: string[];
+  total: number; unplaced?: number; warnings: string[];
 };
 type Saved = { id: number; title: string; spec: Spec };
 
@@ -49,6 +51,7 @@ const CHARTS: { id: Spec['chart']; label: string; icon: typeof LineIcon; when: s
   { id: 'scatter', label: 'Dispersione', icon: ScatterIcon, when: 'la relazione fra due misure' },
   { id: 'bubble', label: 'Bolle', icon: ScatterIcon, when: 'due misure più una terza nella dimensione' },
   { id: 'pie', label: 'Torta', icon: PieIcon, when: 'quanto pesa ciascuna voce, se sono poche' },
+  { id: 'map', label: 'Mappa', icon: Globe, when: 'dove: il colore dice una misura, l’asse Z la scomposizione paese per paese' },
 ];
 
 const AGGS: { id: string; label: string; hint: string }[] = [
@@ -96,15 +99,28 @@ function Tip({ text }: { text: string }) {
   );
 }
 
-export function StudioGraph({ initial }: { initial?: { id: number; title: string; spec: Spec } }) {
-  const [spec, setSpec] = useState<Spec>(initial?.spec ?? DEFAULT);
-  const [title, setTitle] = useState(initial?.title ?? '');
-  const [savedId, setSavedId] = useState<number | null>(initial?.id ?? null);
+/** Da dove si parte quando si arriva chiedendo una mappa. */
+const MAP_PRESET: Spec = {
+  source: 'mentions', chart: 'map', x: 'country', y: 'count', yAgg: 'count',
+  z: 'language', days: 90, limit: 200, palette: 'sequential',
+};
+
+export function StudioGraph({ initial, preset }: {
+  initial?: { id: number; title: string; spec: Spec };
+  preset?: 'map';
+}) {
+  const [spec, setSpec] = useState<Spec>(
+    preset === 'map' ? MAP_PRESET : initial?.spec ?? DEFAULT,
+  );
+  const [title, setTitle] = useState(preset === 'map' ? '' : initial?.title ?? '');
+  const [savedId, setSavedId] = useState<number | null>(preset === 'map' ? null : initial?.id ?? null);
   const [fields, setFields] = useState<Field[]>([]);
   const [saved, setSaved] = useState<Saved[]>([]);
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [comment, setComment] = useState<{ text: string; at: string; stale: boolean } | null>(null);
+  const [commenting, setCommenting] = useState(false);
 
   const dims = fields.filter((f) => f.role === 'dimension');
   const measures = fields.filter((f) => f.role === 'measure');
@@ -132,7 +148,16 @@ export function StudioGraph({ initial }: { initial?: { id: number; title: string
       .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
         if (!alive) return;
-        if (ok) setResult(d); else { setResult(null); setError(d.error ?? 'Errore'); }
+        if (!ok) { setResult(null); setComment(null); setError(d.error ?? 'Errore'); return; }
+        setResult(d);
+        // Il commento salvato vale solo se descrive QUESTI numeri: l'impronta
+        // la calcola il server, che è l'unico a poterla confrontare.
+        if (savedId && d.fingerprint) {
+          fetch(`/api/studio/comment?id=${savedId}&for=${encodeURIComponent(d.fingerprint)}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((c) => alive && setComment(c?.comment ?? null))
+            .catch(() => {});
+        } else setComment(null);
       })
       .catch((e) => alive && setError((e as Error).message))
       .finally(() => alive && setBusy(false));
@@ -156,6 +181,28 @@ export function StudioGraph({ initial }: { initial?: { id: number; title: string
   };
 
   const set = <K extends keyof Spec>(k: K, v: Spec[K]) => setSpec((s) => ({ ...s, [k]: v }));
+
+  /** Chiede il commento all'AI. Vive attaccato al grafico salvato. */
+  const askComment = async () => {
+    if (!savedId) { setError('Salva prima il grafico: il commento resta attaccato a lui.'); return; }
+    setCommenting(true); setError('');
+    try {
+      const res = await fetch('/api/studio/comment', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: savedId, spec, title }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setError(d.error ?? 'Commento non riuscito'); return; }
+      setComment(d.comment);
+    } catch (e) { setError((e as Error).message); }
+    finally { setCommenting(false); }
+  };
+
+  const dropComment = async () => {
+    if (!savedId) return;
+    await fetch(`/api/studio/comment?id=${savedId}`, { method: 'DELETE' });
+    setComment(null);
+  };
 
   return (
     <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
@@ -284,6 +331,43 @@ export function StudioGraph({ initial }: { initial?: { id: number; title: string
             </p>}
 
           {result && result.rows.length > 0 && (
+            <div className="mt-3 rounded-xl border border-[var(--border)] bg-white/[0.02] px-4 py-3">
+              {comment && !comment.stale ? (
+                <>
+                  <p className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-violet-300">
+                    <Sparkles className="size-3" /> Commento · AI
+                    <span className="font-normal normal-case tracking-normal text-slate-600">
+                      scritto il {new Date(comment.at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}
+                    </span>
+                    <button onClick={dropComment} title="Togli il commento"
+                      className="ml-auto text-slate-600 hover:text-red-300"><X className="size-3.5" /></button>
+                  </p>
+                  <p className="text-sm leading-relaxed text-slate-300">{comment.text}</p>
+                  <p className="mt-1.5 text-[10px] text-slate-600">
+                    Sparisce da solo appena i numeri cambiano: un commento che descrive dati che non ci sono più non è vecchio, è falso.
+                  </p>
+                </>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={askComment} disabled={commenting || !savedId}
+                    title={savedId ? 'Fai scrivere all’AI che cosa dice questo grafico' : 'Salva prima il grafico'}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-500/20 disabled:opacity-40">
+                    {commenting ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                    {comment?.stale ? 'Riscrivi il commento' : 'Commenta con l’AI'}
+                  </button>
+                  <span className="text-[11px] text-slate-600">
+                    {comment?.stale
+                      ? `I dati sono cambiati dal ${new Date(comment.at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}: il commento è stato tolto.`
+                      : savedId
+                        ? 'L’AI legge solo le cifre di questo grafico, mai le righe.'
+                        : 'Salva il grafico e potrai farlo commentare.'}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {result && result.rows.length > 0 && (
             <p className="mt-2 text-[11px] text-slate-600">
               {result.rows.length} valori · totale {fmt(result.total)} · {result.xLabel} × {result.yLabel}
               {result.zLabel ? ` × ${result.zLabel}` : ''}
@@ -382,6 +466,18 @@ function Chart({ spec, result }: { spec: Spec; result: Result }) {
   );
 
   const H = 340;
+
+  if (spec.chart === 'map') {
+    // Il sentiment ha due versi attorno allo zero: la mappa lo colora a due
+    // poli, tutto il resto con un'intensità sola.
+    const diverging = /sentiment|punteggio/i.test(result.yLabel) && spec.yAgg !== 'count';
+    return (
+      <StudioMap
+        rows={rows} yLabel={result.yLabel} zLabel={result.zLabel}
+        palette={spec.palette} diverging={diverging} unplaced={result.unplaced}
+      />
+    );
+  }
 
   if (spec.chart === 'pie') {
     return (

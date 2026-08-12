@@ -173,7 +173,7 @@ export function sectionFacts(d: ExportData, id: SectionId): string {
       return [...terms, ...edges].join('\n');
     }
     case 'geo':
-      return d.geo.slice(0, 12).map((g) => `area ${g.country}: ${g.volume} mention (${g.share}%), sentiment ${g.sentiment === null ? 'n/d' : g.sentiment.toFixed(2)}`).join('\n');
+      return d.geo.slice(0, 12).map((g) => `paese ${g.country}: ${g.volume} mention (${g.share}%), sentiment ${g.sentiment === null ? 'n/d' : g.sentiment.toFixed(2)}`).join('\n');
     case 'crisis': {
       const pk = d.crisis.peak;
       if (!pk) return '';

@@ -19,7 +19,7 @@ export const EXPORT_SECTIONS = [
   { id: 'momentum', label: 'Momentum quadrant', group: 'Deep analysis' },
   { id: 'flow', label: 'Conversation flow', group: 'Deep analysis' },
   { id: 'constellation', label: 'Semantic constellation', group: 'Deep analysis' },
-  { id: 'geo', label: 'Geographic map', group: 'Deep analysis' },
+  { id: 'geo', label: 'Countries', group: 'Deep analysis' },
   { id: 'crisis', label: 'Crisis radar & peak', group: 'Deep analysis' },
   // Benchmark & audience — confronti e chi parla
   { id: 'benchmark', label: 'Benchmark', group: 'Benchmark & audience' },

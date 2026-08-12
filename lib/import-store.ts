@@ -201,6 +201,7 @@ export async function deriveMentions(fileId: number, projectId: number): Promise
     source: n.source, externalId: n.externalId,
     url: n.url, title: n.title, content: n.content, author: n.author,
     authorHandle: n.authorHandle, community: n.community, language: n.language,
+    country: n.country,
     publishedAt: n.publishedAt,
     engagement: (n.likes ?? n.comments ?? n.shares ?? n.views) !== null
       ? {

@@ -62,6 +62,9 @@ export const gdelt: Connector = {
       url: a.url,
       title: truncate(a.title ?? '', 300),
       content: truncate(a.title ?? '', 300),
+      // GDELT dice da che paese viene la testata: è l'unica fonte che lo
+      // dichiara, e finora lo stavamo buttando via.
+      country: a.sourcecountry,
       author: a.domain,
       community: a.domain,
       publishedAt: parseSeenDate(a.seendate),

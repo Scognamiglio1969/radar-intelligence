@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { getDb, setMeta, getMeta } from '@/lib/db';
+import { backfillCountries, countryFromUrl, toCountryCode } from '@/lib/country-codes';
 import { mentions, projects, benchmarkEntities } from '@/lib/db/schema';
 import { CONNECTORS, kindOf } from '@/lib/connectors';
 import { setTelegramChannels } from '@/lib/connectors/telegram';
@@ -248,6 +249,10 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
         community: m.community,
         publishedAt: m.publishedAt,
         language: m.language,
+        // Il paese: quello dichiarato dalla fonte se c'è, altrimenti quello
+        // che dice il dominio nazionale dell'indirizzo. Se non lo dice
+        // nessuno resta vuoto: la lingua non è il paese.
+        country: toCountryCode(m.country) ?? countryFromUrl(m.url),
         engagement: m.engagement,
         engagementScore: rawEngagementScore(m),
         reach: m.reach,
@@ -281,5 +286,14 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
 
   await setMeta('source_status', status);
   await setMeta('last_ingest_at', new Date().toISOString());
+  // Le mention raccolte prima che il paese esistesse hanno ancora il loro
+  // indirizzo: ogni giro ne recupera un blocco, finché non ne restano.
+  try {
+    const recuperate = await backfillCountries(project.id);
+    if (recuperate) console.log(`[ingest] paese dedotto dal dominio per ${recuperate} mention già in archivio`);
+  } catch (e) {
+    console.warn('[ingest] recupero dei paesi non riuscito:', (e as Error).message);
+  }
+
   return { inserted, status };
 }

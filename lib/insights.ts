@@ -8,6 +8,7 @@ import { getNarratives } from '@/lib/narratives';
 import { getTimeline } from '@/lib/timeline';
 import { getRecentAlerts } from '@/lib/alerts';
 import { callClaude, claudeAvailable, MODELS } from '@/lib/claude';
+import { A2_TO_NUM, countryFlag, countryName } from '@/lib/country-codes';
 
 const TZ = 'Europe/Rome';
 
@@ -888,46 +889,10 @@ export async function brandHealthReport(projectId: number, days = 14): Promise<H
 // La lingua è l'unico segnale geografico persistito su ogni mention: ogni
 // codice ISO 639-1 viene mappato al paese/area rappresentativa, con centroide
 // (lon/lat) per posizionarlo sulla mappa e bandiera per etichettarlo.
-type GeoMeta = { country: string; flag: string; iso: string[] };
 // Ogni lingua → i paesi (ISO 3166-1 numerico, come nel world-atlas) dove è
 // prevalente. Così l'inglese si distribuisce su US/UK/CA/AU/…, lo spagnolo su
 // Spagna + America Latina, ecc.: la mappa si riempie davvero.
-const LANG_GEO: Record<string, GeoMeta> = {
-  it: { country: 'Italian', flag: '🇮🇹', iso: ['380'] },
-  en: { country: 'English', flag: '🇬🇧', iso: ['840', '826', '124', '036', '372', '554', '710'] },
-  es: { country: 'Spanish', flag: '🇪🇸', iso: ['724', '484', '032', '170', '152', '604', '862', '218', '600', '858', '068', '320', '340', '222', '558', '188', '214', '591'] },
-  fr: { country: 'French', flag: '🇫🇷', iso: ['250', '056', '384', '466', '686'] },
-  de: { country: 'German', flag: '🇩🇪', iso: ['276', '040', '756'] },
-  pt: { country: 'Portuguese', flag: '🇧🇷', iso: ['076', '620', '024', '508'] },
-  nl: { country: 'Dutch', flag: '🇳🇱', iso: ['528'] },
-  pl: { country: 'Polish', flag: '🇵🇱', iso: ['616'] },
-  ru: { country: 'Russian', flag: '🇷🇺', iso: ['643', '112', '398'] },
-  ar: { country: 'Arabic', flag: '🇸🇦', iso: ['682', '818', '784', '504', '368', '012', '400', '760', '434', '788', '887', '414', '512', '634', '048'] },
-  zh: { country: 'Chinese', flag: '🇨🇳', iso: ['156', '158'] },
-  ja: { country: 'Japanese', flag: '🇯🇵', iso: ['392'] },
-  ko: { country: 'Korean', flag: '🇰🇷', iso: ['410'] },
-  tr: { country: 'Turkish', flag: '🇹🇷', iso: ['792'] },
-  ro: { country: 'Romanian', flag: '🇷🇴', iso: ['642'] },
-  hu: { country: 'Hungarian', flag: '🇭🇺', iso: ['348'] },
-  cs: { country: 'Czech', flag: '🇨🇿', iso: ['203'] },
-  el: { country: 'Greek', flag: '🇬🇷', iso: ['300'] },
-  sv: { country: 'Swedish', flag: '🇸🇪', iso: ['752'] },
-  da: { country: 'Danish', flag: '🇩🇰', iso: ['208'] },
-  fi: { country: 'Finnish', flag: '🇫🇮', iso: ['246'] },
-  no: { country: 'Norwegian', flag: '🇳🇴', iso: ['578'] },
-  uk: { country: 'Ukrainian', flag: '🇺🇦', iso: ['804'] },
-  he: { country: 'Hebrew', flag: '🇮🇱', iso: ['376'] },
-  hi: { country: 'Hindi', flag: '🇮🇳', iso: ['356'] },
-  id: { country: 'Indonesian', flag: '🇮🇩', iso: ['360'] },
-  vi: { country: 'Vietnamese', flag: '🇻🇳', iso: ['704'] },
-  th: { country: 'Thai', flag: '🇹🇭', iso: ['764'] },
-  sk: { country: 'Slovak', flag: '🇸🇰', iso: ['703'] },
-  bg: { country: 'Bulgarian', flag: '🇧🇬', iso: ['100'] },
-  hr: { country: 'Croatian', flag: '🇭🇷', iso: ['191'] },
-  sr: { country: 'Serbian', flag: '🇷🇸', iso: ['688'] },
-  ca: { country: 'Catalan', flag: '🇪🇸', iso: ['724'] },
-  sl: { country: 'Slovenian', flag: '🇸🇮', iso: ['705'] },
-};
+
 
 // ---------------------------------------------------------------------------
 // 2b. Emotion radar (distribuzione delle emozioni dominanti)
@@ -963,21 +928,29 @@ export type GeoPoint = {
 export async function geoDistribution(projectId: number, days = 30): Promise<GeoPoint[]> {
   const db = await getDb();
   const since = new Date(Date.now() - days * 86400_000).toISOString();
+
+  // Il PAESE, non la lingua. Prima questa funzione raggruppava per lingua e
+  // dipingeva ogni paese dove quella lingua si parla: dagli Stati Uniti
+  // arrivava "inglese", e quattro post in spagnolo da lì sparivano dentro il
+  // Messico. Ora un paese è un paese, e la lingua è una delle cose che ci si
+  // può guardare dentro.
   const rows = (await db.execute(sql`
-    SELECT lower(language) AS lang, count(*) AS n, avg(sentiment_score) AS sent
+    SELECT lower(country) AS a2, count(*) AS n, avg(sentiment_score) AS sent
     FROM mentions
     WHERE project_id = ${projectId} AND published_at >= ${since}::timestamptz
-      AND language IS NOT NULL AND language <> ''
-    GROUP BY lower(language)
+      AND country IS NOT NULL AND country <> ''
+    GROUP BY lower(country)
     ORDER BY n DESC
-  `)).rows as { lang: string; n: number; sent: number | null }[];
+  `)).rows as { a2: string; n: number; sent: number | null }[];
 
-  const known = rows.filter((r) => LANG_GEO[r.lang]);
-  const total = known.reduce((s, r) => s + Number(r.n), 0) || 1;
-  return known.map((r) => {
-    const g = LANG_GEO[r.lang];
+  const total = rows.reduce((s, r) => s + Number(r.n), 0) || 1;
+  return rows.map((r) => {
+    const num = A2_TO_NUM.get(r.a2);
     return {
-      lang: r.lang, country: g.country, flag: g.flag, iso: g.iso,
+      lang: r.a2,
+      country: countryName(r.a2),
+      flag: countryFlag(r.a2),
+      iso: num ? [num] : [],
       volume: Number(r.n),
       sentiment: r.sent === null ? null : Math.round(Number(r.sent) * 100) / 100,
       share: Math.round((Number(r.n) / total) * 1000) / 10,
