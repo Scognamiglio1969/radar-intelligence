@@ -267,7 +267,8 @@ Il tuo compito è DOPPIO:
 
 1. CAPIRE. Scrivi che cos'è il file nel suo insieme (2-3 frasi) e una riga per ogni foglio. Nella
    riga di un foglio di' la GRANULARITÀ (una riga per cosa: per post? per manager per mese?) e il
-   periodo coperto, quando si vedono.
+   periodo coperto, quando si vedono. UNA riga vuol dire una riga: massimo venti parole per foglio,
+   e quando molti fogli sono uguali dillo una volta sola invece di ripeterlo per ognuno.
    Se più fogli hanno le stesse colonne, dillo: quasi sempre sono la stessa tabella divisa per
    soggetto (una persona, un canale, un mese), e il soggetto sta nel NOME del foglio.
 
@@ -330,7 +331,7 @@ Rispondi SOLO con questo JSON:
  * all'utente arriva "non disponibile" senza sapere perché. Meglio leggerne una
  * parte rappresentativa e DIRE che è una parte.
  */
-const MAX_SHEETS = 24;
+const MAX_SHEETS = 18;
 const MAX_COLUMNS = 24;
 
 function brief(d: Dossier): string {
@@ -458,6 +459,53 @@ export function validateReading(raw: unknown, d: Dossier): AgentReading {
   };
 }
 
+/**
+ * Ripara un JSON tagliato a metà.
+ *
+ * Non è una scorciatoia elegante: è che una risposta troncata contiene comunque
+ * il riassunto e i primi fogli, e buttarla via per una parentesi mancante
+ * significa far ripetere all'utente una chiamata lunga per riavere la stessa
+ * cosa. Si chiudono le stringhe e le parentesi rimaste aperte, e si tiene
+ * quello che c'era.
+ */
+function repairJson(raw: string): unknown {
+  let inString = false;
+  let escaped = false;
+  const stack: string[] = [];
+  let lastSafe = -1;
+
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (escaped) { escaped = false; continue; }
+    if (c === '\\') { escaped = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') { stack.pop(); if (!stack.length) lastSafe = i; }
+    else if (c === ',' && stack.length <= 2) lastSafe = i - 1;
+  }
+
+  const head = raw.slice(0, (lastSafe >= 0 ? lastSafe : raw.length - 1) + 1)
+    .replace(/,\s*$/, '');
+  // Si ricostruisce lo stato delle parentesi sul pezzo tenuto.
+  const chiusure: string[] = [];
+  let s2 = false, e2 = false;
+  for (const c of head) {
+    if (e2) { e2 = false; continue; }
+    if (c === '\\') { e2 = true; continue; }
+    if (c === '"') { s2 = !s2; continue; }
+    if (s2) continue;
+    if (c === '{') chiusure.push('}');
+    else if (c === '[') chiusure.push(']');
+    else if (c === '}' || c === ']') chiusure.pop();
+  }
+  try {
+    return JSON.parse(head + chiusure.reverse().join(''));
+  } catch {
+    return null;
+  }
+}
+
 /** Legge il file: che cos'è, e dove serve una decisione. */
 export async function readFile(
   d: Dossier,
@@ -467,7 +515,7 @@ export async function readFile(
   }
   const payload = brief(d);
   const { text, failure } = await callClaudeDetailed(
-    MODELS.sonnet, 'import_agent', SYSTEM, payload, 3000, false, 240_000,
+    MODELS.sonnet, 'import_agent', SYSTEM, payload, 8000, false, 240_000,
   );
   if (!text) {
     return {
@@ -476,13 +524,24 @@ export async function readFile(
   }
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start < 0 || end <= start) {
-    return { failure: { why: 'empty', message: 'La risposta del modello non era leggibile. Riprova.' } };
+  if (start < 0) {
+    return { failure: { why: 'empty', message: 'Il modello non ha risposto in un formato leggibile. Riprova.' } };
   }
   try {
     return { reading: validateReading(JSON.parse(text.slice(start, end + 1)), d) };
   } catch {
-    return { failure: { why: 'empty', message: 'La risposta del modello non era leggibile. Riprova.' } };
+    // Una risposta tagliata a metà è quasi sempre una risposta TROPPO LUNGA:
+    // si prova a chiuderla, e se si recupera anche solo il riassunto è meglio
+    // di un "riprova" che rifarebbe la stessa cosa allo stesso modo.
+    const salvato = repairJson(text.slice(start));
+    if (salvato) return { reading: validateReading(salvato, d) };
+    return {
+      failure: {
+        why: 'empty',
+        message: 'Il modello ha risposto più del previsto e la risposta è arrivata tagliata. '
+          + 'Riprova: se succede ancora, importa i fogli in due volte.',
+      },
+    };
   }
 }
 

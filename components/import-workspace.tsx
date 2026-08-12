@@ -127,6 +127,14 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
   const [analyzeMsg, setAnalyzeMsg] = useState('');
   /** Il data scientist ha già letto i file in questa sessione. */
   const [scientistRead, setScientistRead] = useState(false);
+  /**
+   * Si mostrano solo i fogli che hanno bisogno di qualcosa.
+   *
+   * Quaranta schede tutte uguali, di cui trentasette a posto, non sono
+   * informazione: sono un muro. Quelle a posto restano contate in una riga, e
+   * si aprono se uno vuole.
+   */
+  const [showAll, setShowAll] = useState(false);
   /** File caricato in attesa che l'utente scelga quali fogli importare. */
   const [pending, setPending] = useState<{ file: File; sheets: SheetInfo[] } | null>(null);
   const [progress, setProgress] = useState(0);
@@ -223,6 +231,26 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     }
     if (!res.ok) { setError(d.error ?? "Errore nell'upload"); return null; }
     return d;
+  };
+
+  /**
+   * Apre la scheda di un foglio e ci porta.
+   *
+   * Con quaranta fogli in pagina, aprire una scheda che sta tre schermate più
+   * giù è indistinguibile dal non fare niente: si preme il pulsante della
+   * guida e sembra rotto. La guida deve accompagnare, non indicare.
+   */
+  const openSheet = (fileId: number) => {
+    setOpen(fileId);
+    setShowAll(true);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`foglio-${fileId}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.animate(
+        [{ boxShadow: '0 0 0 2px rgba(56,189,248,0.7)' }, { boxShadow: '0 0 0 2px rgba(56,189,248,0)' }],
+        { duration: 1400, easing: 'ease-out' },
+      );
+    });
   };
 
   const act = async (fileId: number, action: string, payload?: Record<string, unknown>) => {
@@ -363,6 +391,7 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     working: Boolean(busy === 'upload' || pending),
   });
   const here = currentStage(stageList);
+  const waiting = files.filter((f) => !f.rawPurged && !isReady(f)).length;
 
   const next: Next = (() => {
     if (busy) {
@@ -396,11 +425,24 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
         did: `Ho letto ${files.length} fogli e capito da solo cosa contengono.`,
         title: notReady.length === 1
           ? `Manca una cosa su “${one.sheetName ?? one.filename}”`
-          : `Mancano un paio di scelte su ${notReady.length} fogli`,
+          : `${notReady.length} fogli aspettano una tua scelta`,
         text: one.kind === 'metrics'
-          ? 'Su un foglio di misure mi servono la colonna della data e almeno una colonna di valori. Aprilo qui sotto: te le ho già proposte, devi solo confermare.'
-          : 'Mi serve sapere qual è la colonna del testo. Aprilo qui sotto: se il foglio è fatto di numeri e non di contenuti, puoi anche dirmi che è di misure.',
-        action: { label: `Apri ${one.sheetName ?? one.filename}`, onClick: () => setOpen(one.id) },
+          ? 'Su un foglio di misure servono la colonna della data e almeno una colonna di valori: te le ho già proposte, devi solo confermare. Premi un nome qui sotto e ti ci porto.'
+          : 'Mi serve sapere qual è la colonna del testo. Premi un nome qui sotto e ti ci porto: se il foglio è fatto di numeri e non di contenuti, puoi anche dirmi che è di misure.',
+        // Qui si risolve, non si viene indirizzati altrove: per ogni foglio
+        // che aspetta ci sono le due sole uscite possibili — sistemarlo o
+        // toglierlo. Con quaranta fogli, mandare a cercare la scheda giusta
+        // era la ragione per cui sembrava che non si andasse avanti.
+        pending: notReady.slice(0, 15).map((f) => ({
+          id: f.id,
+          label: f.sheetName ?? f.filename,
+          why: f.kind === 'metrics'
+            ? 'manca la data o le colonne di valore'
+            : 'manca la colonna del testo',
+          onFix: () => openSheet(f.id),
+          onDrop: () => act(f.id, 'delete'),
+        })),
+        more: notReady.length > 15 ? notReady.length - 15 : 0,
       };
     }
 
@@ -526,23 +568,37 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
       {error && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">{error}</p>}
 
       {files.length > 0 && (
-        <p className="flex items-center gap-1.5 px-1 text-[11px] text-slate-500">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] text-slate-500">
           <LineChart className="size-3.5 shrink-0" />
           <span className="font-medium text-slate-400">Jr Data Analyst</span>
-          <span className="text-slate-600">
+          <span className="min-w-0 flex-1 text-slate-600">
             — foglio per foglio: che cos’è ogni colonna. Apri una scheda per correggere quello che ho proposto.
           </span>
-        </p>
+          {files.length > waiting && (
+            <button onClick={() => setShowAll(!showAll)}
+              className="shrink-0 rounded-lg border border-[var(--border)] px-2.5 py-1 text-slate-400 transition hover:bg-white/5">
+              {showAll
+                ? `nascondi i ${files.length - waiting} fogli a posto`
+                : `${files.length - waiting} fogli sono a posto — mostrali`}
+            </button>
+          )}
+        </div>
       )}
 
-      {sources.map((src) => (
+      {sources.map((src) => {
+        // Solo i fogli che hanno bisogno di qualcosa, salvo richiesta.
+        const shown = showAll
+          ? src.files
+          : src.files.filter((f) => !f.rawPurged && !isReady(f));
+        if (!shown.length) return null;
+        return (
         <div key={src.name} className="flex flex-col gap-2">
           <SourceHeader
             src={src} busy={busy}
             onRemove={() => removeSource(src.name)}
             multi={sources.length > 1}
           />
-          {src.files.map((f) => (
+          {shown.map((f) => (
             <FileCard
               key={f.id} file={f} busy={busy} projectId={project.id}
               expanded={open === f.id}
@@ -551,7 +607,8 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
             />
           ))}
         </div>
-      ))}
+        );
+      })}
 {files.length > 0 && (
         <ImportAgentPanel
           projectId={project.id}
@@ -705,6 +762,12 @@ type Next = {
   action?: { label: string; onClick: () => void; disabled?: boolean };
   /** L'azione principale quando è un ANDARE, non un fare: chiude l'import. */
   go?: { label: string; href: string; hint?: string };
+  /** I fogli che aspettano, con le due sole uscite: sistemare o togliere. */
+  pending?: {
+    id: number; label: string; why: string;
+    onFix: () => void; onDrop: () => void;
+  }[];
+  more?: number;
   links?: { label: string; href: string }[];
 };
 
@@ -745,6 +808,29 @@ function NextStep({ n, projectId, role }: { n: Next; projectId: number; role: st
       </p>
       <h2 className="text-xl font-semibold text-slate-100 sm:text-2xl">{n.title}</h2>
       <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-400">{n.text}</p>
+
+      {n.pending && n.pending.length > 0 && (
+        <div className="mt-3 flex flex-col gap-1.5">
+          {n.pending.map((f) => (
+            <div key={f.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-[var(--border)] bg-white/[0.02] px-3 py-2">
+              <FileSpreadsheet className="size-3.5 shrink-0 text-slate-600" />
+              <span className="text-sm text-slate-200">{f.label}</span>
+              <span className="min-w-0 flex-1 text-[11px] text-slate-600">{f.why}</span>
+              <button onClick={f.onFix}
+                className="shrink-0 rounded-lg bg-sky-500/90 px-3 py-1 text-xs font-medium text-slate-950 hover:bg-sky-400">
+                Sistemalo
+              </button>
+              <button onClick={f.onDrop}
+                title="Toglie il foglio dal progetto: il file resta, questo foglio no."
+                className="shrink-0 rounded-lg border border-[var(--border)] px-3 py-1 text-xs text-slate-400 hover:border-red-500/40 hover:text-red-300">
+                Scartalo
+              </button>
+            </div>
+          ))}
+          {n.more ? <p className="px-1 text-[11px] text-slate-600">e altri {n.more}</p> : null}
+        </div>
+      )}
 
       {(n.action || n.go || n.links) && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -1181,7 +1267,7 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
   };
 
   return (
-    <section className="panel px-5 py-4">
+    <section id={`foglio-${file.id}`} className="panel scroll-mt-24 px-5 py-4">
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           {expanded ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}

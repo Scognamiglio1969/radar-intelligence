@@ -132,7 +132,13 @@ export function sheetRelations(
       }
 
       // 1. Parlano degli stessi soggetti?
-      for (const ca of a.stats!.columns) {
+      //
+      // Solo fra tabelle DIVERSE. Due fogli gemelli — stesse colonne, un
+      // soggetto per foglio — condividono per forza il vocabolario di
+      // "FORMATO" o di "FONTE": dirlo è garantito e quindi non è una scoperta.
+      // È il modo più rapido per riempire l'elenco di righe che nessuno legge.
+      const gemelli = a.signature === b.signature;
+      for (const ca of gemelli ? [] : a.stats!.columns) {
         if (!ca.values?.length) continue;
         const cb = b.stats!.columns.find((c) => c.name === ca.name && c.values?.length);
         if (!cb) continue;
@@ -176,9 +182,13 @@ export function sheetRelations(
         const cb = b.stats!.columns.find((c) => c.name === ca.name);
         if (!cb || cb.reads !== 'number' || !cb.median || cb.median <= 0) continue;
         const ratio = ca.median > cb.median ? ca.median / cb.median : cb.median / ca.median;
-        // Tre ordini di grandezza non è una differenza fra due canali: è
-        // un'unità di misura diversa (migliaia contro unità).
-        if (ratio >= 500) {
+        // Un'unità di misura diversa è un fattore MILLE, o un milione: sono i
+        // salti che fanno le unità. Un rapporto di centocinquantamila non è
+        // una conversione, è un manager con un video virale e un altro senza —
+        // e su fogli gemelli, che per costruzione parlano di soggetti diversi,
+        // una differenza di grandezza è la normalità, non un avviso.
+        const vicinoAUnFattoreMille = [1e3, 1e6].some((u) => ratio > u * 0.6 && ratio < u * 1.7);
+        if (vicinoAUnFattoreMille && !(gemelli && !vicinoAUnFattoreMille)) {
           out.push({
             kind: 'scala-diversa', a: a.sheet, b: b.sheet, column: ca.name,
             ratio: Math.round(ratio),
@@ -197,5 +207,21 @@ export function sheetRelations(
     'doppio-caricamento': 0, 'scala-diversa': 1, 'stesso-periodo': 2,
     'stessi-soggetti': 3, 'periodi-consecutivi': 4,
   };
-  return out.sort((x, y) => rank[x.kind] - rank[y.kind]).slice(0, 12);
+  out.sort((x, y) => rank[x.kind] - rank[y.kind]);
+
+  // Un foglio solo non può prendersi tutto l'elenco. Senza questo, il primo in
+  // ordine alfabetico compare dodici volte e gli altri quaranta mai: sembra un
+  // quadro del file e invece è il quadro di un foglio.
+  const quante = new Map<string, number>();
+  const scelte: Relation[] = [];
+  for (const r of out) {
+    const na = quante.get(r.a) ?? 0;
+    const nb = quante.get(r.b) ?? 0;
+    if (na >= 2 || nb >= 2) continue;
+    quante.set(r.a, na + 1);
+    quante.set(r.b, nb + 1);
+    scelte.push(r);
+    if (scelte.length >= 12) break;
+  }
+  return scelte;
 }
