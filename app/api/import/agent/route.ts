@@ -41,13 +41,16 @@ export async function POST(req: Request) {
     if (!dossier.sheets.length) {
       return NextResponse.json({ error: 'Non c’è ancora nessun foglio da leggere.' }, { status: 400 });
     }
-    const reading = await readFile(dossier);
-    if (!reading) {
-      return NextResponse.json({
-        error: 'Motore AI non disponibile: manca la chiave o il tetto di spesa è stato raggiunto.',
-      }, { status: 503 });
+    const out = await readFile(dossier);
+    if ('failure' in out) {
+      // Il motivo VERO, non un elenco di possibilità: chi ha la chiave e il
+      // budget non deve andare a controllare la chiave e il budget.
+      return NextResponse.json(
+        { error: out.failure.message, why: out.failure.why },
+        { status: out.failure.why === 'call-failed' ? 502 : 503 },
+      );
     }
-    return NextResponse.json({ reading, groups: dossier.groups });
+    return NextResponse.json({ reading: out.reading, groups: dossier.groups });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

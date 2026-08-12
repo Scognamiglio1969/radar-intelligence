@@ -115,12 +115,33 @@ function sanitize(s: string): string {
  * are mapped to that provider's equivalent models. The historical name is kept
  * so ~25 call sites don't change.
  */
-export async function callClaude(model: string, purpose: string, system: string, user: string, maxTokens: number, localize = false, timeoutMs = 50_000): Promise<string | null> {
+/**
+ * Perché una chiamata non ha prodotto testo.
+ *
+ * `null` da solo non basta più: dice "non è andata" a cinque situazioni molto
+ * diverse, e chi legge l'errore in faccia merita di sapere quale. Dire "manca
+ * la chiave" a chi la chiave ce l'ha manda a cercare nel posto sbagliato.
+ */
+export type AiFailure =
+  | { why: 'demo'; message: string }
+  | { why: 'no-key'; message: string }
+  | { why: 'budget'; message: string }
+  | { why: 'call-failed'; message: string }
+  | { why: 'empty'; message: string };
+
+export type AiResult = { text: string | null; failure?: AiFailure };
+
+/** La versione che dice anche perché. `callClaude` è questa senza il motivo. */
+export async function callClaudeDetailed(model: string, purpose: string, system: string, user: string, maxTokens: number, localize = false, timeoutMs = 50_000): Promise<AiResult> {
   // Public demo: never spend on the API, regardless of any configured key.
-  if (process.env.DEMO_MODE === '1') return null;
+  if (process.env.DEMO_MODE === '1') {
+    return { text: null, failure: { why: 'demo', message: 'Questa è la demo pubblica: l’AI è spenta.' } };
+  }
   const provider = await aiProvider();
   const key = await providerKey(provider);
-  if (!key) return null;
+  if (!key) {
+    return { text: null, failure: { why: 'no-key', message: 'Nessuna chiave configurata (Impostazioni → Budget).' } };
+  }
   // Contenuti rivolti all'utente: scrivi nella lingua scelta per i contenuti
   // (default inglese). Non si applica alle analisi dati (localize resta false).
   if (localize) {
@@ -133,7 +154,13 @@ export async function callClaude(model: string, purpose: string, system: string,
   const [spend, budget] = await Promise.all([currentSpendUsd(), budgetUsd()]);
   if (spend >= budget) {
     console.warn(`[ai] spend cap reached ($${spend.toFixed(2)}/$${budget}): "${purpose}" call skipped`);
-    return null;
+    return {
+      text: null,
+      failure: {
+        why: 'budget',
+        message: `Tetto di spesa raggiunto: $${spend.toFixed(2)} su $${budget}. Si riparte azzerando il contatore in Impostazioni → Budget.`,
+      },
+    };
   }
 
   // Map the tier token to the provider's actual model.
@@ -163,13 +190,36 @@ export async function callClaude(model: string, purpose: string, system: string,
       outputTokens = msg.usage.output_tokens;
     } catch (e) {
       console.error(`[ai] "${purpose}" call failed:`, e);
-      return null;
+      const msg = (e as Error).message ?? String(e);
+      return {
+        text: null,
+        failure: {
+          why: 'call-failed',
+          // Il messaggio del fornitore dice quasi sempre la cosa giusta:
+          // richiesta troppo grande, tempo scaduto, chiave rifiutata.
+          // Un 401 non è "un errore del fornitore": è la chiave. Dirlo con
+          // queste parole risparmia mezz'ora di ricerche nel posto sbagliato.
+          message: /\b401\b|authentication_error|invalid.*api.?key|unauthorized/i.test(msg)
+            ? 'La chiave AI è stata rifiutata dal fornitore: non è più valida. Sostituiscila in Impostazioni → Budget.'
+            : /\b429\b|rate.?limit/i.test(msg)
+              ? 'Il fornitore AI ha respinto la richiesta per troppo traffico: riprova fra qualche minuto.'
+              : /\b(400)\b|too many tokens|context.*length|too large/i.test(msg)
+                ? 'La richiesta era troppo grande per il modello: riprova con meno fogli per volta.'
+                : /timeout|timed out|aborted/i.test(msg)
+                  ? `La richiesta ha superato il tempo massimo (${Math.round(timeoutMs / 1000)}s). Di solito succede quando il materiale da leggere è troppo.`
+                  : `Il fornitore AI ha rifiutato la richiesta: ${msg.slice(0, 200)}`,
+        },
+      };
     }
   } else {
     const r = await callOpenAICompat(provider, key, actualModel, system, user, maxTokens);
     text = r.text;
     inputTokens = r.inputTokens;
     outputTokens = r.outputTokens;
+  }
+
+  if (!text) {
+    return { text: null, failure: { why: 'empty', message: 'Il modello ha risposto senza testo.' } };
   }
 
   const price = priceFor(provider, actualModel);
@@ -180,7 +230,12 @@ export async function callClaude(model: string, purpose: string, system: string,
     inputTokens, outputTokens,
     costUsd: cost,
   });
-  return text;
+  return { text };
+}
+
+/** La forma storica: il testo, o niente. Chi vuole il motivo usa la versione sopra. */
+export async function callClaude(model: string, purpose: string, system: string, user: string, maxTokens: number, localize = false, timeoutMs = 50_000): Promise<string | null> {
+  return (await callClaudeDetailed(model, purpose, system, user, maxTokens, localize, timeoutMs)).text;
 }
 
 /** Extracts the first valid JSON from a response that may have text around it. */

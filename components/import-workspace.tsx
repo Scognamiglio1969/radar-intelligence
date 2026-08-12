@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  UploadCloud, FileSpreadsheet, Check, Loader2, ArrowRight, Sparkles, AlertTriangle,
-  EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive,
-  Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart, Info, Rocket,
+  UploadCloud, FileSpreadsheet, Check, Loader2, ArrowRight, Sparkles, AlertTriangle, EyeOff, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight, Archive, Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart, Info, Rocket, ShieldCheck,
 } from 'lucide-react';
 import { SpotCheck } from '@/components/import-spotcheck';
 import { ImportAgentPanel } from '@/components/import-agent-panel';
+import { ImportStepper } from '@/components/import-stepper';
+import { stages, currentStage } from '@/lib/import-stages';
 import { TopProgress, creepingProgress } from './top-progress';
 
 // ---------------------------------------------------------------------------
@@ -125,6 +125,8 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [analyzeMsg, setAnalyzeMsg] = useState('');
+  /** Il data scientist ha già letto i file in questa sessione. */
+  const [scientistRead, setScientistRead] = useState(false);
   /** File caricato in attesa che l'utente scelga quali fogli importare. */
   const [pending, setPending] = useState<{ file: File; sheets: SheetInfo[] } | null>(null);
   const [progress, setProgress] = useState(0);
@@ -349,6 +351,19 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
    * che è in corso, poi si sistema ciò che è bloccato, poi si importa ciò che
    * è pronto. Solo quando non resta niente si dice che è finita.
    */
+  // A che punto è il lavoro, e a chi tocca. È la prima cosa che si legge.
+  const stageList = stages({
+    files: files.length,
+    incomplete: files.filter((f) => !f.rawPurged && !isReady(f)).length,
+    ready: stats.ready,
+    imported: stats.importedCount,
+    inArchive: stats.mentions + stats.points,
+    drifted: files.filter((f) => f.status === 'imported' && (f.report?.inserted ?? 0) > f.inArchive).length,
+    readByScientist: scientistRead,
+    working: Boolean(busy === 'upload' || pending),
+  });
+  const here = currentStage(stageList);
+
   const next: Next = (() => {
     if (busy) {
       return {
@@ -459,68 +474,16 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
     <div className="flex flex-col gap-4">
       {progress > 0 && <TopProgress progress={progress} phase={phase} />}
 
-      <NextStep n={next} projectId={project.id} />
+      <ImportStepper list={stageList} />
 
-      {files.length > 0 && <ImportAgentPanel projectId={project.id} onApplied={load} />}
+      <NextStep n={next} projectId={project.id} role={here.role} />
 
-      {/* Il quadro del progetto: N file che diventano un archivio solo. */}
-      {files.length > 0 && (
-        <section className="panel px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex flex-wrap gap-x-8 gap-y-3">
-              <Stat icon={Layers} label="File" value={num(files.length)}
-                hint={stats.pending ? `${stats.pending} da importare` : 'tutti importati'} />
-              <Stat icon={Table2} label="Righe grezze" value={num(stats.rawRows)} hint="conservate, rimappabili" />
-              {stats.mentions > 0 && (
-                <Stat icon={Check} label="Contenuti" value={num(stats.mentions)}
-                  hint={stats.withSentiment ? `${num(stats.withSentiment)} con sentiment dal file` : 'righe con un testo, in archivio adesso'}
-                  tone="ok" />
-              )}
-              {stats.points > 0 && (
-                <Stat icon={LineChart} label="Misure" value={num(stats.points)}
-                  hint="punti di serie storica" tone="ok" />
-              )}
-              {stats.datesFailed > 0 && (
-                <Stat icon={CalendarRange} label="Date illeggibili" value={num(stats.datesFailed)}
-                  hint="finite a oggi: controlla la colonna data" tone="warn" />
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {stats.ready > 0 && (
-                <button onClick={importAll} disabled={!!busy}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500/90 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-50">
-                  {busy === 'all' ? <Loader2 className="size-3.5 animate-spin" /> : <PlayCircle className="size-3.5" />}
-                  Importa i {stats.ready} pronti
-                </button>
-              )}
-              {stats.mentions > 0 && (
-                <button onClick={analyzeNow} disabled={!!busy}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-500/20 disabled:opacity-50">
-                  {busy === 'analyze' ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-                  Analizza con l&rsquo;AI
-                </button>
-              )}
-              {stats.exportable && (
-                <div className="flex items-center overflow-hidden rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-xs text-emerald-200">
-                  <span className="px-2.5 py-1.5 text-emerald-300/70">Normalizzato</span>
-                  <a href={`/api/import/normalized?project=${project.id}&format=xlsx`}
-                    title="Tutti i file, fusi e normalizzati, in un unico foglio Excel"
-                    className="inline-flex items-center gap-1 border-l border-emerald-500/30 px-2.5 py-1.5 hover:bg-emerald-500/20">
-                    <Download className="size-3.5" /> Excel
-                  </a>
-                  <a href={`/api/import/normalized?project=${project.id}&format=csv`}
-                    className="inline-flex items-center gap-1 border-l border-emerald-500/30 px-2.5 py-1.5 hover:bg-emerald-500/20">
-                    <Download className="size-3.5" /> CSV
-                  </a>
-                </div>
-              )}
-            </div>
-          </div>
-          {analyzeMsg && <p className="mt-2 text-xs text-slate-400">{analyzeMsg}</p>}
-        </section>
-      )}
-
-      <section className="panel px-5 py-4">
+            <section className={`panel px-5 py-4 ${here.id === 'archivio' ? 'border-sky-500/40 bg-sky-500/[0.04]' : ''}`}>
+        <p className="mb-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+          <Archive className="size-3.5 shrink-0" />
+          <span className="font-medium text-slate-400">Archivista</span>
+          <span className="text-slate-600">— apre i file e cataloga i fogli</span>
+        </p>
         <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-white/[0.02] px-6 py-7 text-center hover:border-sky-500/50">
           {busy === 'upload'
             ? <Loader2 className="size-7 animate-spin text-sky-400" />
@@ -535,11 +498,6 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
             onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
         </label>
       </section>
-
-      {files.length > 0 && (
-        <ImportLog projectId={project.id} files={files} open={showLog}
-          onToggle={() => setShowLog((v) => !v)} />
-      )}
 
       {pending && (
         <SheetChooser
@@ -567,6 +525,16 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
 
       {error && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">{error}</p>}
 
+      {files.length > 0 && (
+        <p className="flex items-center gap-1.5 px-1 text-[11px] text-slate-500">
+          <LineChart className="size-3.5 shrink-0" />
+          <span className="font-medium text-slate-400">Jr Data Analyst</span>
+          <span className="text-slate-600">
+            — foglio per foglio: che cos’è ogni colonna. Apri una scheda per correggere quello che ho proposto.
+          </span>
+        </p>
+      )}
+
       {sources.map((src) => (
         <div key={src.name} className="flex flex-col gap-2">
           <SourceHeader
@@ -585,7 +553,97 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
         </div>
       ))}
     </div>
-  );
+  );{files.length > 0 && (
+        <ImportAgentPanel
+          projectId={project.id}
+          highlight={here.id === 'scienza'}
+          onApplied={load}
+          onRead={() => setScientistRead(true)}
+        />
+      )}
+
+      {/* Il quadro del progetto: N file che diventano un archivio solo. */}
+      {files.length > 0 && (
+        <section className={`panel px-5 py-4 ${here.id === 'qualita' ? 'border-sky-500/40 bg-sky-500/[0.04]' : ''}`}>
+          <p className="mb-3 flex items-center gap-1.5 text-[11px] text-slate-500">
+            <ShieldCheck className="size-3.5 shrink-0" />
+            <span className="font-medium text-slate-400">Controllo qualità</span>
+            <span className="text-slate-600">— quello che c’è in archivio adesso, non quello che il verbale dice di averci scritto</span>
+          </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex flex-wrap gap-x-8 gap-y-3">
+              <Stat icon={Layers} label="File" value={num(files.length)}
+                hint={stats.pending ? `${stats.pending} da importare` : 'tutti importati'} />
+              <Stat icon={Table2} label="Righe grezze" value={num(stats.rawRows)} hint="conservate, rimappabili" />
+              {stats.mentions > 0 && (
+                <Stat icon={Check} label="Contenuti" value={num(stats.mentions)}
+                  hint={stats.withSentiment ? `${num(stats.withSentiment)} con sentiment dal file` : 'righe con un testo, in archivio adesso'}
+                  tone="ok" />
+              )}
+              {stats.points > 0 && (
+                <Stat icon={LineChart} label="Misure" value={num(stats.points)}
+                  hint="punti di serie storica" tone="ok" />
+              )}
+              {stats.datesFailed > 0 && (
+                <Stat icon={CalendarRange} label="Date illeggibili" value={num(stats.datesFailed)}
+                  hint="finite a oggi: controlla la colonna data" tone="warn" />
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {stats.ready > 0 && (
+                <button onClick={importAll} disabled={!!busy}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500/90 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-50">
+                  {busy === 'all' ? <Loader2 className="size-3.5 animate-spin" /> : <PlayCircle className="size-3.5" />}
+                  Importa i {stats.ready} pronti
+                </button>
+              )}
+              {stats.exportable && (
+                <div className="flex items-center overflow-hidden rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-xs text-emerald-200">
+                  <span className="px-2.5 py-1.5 text-emerald-300/70">Normalizzato</span>
+                  <a href={`/api/import/normalized?project=${project.id}&format=xlsx`}
+                    title="Tutti i file, fusi e normalizzati, in un unico foglio Excel"
+                    className="inline-flex items-center gap-1 border-l border-emerald-500/30 px-2.5 py-1.5 hover:bg-emerald-500/20">
+                    <Download className="size-3.5" /> Excel
+                  </a>
+                  <a href={`/api/import/normalized?project=${project.id}&format=csv`}
+                    className="inline-flex items-center gap-1 border-l border-emerald-500/30 px-2.5 py-1.5 hover:bg-emerald-500/20">
+                    <Download className="size-3.5" /> CSV
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {files.length > 0 && (
+        <ImportLog projectId={project.id} files={files} open={showLog}
+          onToggle={() => setShowLog((v) => !v)} />
+      )}
+
+      {/* Lavoro dell'ANALISTA, e viene dopo: qui i dati ci sono già, e si
+          chiede all'AI di leggerne il contenuto — sentiment, temi, rilevanza.
+          Non è la stessa cosa del data scientist, che guarda la FORMA del file
+          prima di importarlo: due pulsanti chiamati "AI" nello stesso posto
+          erano il modo più veloce per non capire né l'uno né l'altro. */}
+      {stats.mentions > 0 && (
+        <section className="panel flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5">
+          <Rocket className="size-4 shrink-0 text-emerald-300" />
+          <span className="text-sm font-medium text-slate-200">Analista</span>
+          <span className="min-w-0 flex-1 text-[11px] text-slate-600">
+            I contenuti sono in archivio. Posso farli leggere all’AI: sentiment, temi e rilevanza
+            rispetto al tema del progetto, come per le mention raccolte da Radar.
+          </span>
+          <button onClick={analyzeNow} disabled={!!busy}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-500/20 disabled:opacity-50">
+            {busy === 'analyze' ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+            Analizza i contenuti
+          </button>
+          {analyzeMsg && <p className="w-full text-xs text-slate-400">{analyzeMsg}</p>}
+        </section>
+      )}
+
+
 }
 
 /**
@@ -661,7 +719,7 @@ type Next = {
  * Il pannello è sempre lo stesso: cambia solo il momento. Così chi torna dopo
  * una settimana non deve ricostruirsi dove era rimasto.
  */
-function NextStep({ n, projectId }: { n: Next; projectId: number }) {
+function NextStep({ n, projectId, role }: { n: Next; projectId: number; role: string }) {
   const tone = n.mood === 'you'
     ? { ring: 'border-sky-500/50 bg-sky-500/[0.06]', label: 'ORA TOCCA A TE', color: 'text-sky-300', icon: ArrowRight }
     : n.mood === 'me'
@@ -676,8 +734,15 @@ function NextStep({ n, projectId }: { n: Next; projectId: number }) {
           <Check className="size-3.5 shrink-0" /> {n.did}
         </p>
       )}
-      <p className={`mb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-widest ${tone.color}`}>
-        <Icon className={`size-3.5 ${n.mood === 'me' ? 'animate-spin' : ''}`} /> {tone.label}
+      <p className={`mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold tracking-widest ${tone.color}`}>
+        <span className="flex items-center gap-1.5">
+          <Icon className={`size-3.5 ${n.mood === 'me' ? 'animate-spin' : ''}`} /> {tone.label}
+        </span>
+        {/* Chi ha in mano il lavoro adesso: la stessa parola che si legge
+            nella catena qui sopra, così i due riferimenti si agganciano. */}
+        <span className="rounded-full border border-current/30 px-2 py-0.5 text-[10px] font-medium tracking-normal opacity-80">
+          {role}
+        </span>
       </p>
       <h2 className="text-xl font-semibold text-slate-100 sm:text-2xl">{n.title}</h2>
       <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-400">{n.text}</p>

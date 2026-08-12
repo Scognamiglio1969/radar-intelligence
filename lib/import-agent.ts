@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { importFiles } from '@/lib/db/schema';
-import { callClaude, MODELS } from '@/lib/claude';
+import { callClaudeDetailed, MODELS, type AiFailure } from '@/lib/claude';
 import type { ColumnProfile } from '@/lib/import-profile';
 import type { MetricMap } from '@/lib/import-metrics';
 import { sheetStats, type SheetStats } from '@/lib/import-stats';
@@ -304,6 +304,17 @@ Rispondi SOLO con questo JSON:
  * date, zeri, colonne chiave, righe di totale. È la differenza fra chiedere
  * "che cosa sarà mai questa colonna" e far leggere quello che i numeri fanno.
  */
+/**
+ * Quanti fogli e quante colonne stanno in una richiesta.
+ *
+ * Una cartella da cinquantasei fogli per quaranta colonne produce centinaia di
+ * migliaia di caratteri: la richiesta o viene rifiutata o non torna in tempo, e
+ * all'utente arriva "non disponibile" senza sapere perché. Meglio leggerne una
+ * parte rappresentativa e DIRE che è una parte.
+ */
+const MAX_SHEETS = 24;
+const MAX_COLUMNS = 24;
+
 function brief(d: Dossier): string {
   const col = (c: NonNullable<SheetDossier['stats']>['columns'][number]) => ({
     nome: c.name,
@@ -321,7 +332,21 @@ function brief(d: Dossier): string {
     esempi: c.samples,
   });
 
-  const sheets = d.sheets.map((s) => ({
+  // Si tengono i fogli più informativi: quelli con più righe, e comunque un
+  // rappresentante per ogni gruppo — un gruppo di venti fogli identici si
+  // capisce guardandone uno.
+  const seen = new Set<string>();
+  const ordered = [...d.sheets].sort((a, b) => b.rows - a.rows);
+  const picked: SheetDossier[] = [];
+  for (const s of ordered) {
+    const first = !seen.has(s.signature);
+    seen.add(s.signature);
+    if (first || picked.length < MAX_SHEETS) picked.push(s);
+    if (picked.length >= MAX_SHEETS) break;
+  }
+  const omitted = d.sheets.length - picked.length;
+
+  const sheets = picked.map((s) => ({
     foglio: s.sheet,
     file: s.origin,
     righe: s.rows,
@@ -329,9 +354,10 @@ function brief(d: Dossier): string {
     ...(s.stats?.key ? { colonna_che_identifica_la_riga: s.stats.key } : {}),
     ...(s.stats?.duplicates ? { righe_duplicate: s.stats.duplicates } : {}),
     ...(s.stats?.totalRow ? { attenzione_riga_di_totali: s.stats.totalRow.evidence } : {}),
+    ...(s.columns.length > MAX_COLUMNS ? { colonne_totali: s.columns.length } : {}),
     colonne: s.stats
-      ? s.stats.columns.slice(0, 40).map(col)
-      : s.profiles.map((p) => ({
+      ? s.stats.columns.slice(0, MAX_COLUMNS).map(col)
+      : s.profiles.slice(0, MAX_COLUMNS).map((p) => ({
         nome: p.name, contiene: p.kind, pieno: `${p.filled}%`,
         distinti: p.distinct, esempi: p.samples,
       })),
@@ -340,7 +366,10 @@ function brief(d: Dossier): string {
     fogli_con_le_stesse_colonne: g.sheets,
     la_parte_che_cambia_nel_nome: g.varyingPart,
   }));
-  return `FOGLI:\n${JSON.stringify(sheets, null, 1)}\n\nGRUPPI:\n${JSON.stringify(groups, null, 1)}`;
+  const note = omitted > 0
+    ? `\n\nNOTA: ti ho dato ${picked.length} fogli su ${d.sheets.length}; gli altri hanno le stesse colonne di uno di questi. Non parlare dei fogli che non hai visto.`
+    : '';
+  return `FOGLI:\n${JSON.stringify(sheets, null, 1)}\n\nGRUPPI:\n${JSON.stringify(groups, null, 1)}${note}`;
 }
 
 const ACTIONS = new Set(['kind', 'entityFromSheet', 'dateColumn', 'contentColumn', 'skip', 'nothing']);
@@ -407,17 +436,30 @@ export function validateReading(raw: unknown, d: Dossier): AgentReading {
 }
 
 /** Legge il file: che cos'è, e dove serve una decisione. */
-export async function readFile(d: Dossier): Promise<AgentReading | null> {
-  if (!d.sheets.length) return null;
-  const text = await callClaude(MODELS.sonnet, 'import_agent', SYSTEM, brief(d), 3000, false, 120_000);
-  if (!text) return null;
+export async function readFile(
+  d: Dossier,
+): Promise<{ reading: AgentReading } | { failure: AiFailure }> {
+  if (!d.sheets.length) {
+    return { failure: { why: 'empty', message: 'Non c’è ancora nessun foglio da leggere.' } };
+  }
+  const payload = brief(d);
+  const { text, failure } = await callClaudeDetailed(
+    MODELS.sonnet, 'import_agent', SYSTEM, payload, 3000, false, 240_000,
+  );
+  if (!text) {
+    return {
+      failure: failure ?? { why: 'empty', message: 'Il modello non ha risposto.' },
+    };
+  }
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
+  if (start < 0 || end <= start) {
+    return { failure: { why: 'empty', message: 'La risposta del modello non era leggibile. Riprova.' } };
+  }
   try {
-    return validateReading(JSON.parse(text.slice(start, end + 1)), d);
+    return { reading: validateReading(JSON.parse(text.slice(start, end + 1)), d) };
   } catch {
-    return null;
+    return { failure: { why: 'empty', message: 'La risposta del modello non era leggibile. Riprova.' } };
   }
 }
 

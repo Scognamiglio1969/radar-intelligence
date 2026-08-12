@@ -29,9 +29,13 @@ type Reading = {
   questions: Question[];
 };
 
-export function ImportAgentPanel({ projectId, onApplied }: {
+export function ImportAgentPanel({ projectId, onApplied, onRead, highlight }: {
   projectId: number;
   onApplied: () => void;
+  /** Ha letto i file: la catena in cima lo registra. */
+  onRead?: () => void;
+  /** Tocca a lui adesso: il riquadro si accende. */
+  highlight?: boolean;
 }) {
   const [reading, setReading] = useState<Reading | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,6 +54,7 @@ export function ImportAgentPanel({ projectId, onApplied }: {
       const d = await res.json();
       if (!res.ok) { setError(d.error ?? 'Lettura non riuscita'); return; }
       setReading(d.reading);
+      onRead?.();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -75,13 +80,14 @@ export function ImportAgentPanel({ projectId, onApplied }: {
   const open = reading ? reading.questions.filter((q) => !answered[q.id]).length : 0;
 
   return (
-    <section className="panel px-5 py-4">
+    <section className={`panel px-5 py-4 ${highlight ? 'border-sky-500/40 bg-sky-500/[0.04]' : ''}`}>
       <div className="flex flex-wrap items-center gap-2">
         <Brain className="size-4 shrink-0 text-violet-300" />
-        <h2 className="text-sm font-semibold text-slate-200">Fammi leggere i file</h2>
+        <h2 className="text-sm font-semibold text-slate-200">Data Scientist</h2>
         <p className="min-w-0 flex-1 text-[11px] text-slate-600">
-          Guardo tutti i fogli insieme — forme, distribuzioni, che cosa si somiglia — e ti dico che
-          cosa hai caricato. Poi chiedo solo dove la tua risposta cambia il risultato.
+          Guardo tutti i fogli <span className="text-slate-500">insieme</span> — distribuzioni, che
+          cosa si somiglia, le trappole dei fogli fatti a mano — e ti dico che cosa hai caricato.
+          Poi chiedo solo dove la tua risposta cambia il risultato.
         </p>
         <button onClick={read} disabled={busy}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-500/20 disabled:opacity-50">
