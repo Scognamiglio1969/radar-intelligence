@@ -113,7 +113,9 @@ export function deriveRows(
     // Le colonne conservate ma non mappate. Restano come TESTO: sono
     // dimensioni con cui si taglia l'analisi (pillar, campagna, area
     // semantica), non misure su cui si fanno somme.
-    const custom: Record<string, string> = {};
+    // I campi costanti del foglio valgono per ogni riga: si scrivono per
+    // primi, così una colonna con lo stesso nome può ancora correggerli.
+    const custom: Record<string, string> = { ...(map.constants ?? {}) };
     for (const [col, label] of Object.entries(map.extras ?? {})) {
       const v = cleanText(get(row, col));
       if (v) custom[label || col] = v;

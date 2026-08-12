@@ -183,7 +183,11 @@ export async function deriveMentions(fileId: number, projectId: number): Promise
 
   // La mappatura dei campi e le colonne conservate vivono in due colonne
   // diverse ma sono un'unica istruzione di trasformazione.
-  const map = { ...file.mapping, extras: file.extras ?? {} } as unknown as ColumnMap;
+  const map = {
+    ...file.mapping,
+    extras: file.extras ?? {},
+    constants: file.constants ?? {},
+  } as unknown as ColumnMap;
   if (!map.content) throw new Error('Manca la colonna del testo');
 
   await db.delete(mentions).where(eq(mentions.importFileId, fileId));
@@ -333,10 +337,15 @@ export async function deriveMetricPoints(fileId: number, projectId: number): Pro
     raw.map((r) => r.data as Record<string, unknown>), map, label,
   );
 
+  // I campi costanti del foglio valgono per ogni punto: sulle misure sono
+  // dimensioni, ed è così che quarantatré fogli per manager diventano una
+  // serie sola divisibile per manager.
+  const constants = (file.constants ?? {}) as Record<string, string>;
   for (let i = 0; i < points.length; i += 500) {
     await db.insert(metricPoints).values(points.slice(i, i + 500).map((p) => ({
       projectId, importFileId: fileId,
-      entity: p.entity, metric: p.metric, date: p.date, value: p.value, dims: p.dims,
+      entity: p.entity, metric: p.metric, date: p.date, value: p.value,
+      dims: { ...constants, ...p.dims },
     })));
   }
 

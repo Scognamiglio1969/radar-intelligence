@@ -401,6 +401,15 @@ export const importFiles = pgTable('import_files', {
   kind: text('kind').$type<'mentions' | 'metrics'>().notNull().default('mentions'),
   /** Che tipo di foglio è: da qui nascono gli insight che può dare. */
   archetype: text('archetype'),
+  /**
+   * Campi che valgono per OGNI riga di questo foglio, e che nel foglio non
+   * stanno in nessuna colonna.
+   *
+   * Il caso vero: quarantatré fogli con le stesse colonne, uno per manager, e
+   * il nome del manager scritto solo nel nome del foglio. Senza questo, quel
+   * dato — l'unico che rende confrontabili i fogli fra loro — si perde.
+   */
+  constants: jsonb('constants').$type<Record<string, string>>().notNull().default({}),
   /** Le entità di questo foglio sono persone (personal branding). */
   people: integer('people').notNull().default(0),
   /** Mappatura del foglio di metriche (data, entità, colonne valore, dimensioni). */

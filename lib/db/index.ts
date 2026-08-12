@@ -386,6 +386,7 @@ const DDL = [
   `ALTER TABLE studio_charts ADD COLUMN IF NOT EXISTS comment TEXT`,
   `ALTER TABLE studio_charts ADD COLUMN IF NOT EXISTS comment_at TIMESTAMPTZ`,
   `ALTER TABLE studio_charts ADD COLUMN IF NOT EXISTS comment_for TEXT`,
+  `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS constants JSONB NOT NULL DEFAULT '{}'`,
   `ALTER TABLE periodic_reports ADD COLUMN IF NOT EXISTS pov JSONB`,
 ];
 

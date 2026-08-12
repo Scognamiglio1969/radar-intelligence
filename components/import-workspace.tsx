@@ -7,6 +7,7 @@ import {
   Download, Eye, Table2, Layers, CalendarRange, PlayCircle, ClipboardCheck, LineChart, Info, Rocket,
 } from 'lucide-react';
 import { SpotCheck } from '@/components/import-spotcheck';
+import { ImportAgentPanel } from '@/components/import-agent-panel';
 import { TopProgress, creepingProgress } from './top-progress';
 
 // ---------------------------------------------------------------------------
@@ -459,6 +460,8 @@ export function ImportWorkspace({ project }: { project: { id: number; name: stri
       {progress > 0 && <TopProgress progress={progress} phase={phase} />}
 
       <NextStep n={next} projectId={project.id} />
+
+      {files.length > 0 && <ImportAgentPanel projectId={project.id} onApplied={load} />}
 
       {/* Il quadro del progetto: N file che diventano un archivio solo. */}
       {files.length > 0 && (

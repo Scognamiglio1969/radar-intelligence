@@ -55,6 +55,11 @@ export type ColumnMap = {
   language?: string;
   community?: string;
   country?: string;
+  /**
+   * Campi che valgono per OGNI riga del foglio e che nel foglio non stanno in
+   * nessuna colonna: il tipico è il soggetto scritto solo nel nome del foglio.
+   */
+  constants?: Record<string, string>;
   /** Sentiment già calcolato dallo strumento di provenienza. */
   sentiment?: string;
   reach?: string;
