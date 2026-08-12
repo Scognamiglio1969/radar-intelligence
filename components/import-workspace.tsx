@@ -1281,10 +1281,10 @@ function FileCard({ file, busy, projectId, expanded, onToggle, onAct }: {
   return (
     <section id={`foglio-${file.id}`} className="panel scroll-mt-24 px-5 py-4">
       <div className="flex flex-wrap items-center gap-3">
-        <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+        <button onClick={onToggle} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-left">
           {expanded ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
           <FileSpreadsheet className="size-4 shrink-0 text-slate-500" />
-          <span className="truncate text-sm font-medium text-slate-200">{file.sheetName ?? file.filename}</span>
+          <span className="min-w-[7rem] flex-1 truncate text-sm font-medium text-slate-200">{file.sheetName ?? file.filename}</span>
           <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${file.kind === 'metrics' ? 'bg-violet-500/15 text-violet-300' : 'bg-sky-500/15 text-sky-300'}`}>{file.kind === 'metrics' ? 'misure' : 'contenuti'}</span>
           {file.person && (
             <span title={`Il foglio si chiama come una persona: ogni riga risulta sua. Senza questo, ${file.person} non comparirebbe da nessuna parte.`}
