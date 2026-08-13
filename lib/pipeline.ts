@@ -190,8 +190,22 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean; proj
       summary.push(row);
     }
 
-    // Retention: 90 giorni (free tier Neon)
-    await db.execute(sql`DELETE FROM mentions WHERE published_at < now() - interval '90 days'`);
+    // Retention: 90 giorni (free tier Neon) — MA SOLO SU CIÒ CHE RADAR RACCOGLIE.
+    //
+    // Quello che arriva da un file caricato non è uno stream che si rinnova: è
+    // l'archivio di chi lo ha caricato, e spesso è per definizione vecchio —
+    // un Excel di post 2023-2025 è più vecchio di novanta giorni in ogni sua
+    // riga. Con la regola applicata a tutti, ogni raccolta cancellava
+    // silenziosamente l'intero import: si importava, si vedevano le righe, e
+    // poco dopo l'archivio era vuoto senza che niente lo dicesse.
+    //
+    // Ricaricare il file non serviva a niente, perché il giro dopo spariva di
+    // nuovo. È il motivo per cui un progetto importato sembrava non contenere
+    // né contenuti né persone.
+    await db.execute(sql`
+      DELETE FROM mentions
+      WHERE published_at < now() - interval '90 days'
+        AND import_file_id IS NULL`);
 
     return { skipped: false, summary };
   } finally {
