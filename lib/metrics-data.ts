@@ -49,11 +49,14 @@ export async function metricEntities(projectId: number): Promise<{ entity: strin
  */
 export async function seriesByMetric(
   projectId: number, metrics: string[], entity?: string,
+  /** Quante linee al massimo: oltre una decina il grafico smette di parlare. */
+  maxSeries = 10,
 ): Promise<Series[]> {
   if (!metrics.length) return [];
   const db = await getDb();
   const rows = await db.select({
     metric: metricPoints.metric,
+    entity: metricPoints.entity,
     day: sql<string>`to_char(${metricPoints.date}, 'YYYY-MM-DD')`,
     value: sql<number>`sum(${metricPoints.value})`,
   }).from(metricPoints)
@@ -62,17 +65,38 @@ export async function seriesByMetric(
       sql`${metricPoints.metric} in ${metrics}`,
       ...(entity ? [eq(metricPoints.entity, entity)] : []),
     ))
-    .groupBy(metricPoints.metric, sql`2`)
-    .orderBy(sql`2`);
+    .groupBy(metricPoints.metric, metricPoints.entity, sql`3`)
+    .orderBy(sql`3`);
+
+  // Una metrica che appartiene a più soggetti va TENUTA DIVISA.
+  //
+  // "Total Followers" in un file per manager è la metrica di quindici persone
+  // diverse. Sommarle giorno per giorno sembra innocuo e non lo è: i fogli non
+  // coprono tutti gli stessi mesi, così a gennaio la somma è di sette persone
+  // e a febbraio di quattro, e la linea precipita e risale ogni mese. Sembra
+  // un crollo del pubblico ed è solo un foglio che quel mese non c'era.
+  //
+  // Sommare uno STOCK — follower, iscritti — fra soggetti diversi non
+  // significa comunque niente: due persone con diecimila follower non fanno un
+  // pubblico da ventimila, perché sono in buona parte le stesse persone.
+  const entitiesOf = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (!entitiesOf.has(r.metric)) entitiesOf.set(r.metric, new Set());
+    entitiesOf.get(r.metric)!.add(r.entity);
+  }
 
   const out = new Map<string, Series>();
   for (const r of rows) {
-    if (!out.has(r.metric)) out.set(r.metric, { name: r.metric, points: [] });
-    out.get(r.metric)!.points.push({ date: r.day, value: Number(r.value) });
+    const split = (entitiesOf.get(r.metric)?.size ?? 1) > 1 && !entity;
+    const name = split ? `${r.entity} · ${r.metric}` : r.metric;
+    if (!out.has(name)) out.set(name, { name, points: [] });
+    out.get(name)!.points.push({ date: r.day, value: Number(r.value) });
   }
+
   // Ordine per grandezza: la serie più importante prende il primo colore.
-  return [...out.values()].sort((a, b) =>
-    Math.max(...b.points.map((p) => p.value)) - Math.max(...a.points.map((p) => p.value)));
+  return [...out.values()]
+    .sort((a, b) => Math.max(...b.points.map((p) => p.value)) - Math.max(...a.points.map((p) => p.value)))
+    .slice(0, maxSeries);
 }
 
 /** Una serie per ENTITÀ su una sola metrica: il confronto fra manager o canali. */

@@ -177,6 +177,24 @@ export async function proposeMapping(profiles: ColumnProfile[]): Promise<FieldPr
  *  in "Social Network": il nome inganna, i valori no. */
 const PLATFORMS = /^(twitter|x|facebook|instagram|tiktok|linkedin|youtube|reddit|telegram|threads|pinterest|snapchat|twitch|mastodon|bluesky|weibo|vk|blog|forum|news|web)$/i;
 
+/**
+ * Testate e agenzie: l'altra cosa che può stare in "fonte".
+ *
+ * Serve a distinguere una colonna di fonti vere da una che si CHIAMA fonte e
+ * contiene altro. In un file di personal branding la colonna "FONTE" conteneva
+ * i pilastri editoriali — "Strategia e vision generale", "Rete agenziale",
+ * "Le tenute del leone alato" — e ogni contenuto è finito in archivio con
+ * quella come piattaforma di provenienza: i filtri della pagina Ascolto
+ * offrivano quindici "fonti" che non erano fonti.
+ *
+ * Riconosce la parola generica che quasi ogni testata porta nel nome, non
+ * l'elenco delle testate: quello non finirebbe mai e invecchierebbe subito.
+ */
+const OUTLET_HINT = /\b(corriere|repubblica|sole 24|ansa|adnkronos|agi|messaggero|stampa|gazzetta|giornale|quotidiano|agenzia|agenzie|magazine|rivista|times|post|journal|herald|tribune|guardian|reuters|bloomberg|cnn|bbc|rai|tg\d|mediaset|sky|radio|tv|press|news|daily|weekly)\b/i;
+
+/** Un valore che porta un dominio è una fonte per definizione. */
+const LOOKS_LIKE_DOMAIN = /(https?:\/\/|\w\.(it|com|net|org|eu|uk|fr|de|es|io|co)\b)/i;
+
 /** Nome italiano equivalente, per la corrispondenza esatta. */
 const FIELD_ALIASES: Partial<Record<TargetField, string>> = {
   content: 'testo', title: 'titolo', date: 'data', time: 'ora', author: 'autore',
@@ -253,9 +271,20 @@ function scoreField(field: TargetField, p: ColumnProfile, rowCount: number): num
     const hits = p.samples.filter((s) => PLATFORMS.test(s.trim())).length;
     // I valori sono nomi di piattaforme: batte qualunque indizio dal nome.
     if (hits >= Math.max(1, Math.ceil(p.samples.length / 2))) score += 70;
-    // Colonna che si CHIAMA "source" ma contiene altro: l'indizio del nome va
-    // annullato, altrimenti vince su quella giusta.
-    else if (p.kind === 'text' && p.distinct <= 4 && hits === 0) score -= 45;
+    else {
+      // Nessuna piattaforma fra i valori: prima di credere al nome della
+      // colonna si cerca l'altra forma che una fonte può avere — una testata,
+      // un'agenzia, un dominio. Se non c'è nemmeno quella, il nome non basta:
+      // la fonte è il campo con cui si filtra tutto l'archivio, e riempirlo
+      // con qualcos'altro non si nota finché non si guarda la pagina Ascolto.
+      const fonti = p.samples.filter((s) => OUTLET_HINT.test(s) || LOOKS_LIKE_DOMAIN.test(s)).length;
+      // Nessuna prova nei valori: la colonna esce di gara, come quando il tipo
+      // è incompatibile. Una penalità non basterebbe — "FONTE" prende 95 punti
+      // solo dal nome, e resterebbe comunque la candidata migliore. La colonna
+      // non va persa: senza mappatura resta un campo personalizzato, ed è lì
+      // che un pilastro editoriale serve davvero.
+      if (fonti === 0) return 0;
+    }
   }
   // Un nome di persona o di testata: testo corto, quasi sempre diverso riga
   // per riga, mai un indirizzo. Senza questo indizio, una colonna chiamata

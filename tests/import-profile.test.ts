@@ -179,3 +179,51 @@ test('una colonna di soli ID non diventa il contenuto, anche se si chiama così'
   assert.notEqual(map.title, 'Testo del post', 'nemmeno come titolo');
   assert.equal(map.url, 'Link post');
 });
+
+// ---------------------------------------------------------------------------
+// La fonte non è quello che c'è scritto nell'intestazione.
+//
+// In un file vero la colonna si chiamava "FONTE" e conteneva i pilastri
+// editoriali. Ogni contenuto è finito in archivio con "Strategia e vision
+// generale" come piattaforma di provenienza, e la pagina Ascolto offriva
+// quindici fonti che non erano fonti. Il nome propone, i valori decidono.
+// ---------------------------------------------------------------------------
+
+test('una colonna "FONTE" piena di temi non diventa la fonte', () => {
+  const rows = Array.from({ length: 40 }, (_, i) => ({
+    DATA: `2025-0${(i % 9) + 1}-01`,
+    TESTO: `Un contenuto abbastanza lungo da sembrare il testo del post numero ${i}, con parole vere.`,
+    FONTE: ['Strategia e vision generale', 'Rete agenziale e momenti', 'Sostenibilità e le tenute',
+      'Le tenute del leone alato', 'Integrazione Cattolica', 'Eventi università', 'Certificazioni'][i % 7],
+  }));
+  const profiles = profileColumns(['DATA', 'TESTO', 'FONTE'], rows);
+  const proposal = heuristicMapping(profiles, rows.length);
+  const fonte = proposal.find((p) => p.column === 'FONTE');
+  assert.notEqual(fonte?.field, 'source',
+    'i pilastri editoriali non sono piattaforme di provenienza');
+});
+
+test('una colonna di piattaforme vere resta la fonte', () => {
+  const rows = Array.from({ length: 40 }, (_, i) => ({
+    DATA: `2025-0${(i % 9) + 1}-01`,
+    TESTO: `Un contenuto abbastanza lungo da sembrare il testo del post numero ${i}, con parole vere.`,
+    FONTE: ['LinkedIn', 'Instagram', 'X', 'Facebook'][i % 4],
+  }));
+  const profiles = profileColumns(['DATA', 'TESTO', 'FONTE'], rows);
+  const proposal = heuristicMapping(profiles, rows.length);
+  assert.equal(proposal.find((p) => p.column === 'FONTE')?.field, 'source');
+});
+
+test('una colonna di testate resta la fonte', () => {
+  // Il monitoraggio stampa è il caso opposto: lì la fonte non è una
+  // piattaforma ma un giornale, e toglierle la mappatura automatica
+  // costerebbe un clic per ogni file.
+  const rows = Array.from({ length: 40 }, (_, i) => ({
+    DATA: `2025-0${(i % 9) + 1}-01`,
+    TESTO: `Un articolo abbastanza lungo da sembrare il corpo della notizia numero ${i}, con parole vere.`,
+    FONTE: ['Corriere della Sera', 'La Stampa', 'Il Sole 24 Ore', 'Ansa', 'repubblica.it'][i % 5],
+  }));
+  const profiles = profileColumns(['DATA', 'TESTO', 'FONTE'], rows);
+  const proposal = heuristicMapping(profiles, rows.length);
+  assert.equal(proposal.find((p) => p.column === 'FONTE')?.field, 'source');
+});
