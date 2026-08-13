@@ -96,23 +96,20 @@ export async function detectPeople(projectId: number): Promise<string[]> {
   }
 
   if (flagged.length) {
-    const rows = await db.select({ entity: metricPoints.entity }).from(metricPoints)
+    // Una lettura sola per due domande: chi è l'entità della serie, e come si
+    // chiamano le colonne. Erano due scansioni identiche della stessa tabella,
+    // e su un progetto da quaranta fogli si sentivano tutte e due.
+    const rows = await db.select({ entity: metricPoints.entity, metric: metricPoints.metric })
+      .from(metricPoints)
       .where(and(
         eq(metricPoints.projectId, projectId),
         sql`${metricPoints.importFileId} in ${flagged.map((f) => f.id)}`,
       ))
-      .groupBy(metricPoints.entity);
-    for (const r of rows) if (looksLikePerson(r.entity)) names.add(r.entity);
-
-    // I fogli larghi mettono una persona per COLONNA: lì il nome è la metrica.
-    const cols = await db.select({ metric: metricPoints.metric }).from(metricPoints)
-      .where(and(
-        eq(metricPoints.projectId, projectId),
-        sql`${metricPoints.importFileId} in ${flagged.map((f) => f.id)}`,
-      ))
-      .groupBy(metricPoints.metric);
-    for (const c of cols) {
-      const clean = c.metric.replace(/\s*(delta|totale|total)\s*$/i, '').trim();
+      .groupBy(metricPoints.entity, metricPoints.metric);
+    for (const r of rows) {
+      if (looksLikePerson(r.entity)) names.add(r.entity);
+      // I fogli larghi mettono una persona per COLONNA: lì il nome è la metrica.
+      const clean = r.metric.replace(/\s*(delta|totale|total)\s*$/i, '').trim();
       if (looksLikePerson(clean)) names.add(clean);
     }
   }
@@ -311,8 +308,10 @@ export async function personCard(projectId: number, person: string): Promise<Per
 /** Confronto fra persone su una metrica media: la classifica del team. */
 export async function peopleRanking(
   projectId: number, people: string[],
+  /** Le schede già calcolate: ricalcolarle qui raddoppiava il lavoro della pagina. */
+  ready?: PersonCard[],
 ): Promise<{ name: string; followers: number | null; perMonth: number | null; engagement: number | null }[]> {
-  const cards = await Promise.all(people.map((p) => personCard(projectId, p)));
+  const cards = ready ?? await Promise.all(people.map((p) => personCard(projectId, p)));
   return cards.map((c) => ({
     name: c.name,
     followers: c.followers?.latest ?? null,
@@ -369,4 +368,33 @@ export async function peopleFollowerSeries(
   })));
   return series.filter((s) => s.points.length >= 2)
     .sort((a, b) => (b.points.at(-1)?.value ?? 0) - (a.points.at(-1)?.value ?? 0));
+}
+
+/**
+ * Quante persone contiene questo progetto — per il menù.
+ *
+ * Deve costare poco: gira su ogni pagina. Legge solo la tabella dei file, che
+ * ha una riga per foglio, senza toccare le menzioni né le serie. Il nome sta
+ * fra le costanti se l'import l'ha già scritto, e si ricava dal titolo del
+ * foglio quando il file è stato caricato prima che Radar lo leggesse.
+ *
+ * Può contare meno persone di `detectPeople` — quelle nascoste in una colonna
+ * di un foglio largo qui non si vedono — e va bene così: serve a dire "ci sono
+ * delle persone, sono di là", non a fare una statistica.
+ */
+export async function countPeople(projectId: number): Promise<number> {
+  const db = await getDb();
+  const files = await db.select({
+    sheetName: importFiles.sheetName, filename: importFiles.filename,
+    constants: importFiles.constants,
+  }).from(importFiles)
+    .where(and(eq(importFiles.projectId, projectId), eq(importFiles.people, 1)));
+
+  const names = new Set<string>();
+  for (const f of files) {
+    const c = (f.constants ?? {}) as Record<string, string>;
+    const name = c[PERSON_FIELD] ?? personFromSheetName(f.sheetName ?? f.filename);
+    if (name) names.add(name);
+  }
+  return mergeSamePerson([...names]).length;
 }

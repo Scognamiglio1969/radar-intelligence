@@ -33,11 +33,13 @@ type Props = {
   currentId: number | null;
   lastIngest: string | null;
   alertCount?: number;
+  /** Quante persone ha il progetto: il menù lo dice, altrimenti non si trovano. */
+  peopleCount?: number;
   user?: { name: string; role: string } | null;
   locale?: Locale;
 };
 
-export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user = null, locale = 'en' }: Props) {
+export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, peopleCount = 0, user = null, locale = 'en' }: Props) {
   const t = tFor(locale);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -105,7 +107,7 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
               </button>
             </div>
             <CommandHint locale={locale} />
-            <NavLinks pathname={pathname} alertCount={alertCount} t={t} onNavigate={() => setOpen(false)} />
+            <NavLinks pathname={pathname} alertCount={alertCount} peopleCount={peopleCount} t={t} onNavigate={() => setOpen(false)} />
             {userBlock}
             <FooterBlock lastIngest={lastIngest} />
           </div>
@@ -119,7 +121,7 @@ export function Sidebar({ projects, currentId, lastIngest, alertCount = 0, user 
         </div>
         <ProjectSelect projects={projects} currentId={currentId} />
         <CommandHint locale={locale} />
-        <NavLinks pathname={pathname} alertCount={alertCount} t={t} />
+        <NavLinks pathname={pathname} alertCount={alertCount} peopleCount={peopleCount} t={t} />
         <div className="mt-auto flex flex-col gap-3">
           {userBlock}
           <FooterBlock lastIngest={lastIngest} />
@@ -161,8 +163,9 @@ function ProjectSelect({ projects, currentId, compact }: {
  * restano al loro posto, più piccole e in grigio. Non si nasconde niente e non
  * serve un clic in più: cambia solo quanto pesano sull'occhio.
  */
-function NavLinks({ pathname, alertCount = 0, t, onNavigate }: {
-  pathname: string; alertCount?: number; t: (k: string, f: string) => string; onNavigate?: () => void;
+function NavLinks({ pathname, alertCount = 0, peopleCount = 0, t, onNavigate }: {
+  pathname: string; alertCount?: number; peopleCount?: number;
+  t: (k: string, f: string) => string; onNavigate?: () => void;
 }) {
   return (
     <nav className="flex flex-col gap-px overflow-y-auto">
@@ -205,6 +208,15 @@ function NavLinks({ pathname, alertCount = 0, t, onNavigate }: {
               // venti icone tutte accese nessuna aiuta più a distinguere.
               : <span className="ml-[3px] mr-[7px] size-[3px] shrink-0 rounded-full bg-current opacity-40" />}
             <span className="truncate">{t(key, label)}</span>
+            {/* Le persone stanno dentro questa voce come scheda: senza il
+                numero, un progetto che ne contiene quindici sembra non averne
+                nessuna — e la pagina non la cerca più nessuno. */}
+            {href === '/measures' && peopleCount > 0 && (
+              <span title={`${peopleCount} persone in questo progetto`}
+                className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-white/10 px-1.5 text-[11px] font-semibold text-slate-300">
+                {peopleCount}
+              </span>
+            )}
             {href === '/alerts' && alertCount > 0 && (
               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[11px] font-bold text-white">
                 {alertCount > 9 ? '9+' : alertCount}

@@ -36,7 +36,7 @@ export default async function PeoplePage() {
   }
 
   const cards = await Promise.all(names.map((n) => personCard(project.id, n)));
-  const ranking = await peopleRanking(project.id, names);
+  const ranking = await peopleRanking(project.id, names, cards);
   // Chi non ha nessun dato utile non merita una scheda vuota.
   const useful = cards.filter((c) => c.followers || c.rhythm || c.averages.length || c.audience.length);
   // Le serie nel tempo, una per persona: alimentano il confronto e il focus.

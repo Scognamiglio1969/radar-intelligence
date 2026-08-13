@@ -8,6 +8,7 @@ import { ExportBar } from '@/components/export-bar';
 import { getCurrentProject, getLastIngestAt, getProjects, getPulse, getRecentAlertCount } from '@/lib/data';
 import { LiveFavicon } from '@/components/live-favicon';
 import { getCurrentUser } from '@/lib/auth';
+import { countPeople } from '@/lib/people-insights';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
@@ -30,6 +31,7 @@ export default async function RootLayout({
     getProjects(), getCurrentProject(), getLastIngestAt(), getCurrentUser(),
   ]);
   const alertCount = current ? await getRecentAlertCount(current.id) : 0;
+  const peopleCount = current ? await countPeople(current.id) : 0;
   const pulse = current ? await getPulse(current.id) : { mentions24h: 0, sentiment: null };
   const stale = !lastIngest || Date.now() - lastIngest.getTime() > 2 * 3600_000;
 
@@ -56,6 +58,7 @@ export default async function RootLayout({
             currentId={current?.id ?? null}
             lastIngest={lastIngest?.toISOString() ?? null}
             alertCount={alertCount}
+            peopleCount={peopleCount}
             user={user ? { name: user.name, role: user.role } : null}
             locale={locale}
           />
