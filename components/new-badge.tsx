@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import { useI18n } from '@/components/i18n-provider';
 
 // ---------------------------------------------------------------------------
 // "Dati nuovi".
@@ -41,16 +42,17 @@ export function useIsNew(id: string, latest: string | null | undefined): boolean
   return isNew;
 }
 
-export function NewBadge({ id, latest, label = 'dati nuovi' }: {
+export function NewBadge({ id, latest, label }: {
   id: string; latest: string | null | undefined; label?: string;
 }) {
   const isNew = useIsNew(id, latest);
+  const { t, formatDate } = useI18n();
   if (!isNew) return null;
   return (
     <span
-      title={`Aggiornato al ${latest ? new Date(latest).toLocaleDateString('it-IT') : ''}: non c'era l'ultima volta che hai guardato`}
+      title={t('newBadge.title', 'Updated on {date}: it was not present on your last visit').replace('{date}', latest ? formatDate(latest) : '')}
       className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-      <Sparkles className="size-2.5" /> {label}
+      <Sparkles className="size-2.5" /> {label ?? t('newBadge.label', 'new data')}
     </span>
   );
 }

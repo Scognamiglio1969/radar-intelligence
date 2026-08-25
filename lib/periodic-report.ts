@@ -5,6 +5,8 @@ import { buildPointOfView, getPovCached, povAgeDays, type FactPack, type PointOf
 import { collectExportData, sourceLabel, type ExportData, type Project } from '@/lib/export-data';
 import { SECTION_RENDERERS, type ReportPage } from '@/lib/report-pdf';
 import type { SectionId } from '@/lib/export-sections';
+import { getContentLocale, type ContentLocale } from '@/lib/content-locale';
+import { formatDate, formatNumber } from '@/lib/i18n-dict';
 
 // ---------------------------------------------------------------------------
 // Report periodico: POV + Brief + i numeri del periodo.
@@ -67,7 +69,7 @@ export type PeriodicReport = {
 };
 
 const fmt = (d: Date) => d.toISOString().slice(0, 10);
-const itDate = (s: string) => new Date(s).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+const longDate = (locale: ContentLocale, s: string) => formatDate(locale, s, { day: 'numeric', month: 'long', year: 'numeric' });
 
 /** I numeri del periodo, da SQL. Nessun modello li tocca. */
 async function periodStats(projectId: number, from: Date, to: Date) {
@@ -117,13 +119,25 @@ async function periodStats(projectId: number, from: Date, to: Date) {
 }
 
 /** L'apertura del report: prosa deterministica, costruita sui numeri appena letti. */
-function periodSummary(stats: Awaited<ReturnType<typeof periodStats>>, from: string, to: string): string {
+export function periodSummary(stats: Awaited<ReturnType<typeof periodStats>>, from: string, to: string, locale: ContentLocale): string {
+  const n = (value: number) => formatNumber(locale, value);
+  if (locale === 'en') {
+    const parts = [
+      `From ${longDate(locale, from)} to ${longDate(locale, to)}, ${n(stats.total)} mentions were collected`
+      + (stats.changePct === null ? ' (there is no previous period to compare)' : `, ${stats.changePct >= 0 ? '+' : ''}${stats.changePct}% versus the previous period, which had ${n(stats.prev)}`)
+      + `, from ${stats.sources} sources and ${n(stats.authors)} distinct authors.`,
+    ];
+    if (stats.sentiment !== null) parts.push(`Average sentiment was ${stats.sentiment.toFixed(2)} on a -1 to +1 scale: ${stats.sentiment > 0.15 ? 'positive-leaning' : stats.sentiment < -0.15 ? 'negative-leaning' : 'broadly neutral'}.`);
+    if (stats.peak) parts.push(`The busiest day was ${longDate(locale, stats.peak.day)}, with ${n(stats.peak.n)} mentions.`);
+    if (stats.topSources.length) parts.push(`The leading sources were ${stats.topSources.map((s) => `${sourceLabel(s.source)} (${n(s.n)})`).join(', ')}.`);
+    return parts.join(' ');
+  }
   const parts: string[] = [
-    `Dal ${itDate(from)} al ${itDate(to)} sono state raccolte ${stats.total.toLocaleString('it-IT')} menzioni`
+    `Dal ${longDate(locale, from)} al ${longDate(locale, to)} sono state raccolte ${n(stats.total)} menzioni`
     + (stats.changePct === null
       ? ' (non c\'è un periodo precedente con cui confrontarle)'
-      : `, ${stats.changePct >= 0 ? '+' : ''}${stats.changePct}% rispetto al periodo precedente, che ne aveva ${stats.prev.toLocaleString('it-IT')}`)
-    + `, da ${stats.sources} fonti e ${stats.authors.toLocaleString('it-IT')} autori distinti.`,
+      : `, ${stats.changePct >= 0 ? '+' : ''}${stats.changePct}% rispetto al periodo precedente, che ne aveva ${n(stats.prev)}`)
+    + `, da ${stats.sources} fonti e ${n(stats.authors)} autori distinti.`,
   ];
   if (stats.sentiment !== null) {
     const label = stats.sentiment > 0.15 ? 'orientato al positivo'
@@ -131,31 +145,38 @@ function periodSummary(stats: Awaited<ReturnType<typeof periodStats>>, from: str
     parts.push(`Il sentiment medio del periodo è ${stats.sentiment.toFixed(2)} su una scala da -1 a +1: ${label}.`);
   }
   if (stats.peak) {
-    parts.push(`Il giorno più intenso è stato il ${itDate(stats.peak.day)}, con ${stats.peak.n.toLocaleString('it-IT')} menzioni.`);
+    parts.push(`Il giorno più intenso è stato il ${longDate(locale, stats.peak.day)}, con ${n(stats.peak.n)} menzioni.`);
   }
   if (stats.topSources.length) {
-    parts.push(`Le fonti che hanno pesato di più: ${stats.topSources.map((s) => `${sourceLabel(s.source)} (${s.n.toLocaleString('it-IT')})`).join(', ')}.`);
+    parts.push(`Le fonti che hanno pesato di più: ${stats.topSources.map((s) => `${sourceLabel(s.source)} (${n(s.n)})`).join(', ')}.`);
   }
   return parts.join(' ');
 }
 
 /** La nota di provenienza della tesi. È il requisito esplicito: mai omessa. */
-function provenanceNote(p: Provenance): string {
+export function provenanceNote(p: Provenance, locale: ContentLocale): string {
+  const n = (value: number) => formatNumber(locale, value);
+  if (locale === 'en') {
+    if (!p.povGeneratedAt) return `No Point of View was available when this report was generated, so this document contains only figures and facts for the period. Period covered: ${longDate(locale, p.periodFrom)} to ${longDate(locale, p.periodTo)}, ${n(p.periodMentions)} mentions.`;
+    const when = formatDate(locale, p.povGeneratedAt, { dateStyle: 'long', timeStyle: 'short' });
+    const age = p.povAgeDays === 0 ? 'today' : p.povAgeDays === 1 ? 'yesterday' : `${p.povAgeDays} days ago`;
+    return `Point of View provenance — ${p.povReused ? 'reused' : 'generated for this report'} on ${when} (${age}), over a ${p.povWindowDays}-day window containing ${n(p.povMentions ?? 0)} mentions from ${p.povSources ?? 0} sources. ${p.povReused ? 'It was not regenerated for this period: the underlying interpretation is the current one, while figures on previous pages cover this report period.' : 'It was written from the indicated window, not the entire archive.'} This report covers ${longDate(locale, p.periodFrom)} to ${longDate(locale, p.periodTo)} and contains ${n(p.periodMentions)} mentions.`;
+  }
   if (!p.povGeneratedAt) {
     return 'Nessuna tesi (Point of View) era disponibile al momento della generazione di questo report: '
       + 'questo documento riporta quindi solo i numeri e i fatti del periodo. '
-      + `Periodo coperto: dal ${itDate(p.periodFrom)} al ${itDate(p.periodTo)}, ${p.periodMentions.toLocaleString('it-IT')} menzioni.`;
+      + `Periodo coperto: dal ${longDate(locale, p.periodFrom)} al ${longDate(locale, p.periodTo)}, ${n(p.periodMentions)} menzioni.`;
   }
-  const when = new Date(p.povGeneratedAt).toLocaleString('it-IT', { dateStyle: 'long', timeStyle: 'short' });
+  const when = formatDate(locale, p.povGeneratedAt, { dateStyle: 'long', timeStyle: 'short' });
   const age = p.povAgeDays === 0 ? 'oggi stesso'
     : p.povAgeDays === 1 ? 'ieri' : `${p.povAgeDays} giorni fa`;
   return `Provenienza della tesi — Point of View ${p.povReused ? 'riusato' : 'generato per questo report'} il ${when} (${age}), `
-    + `su una finestra di ${p.povWindowDays} giorni che conteneva ${(p.povMentions ?? 0).toLocaleString('it-IT')} menzioni `
+    + `su una finestra di ${p.povWindowDays} giorni che conteneva ${n(p.povMentions ?? 0)} menzioni `
     + `da ${p.povSources ?? 0} fonti. `
     + (p.povReused
       ? 'Non è stata rigenerata per questo periodo: la lettura di fondo è quella corrente, i numeri delle pagine precedenti sono invece quelli del periodo di questo report.'
       : 'È stata scritta sui dati della finestra indicata, non su quelli dell\'intero archivio.')
-    + ` Il periodo coperto da questo report va dal ${itDate(p.periodFrom)} al ${itDate(p.periodTo)} e contiene ${p.periodMentions.toLocaleString('it-IT')} menzioni.`;
+    + ` Il periodo coperto da questo report va dal ${longDate(locale, p.periodFrom)} al ${longDate(locale, p.periodTo)} e contiene ${n(p.periodMentions)} menzioni.`;
 }
 
 /** Le sezioni che compongono un'edizione, nell'ordine. Quelle senza dati saltano. */
@@ -170,10 +191,11 @@ const OUTLINE: { title: string; sections: SectionId[] }[] = [
  * Genera un'edizione: legge i numeri, decide la tesi secondo la cadenza e
  * compone la scaletta. Non salva: pensarci al chiamante.
  */
-export async function buildPeriodicReport(project: Project, cadence: Cadence): Promise<{
+export async function buildPeriodicReport(project: Project, cadence: Cadence, requestedLocale?: ContentLocale): Promise<{
   periodStart: string; periodEnd: string; pages: ReportPage[]; provenance: Provenance;
   pov: PointOfView | null;
 }> {
+  const locale = requestedLocale ?? await getContentLocale();
   const spec = CADENCE.get(cadence)!;
   const to = new Date();
   const from = new Date(to.getTime() - spec.days * 86400_000);
@@ -226,17 +248,25 @@ export async function buildPeriodicReport(project: Project, cadence: Cadence): P
   const withPov: ExportData = { ...data, pov: { facts: facts ?? data.pov.facts, pov } };
 
   const pages: ReportPage[] = [];
-  for (const group of OUTLINE) {
+  const outline = locale === 'it' ? OUTLINE : [
+    { title: 'The period in numbers', sections: ['kpi', 'volume', 'sentiment', 'topics'] as SectionId[] },
+    { title: 'The point of view', sections: ['pov'] as SectionId[] },
+    { title: 'Facts from the period', sections: ['brief', 'alerts', 'timeline'] as SectionId[] },
+    { title: 'Comparison', sections: ['benchmark', 'sov'] as SectionId[] },
+  ];
+  for (const group of outline) {
+    const isPov = group.sections.length === 1 && group.sections[0] === 'pov';
+    const isNumbers = group.sections[0] === 'kpi';
     const sections = group.sections.filter((s) => SECTION_RENDERERS[s].has(withPov));
-    if (!sections.length && group.title !== 'La tesi') continue;
+    if (!sections.length && !isPov) continue;
     const page: ReportPage = { title: group.title, blocks: [] };
-    if (group.title === 'Il periodo in numeri') {
-      page.blocks.push({ type: 'text', text: periodSummary(stats, fmt(from), fmt(to)), role: 'intro' });
+    if (isNumbers) {
+      page.blocks.push({ type: 'text', text: periodSummary(stats, fmt(from), fmt(to), locale), role: 'intro' });
     }
     page.blocks.push(...sections.map((s) => ({ type: 'chart' as const, section: s })));
     // La provenienza chiude la pagina della tesi: sta accanto a ciò che qualifica.
-    if (group.title === 'La tesi') {
-      page.blocks.push({ type: 'text', text: provenanceNote(provenance), role: 'free' });
+    if (isPov) {
+      page.blocks.push({ type: 'text', text: provenanceNote(provenance, locale), role: 'free' });
     }
     if (page.blocks.length) pages.push(page);
   }

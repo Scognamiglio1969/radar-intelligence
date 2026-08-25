@@ -2,13 +2,14 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Sidebar } from '@/components/sidebar';
-import { getLocale, localeTag, setServerLocaleTag } from '@/lib/i18n';
+import { getLocale, setServerLocaleTag } from '@/lib/i18n';
 import { AutoRefresh } from '@/components/auto-refresh';
 import { ExportBar } from '@/components/export-bar';
 import { getCurrentProject, getLastIngestAt, getProjects, getPulse, getRecentAlertCount } from '@/lib/data';
 import { LiveFavicon } from '@/components/live-favicon';
 import { getCurrentUser } from '@/lib/auth';
 import { countPeople } from '@/lib/people-insights';
+import { I18nProvider } from '@/components/i18n-provider';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
@@ -43,6 +44,7 @@ export default async function RootLayout({
   return (
     <html lang={locale} className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full">
+        <I18nProvider locale={locale}>
         {demo && (
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-sky-500/15 px-4 py-2 text-center text-xs text-sky-200">
             <span>🛰️ <strong>Live demo</strong> — read-only, sample data. Interactive AI features run when you self-host with your own key.</span>
@@ -71,6 +73,7 @@ export default async function RootLayout({
         </div>
         <AutoRefresh stale={stale} />
         <LiveFavicon sentiment={pulse.sentiment} mentions24h={pulse.mentions24h} alerts={alertCount} />
+        </I18nProvider>
       </body>
     </html>
   );

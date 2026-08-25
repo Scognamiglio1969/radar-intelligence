@@ -7,20 +7,15 @@ import {
   type StudioSpec,
 } from '@/lib/studio';
 import { AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
+import { getContentLocale, localeDirective } from '@/lib/content-locale';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const SYSTEM = `Sei un analista di media intelligence. Ricevi le CIFRE già calcolate di UN grafico.
-Scrivi un commento di 2-4 frasi:
-- parti da ciò che il grafico mostra davvero, citando i numeri che ti sono stati dati;
-- di' che cosa significa per chi legge, non limitarti a ripetere la classifica;
-- segnala l'anomalia o il dato controintuitivo, se c'è.
-Regole ferree:
-- NON inventare cifre, nomi o cause che non sono nei dati ricevuti;
-- niente elenchi puntati, niente markdown: prosa continua;
-- rispondi SOLO con il testo del commento, senza preamboli.`;
+const SYSTEM = `You are a media-intelligence analyst. You receive the already-calculated figures for ONE chart.
+Write a 2–4 sentence commentary. Start with what the chart actually shows and cite the supplied figures. Explain what it means to the reader instead of merely repeating the ranking. Call out an anomaly or counterintuitive result when present.
+Never invent figures, names, or causes absent from the supplied data. Use continuous prose without bullets or Markdown. Return ONLY the commentary, without a preamble.`;
 
 /** Il commento salvato, se i dati sono ancora quelli che descriveva. */
 export async function GET(req: Request) {
@@ -62,8 +57,9 @@ export async function POST(req: Request) {
       days: spec.days, palette: [], rows: result.rows,
     });
 
-    const user = `Progetto: ${project.name}\nTema seguito: ${(project.keywords ?? []).join(', ')}\n\n${facts}`;
-    const text = await callClaude(MODELS.sonnet, 'studio-comment', SYSTEM, user, 500, true);
+    const contentLocale = await getContentLocale();
+    const user = `Project: ${project.name}\nMonitored topic: ${(project.keywords ?? []).join(', ')}\n\n${facts}`;
+    const text = await callClaude(MODELS.sonnet, 'studio-comment', SYSTEM + localeDirective(contentLocale), user, 500, true);
     if (text === null) {
       return NextResponse.json({
         error: 'Motore AI non disponibile: manca la chiave o il tetto di spesa è stato raggiunto.',

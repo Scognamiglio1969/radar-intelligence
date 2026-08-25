@@ -41,3 +41,10 @@ export const AI_DISCLOSURE_META = {
   keywords: 'AI-generated, intelligenza artificiale, EU AI Act, Regolamento (UE) 2024/1689 art. 50, synthetic text',
   description: AI_DISCLOSURE_LONG,
 } as const;
+
+export function aiDisclosure(locale: 'en' | 'it') {
+  if (locale === 'it') return { short: AI_DISCLOSURE_SHORT, long: AI_DISCLOSURE_LONG, meta: AI_DISCLOSURE_META };
+  const short = 'Created with artificial-intelligence support — Regulation (EU) 2024/1689 (AI Act), Article 50, applicable from 2 August 2026';
+  const long = 'Created with artificial-intelligence support. This document contains text generated automatically by generative AI systems (summaries, commentary, Point of View, briefs, sentiment classifications, and topics). Numeric values and rankings come from direct queries of the project archive, not from the model. Disclosure under Article 50 of Regulation (EU) 2024/1689 (AI Act), applicable from 2 August 2026.';
+  return { short, long, meta: { subject: 'Content generated with artificial-intelligence support (AI-generated content)', keywords: 'AI-generated, artificial intelligence, EU AI Act, Regulation (EU) 2024/1689 Article 50, synthetic text', description: long } };
+}
