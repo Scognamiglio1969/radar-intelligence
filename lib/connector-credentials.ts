@@ -70,6 +70,9 @@ export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
     { env: 'PODCASTINDEX_API_KEY', label: 'API Key', hint: 'free, from api.podcastindex.org (sent by email)', secret: true },
     { env: 'PODCASTINDEX_API_SECRET', label: 'API Secret', hint: 'the secret delivered together with the key', secret: true },
   ],
+  mcp: [
+    { env: 'RADAR_MCP_TOKEN', label: 'MCP access token', hint: 'protects /api/mcp — generate one from the MCP page', secret: true },
+  ],
   factcheck: [
     { env: 'GOOGLE_FACTCHECK_API_KEY', label: 'API Key', hint: 'Google Cloud key with the "Fact Check Tools API" enabled — the YouTube key works too once that API is enabled in its project', secret: true },
   ],

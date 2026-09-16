@@ -42,6 +42,7 @@ const IT: Record<string, string> = {
   'nav.factchecks': 'Verifiche',
   'nav.trials': 'Studi clinici',
   'nav.podcasts': 'Podcast',
+  'nav.mcp': 'MCP',
   'nav.content': 'Contenuti top',
   'nav.messages': 'Ripresa dei messaggi',
   'nav.emv': 'Valore media',

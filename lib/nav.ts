@@ -3,7 +3,7 @@ import {
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, MonitorPlay, Network, History, LayoutGrid, Lightbulb,
   MessageSquareQuote, Euro, Award, Trophy, FileClock, BookOpen, LineChart,
-  UserRound, Shapes, UploadCloud, Gauge, SearchCheck, FlaskConical, Podcast,
+  UserRound, Shapes, UploadCloud, Gauge, SearchCheck, FlaskConical, Podcast, PlugZap,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -72,6 +72,7 @@ export const NAV: NavItem[] = [
   { section: 'Setup', key: 'nav.setup' },
   { href: '/settings', label: 'Projects', key: 'nav.settings', icon: Settings, also: ['sources', 'keys', 'budget', 'delete'] },
   { href: '/import', label: 'Import a file', key: 'nav.import', icon: UploadCloud, also: ['excel', 'csv', 'upload', 'sheet'] },
+  { href: '/mcp', label: 'MCP', key: 'nav.mcp', icon: PlugZap, also: ['claude', 'copilot', 'model context protocol', 'token', 'prompt', 'libreria', 'agent'] },
 
   { section: '', key: '' },
   { section: 'Beyond mentions', key: 'nav.beyondSection' },
