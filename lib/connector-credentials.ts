@@ -24,6 +24,13 @@ export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   grok: [
     { env: 'XAI_API_KEY', label: 'xAI (Grok) API key', hint: 'from console.x.ai', secret: true },
   ],
+  azure: [
+    { env: 'AZURE_OPENAI_API_KEY', label: 'Azure OpenAI key', hint: 'Azure portal → your Foundry/OpenAI resource → Keys and Endpoint', secret: true },
+    { env: 'AZURE_OPENAI_ENDPOINT', label: 'Resource URL', hint: 'e.g. https://my-resource.openai.azure.com — the model names above are your deployment names', secret: false },
+  ],
+  talkwalker: [
+    { env: 'TALKWALKER_ACCESS_TOKEN', label: 'Talkwalker access token', hint: 'read_only token issued by your Talkwalker Customer Success Manager', secret: true },
+  ],
   reddit: [
     { env: 'REDDIT_CLIENT_ID', label: 'Client ID', hint: 'Reddit app of type "script", the string under the name', secret: true },
     { env: 'REDDIT_CLIENT_SECRET', label: 'Client Secret', hint: 'the app’s "secret" field', secret: true },

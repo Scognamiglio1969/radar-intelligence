@@ -158,6 +158,54 @@ export async function createProject(formData: FormData) {
   redirect(`/settings?p=${created.id}`);
 }
 
+/**
+ * Crea un progetto in modalità "talkwalker": le mention non si raccolgono dal
+ * web né si caricano da file, si leggono dall'API Talkwalker aziendale. La
+ * query booleana del progetto diventa la query Talkwalker, così il resto di
+ * Radar (sentiment, trend, narrazioni, export) lavora come su ogni altro.
+ */
+function parseTalkwalkerForm(formData: FormData) {
+  return {
+    name: String(formData.get('name') ?? '').trim().slice(0, 80),
+    talkwalkerProject: String(formData.get('talkwalkerProject') ?? '').trim().slice(0, 120) || null,
+    // Nessun topic selezionato = tutto quello che il progetto Talkwalker
+    // raccoglie: è il caso normale di chi vuole i dati prima delle domande.
+    talkwalkerTopics: formData.getAll('talkwalkerTopics').map(String).filter(Boolean).slice(0, 50),
+    semanticContext: String(formData.get('semanticContext') ?? '').trim().slice(0, 600) || null,
+    visibility: formData.get('shared') ? 'shared' : 'private',
+  };
+}
+
+/**
+ * Crea un progetto "talkwalker". Non chiede parole chiave: la ricerca è già
+ * scritta in Talkwalker, qui si sceglie solo da quale topic prendere i
+ * documenti (o da tutti). Duplicare la query sarebbe duplicare Talkwalker.
+ */
+export async function createTalkwalkerProject(formData: FormData) {
+  const { getCurrentUser } = await import('@/lib/auth');
+  const db = await getDb();
+  const user = await getCurrentUser();
+  if (!user) return;
+  const data = parseTalkwalkerForm(formData);
+  if (!data.name || !data.talkwalkerProject) return;
+  const [created] = await db.insert(projects)
+    .values({ ...data, mode: 'talkwalker', ownerId: user.id, keywords: [], languages: [] })
+    .returning();
+  revalidatePath('/', 'layout');
+  redirect(`/settings?p=${created.id}`);
+}
+
+/** Modifica di un progetto talkwalker: nome, progetto/topic di origine, contesto. */
+export async function updateTalkwalkerProject(formData: FormData) {
+  const db = await getDb();
+  const id = Number(formData.get('id'));
+  if (!id || !(await assertCanEdit(id))) return;
+  const data = parseTalkwalkerForm(formData);
+  if (!data.name || !data.talkwalkerProject) return;
+  await db.update(projects).set(data).where(eq(projects.id, id));
+  revalidatePath('/', 'layout');
+}
+
 /** Crea un progetto in modalità "upload" (nessuno scraping) e va al caricamento file. */
 export async function createImportProject(formData: FormData) {
   const user = await getCurrentUser();

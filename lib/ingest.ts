@@ -58,10 +58,17 @@ function rawEngagementScore(m: RawMention): number {
 const CONNECTOR_TERM_CAP: Partial<Record<string, number>> = {
   gdelt: 6, reddit: 5, bluesky: 4, mastodon: 4, newsapi: 6,
   arxiv: 3, github: 2, 'sec-edgar': 3, stackexchange: 3, x: 5, tiktok: 5, youtube: 2,
+  // Talkwalker accetta 50 operandi per query: con 40 termini OR resta spazio
+  // per gli AND e i NOT del progetto, e di solito basta una chiamata sola.
+  talkwalker: 40,
 };
 // Fonti su cui è sicuro spezzare in più chiamate per coprire tutti i
 // termini nello stesso ciclo: gratuite, senza quota stretta.
-const BATCH_FULLY: Set<string> = new Set(['googlenews', 'gdelt', 'reddit', 'bluesky', 'mastodon']);
+// Talkwalker è a pagamento ma sta qui lo stesso: la sua query regge tutti i
+// termini in una volta, quindi "spezzare" significa comunque una chiamata sola
+// (10 credits + 1 per risultato) invece di ruotare le parole e vedere ogni
+// ciclo un pezzo diverso del tema.
+const BATCH_FULLY: Set<string> = new Set(['googlenews', 'gdelt', 'reddit', 'bluesky', 'mastodon', 'talkwalker']);
 // Sottoinsieme usato per la ricerca-concorrente: GDELT escluso apposta.
 // Verificato dal vivo che fallisce sempre con 429 su una richiesta ogni
 // entità (una quota giornaliera già stretta, saturata subito da una dozzina
@@ -70,6 +77,35 @@ const BATCH_FULLY: Set<string> = new Set(['googlenews', 'gdelt', 'reddit', 'blue
 // spingeva il tempo totale oltre il limite della funzione serverless (300s).
 // Resta pieno per la query del progetto (BATCH_FULLY), solo qui si toglie.
 const ENTITY_SEARCH_CONNECTORS: Set<string> = new Set(['googlenews', 'reddit', 'bluesky', 'mastodon']);
+
+// ---------------------------------------------------------------------------
+// Budget Talkwalker.
+//
+// Il contratto dà 20.000 credits al mese con un tetto di 1.000 al giorno, e
+// ogni ricerca costa 10 credits più 1 per risultato. Con quei numeri un dito
+// pesante sul pulsante "Aggiorna ora" può bruciare l'allowance di una giornata
+// in pochi minuti: qui si tiene il conto e, esaurito il budget, i progetti
+// Talkwalker saltano l'ingestion invece di spendere.
+//
+// Il conto è una STIMA basata sul listino pubblicato: il saldo vero sta nel
+// contratto, e questo serve solo a non arrivarci sopra per distrazione.
+// ---------------------------------------------------------------------------
+const TALKWALKER_COST_PER_CALL = 10;
+const talkwalkerBudgetKey = () => `talkwalker_credits_${new Date().toISOString().slice(0, 10)}`;
+
+function talkwalkerDailyBudget(): number {
+  const raw = Number(process.env.TALKWALKER_DAILY_CREDITS ?? 1000);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 1000;
+}
+
+async function talkwalkerCreditsSpentToday(): Promise<number> {
+  return (await getMeta<number>(talkwalkerBudgetKey())) ?? 0;
+}
+
+async function addTalkwalkerCredits(spent: number): Promise<void> {
+  if (spent <= 0) return;
+  await setMeta(talkwalkerBudgetKey(), (await talkwalkerCreditsSpentToday()) + spent);
+}
 
 function chunk<T>(arr: T[], size: number): T[][] {
   if (arr.length === 0) return [];
@@ -158,6 +194,8 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
     excludeTerms: project.excludeTerms ?? [],
     languages: project.languages,
     countries: project.countries ?? [],
+    talkwalkerProject: project.talkwalkerProject ?? undefined,
+    talkwalkerTopics: project.talkwalkerTopics ?? [],
   };
   const status: SourceStatus = (await getMeta<SourceStatus>('source_status')) ?? {};
   let inserted = 0;
@@ -178,7 +216,27 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
   setRssFeeds(project.rssFeeds ?? []);
   // Carica le chiavi API inserite dall'utente prima di decidere quali fonti sono attive.
   await hydrateConnectorCredentials();
-  const enabled = CONNECTORS.filter((c) => c.enabled());
+  // Un progetto 'talkwalker' interroga SOLO Talkwalker; tutti gli altri non lo
+  // toccano mai. Le due regole sono la stessa cosa vista dai due lati: i
+  // credits del contratto aziendale si spendono dove l'utente ha deciso.
+  let enabled = CONNECTORS
+    .filter((c) => c.enabled())
+    .filter((c) => (project.mode === 'talkwalker' ? c.id === 'talkwalker' : c.id !== 'talkwalker'));
+
+  if (project.mode === 'talkwalker') {
+    const budget = talkwalkerDailyBudget();
+    const spent = await talkwalkerCreditsSpentToday();
+    if (budget > 0 && spent >= budget) {
+      console.log(`[ingest] Talkwalker: budget del giorno esaurito (${spent}/${budget} credits stimati), ingestion saltata`);
+      enabled = [];
+      status.talkwalker = {
+        ok: false, count: 0,
+        error: `Budget Talkwalker del giorno esaurito: ~${spent} credits su ${budget}. Riprende domani, oppure alza TALKWALKER_DAILY_CREDITS.`,
+        at: new Date().toISOString(), lastOkAt: status.talkwalker?.lastOkAt,
+      };
+      await setMeta('source_status', status);
+    }
+  }
 
   const entities = await db.select().from(benchmarkEntities).where(eq(benchmarkEntities.projectId, project.id));
 
@@ -273,6 +331,18 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
     }
     inserted += count;
     agg.set(job.connectorId, { ok: true, count: prevAgg.count + count });
+  }
+
+  // Costo stimato del giro Talkwalker: 10 credits a chiamata più 1 per
+  // risultato ricevuto (non per mention inserita: si paga anche il duplicato).
+  const talkwalkerJobs = results.filter((r) => r.job.connectorId === 'talkwalker');
+  if (talkwalkerJobs.length) {
+    const spent = talkwalkerJobs.reduce(
+      (tot, r) => tot + TALKWALKER_COST_PER_CALL + (r.error === undefined ? r.mentions.length : 0),
+      0,
+    );
+    await addTalkwalkerCredits(spent);
+    console.log(`[ingest] Talkwalker: ~${spent} credits spesi in questo giro (${await talkwalkerCreditsSpentToday()}/${talkwalkerDailyBudget()} oggi)`);
   }
 
   const nowIso = new Date().toISOString();

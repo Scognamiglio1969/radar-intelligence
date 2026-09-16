@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, Trash2, Link2, Star, Radar, UploadCloud } from 'lucide-react';
+import { Plus, Trash2, Link2, Star, Radar, UploadCloud, Antenna } from 'lucide-react';
 import { and, eq, gte } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { shareLinks } from '@/lib/db/schema';
@@ -12,9 +12,12 @@ import { getT } from '@/lib/i18n';
 import type { projects as projectsTable } from '@/lib/db/schema';
 import { EditableEntity } from '@/components/editable-entity';
 import {
-  addEntity, createProject, createImportProject, createShareLink, deleteEntity,
+  addEntity, createProject, createImportProject, createTalkwalkerProject, createShareLink, deleteEntity,
   revokeShareLink, saveAndExpandProject, setOwnBrand, updateEntity, updateProject, updateImportProject,
+  updateTalkwalkerProject,
 } from './actions';
+import { listTalkwalkerTopics } from '@/lib/connectors/talkwalker';
+import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
 
 type Project = typeof projectsTable.$inferSelect;
 
@@ -44,11 +47,25 @@ export default async function SettingsPage({ searchParams }: {
   if (allProjects.length === 0) return <EmptyState message="No project." />;
 
   const isNew = sp.p === 'new';
-  const newType = sp.type; // 'listening' | 'import' | undefined (chooser)
+  const newType = sp.type; // 'listening' | 'import' | 'talkwalker' | undefined (chooser)
   const selected = isNew
     ? null
     : allProjects.find((p) => p.id === Number(sp.p)) ?? current ?? allProjects[0];
   const entities = selected ? await getBenchmarkEntities(selected.id) : [];
+
+  // I topic si leggono da Talkwalker solo quando servono davvero: chiamata
+  // gratuita ma con rate limit stretto (20/min), e un errore qui non deve
+  // impedire di aprire le impostazioni — si mostra il motivo e si va avanti.
+  let twTopics: { id: string; label: string }[] = [];
+  let twTopicsError: string | null = null;
+  if (selected?.mode === 'talkwalker' && selected.talkwalkerProject) {
+    try {
+      await hydrateConnectorCredentials();
+      twTopics = await listTalkwalkerTopics(selected.talkwalkerProject);
+    } catch (e) {
+      twTopicsError = (e as Error).message;
+    }
+  }
   const db = await getDb();
   const activeShares = selected
     ? await db.select().from(shareLinks)
@@ -103,7 +120,7 @@ export default async function SettingsPage({ searchParams }: {
                 /* Passo 0: che tipo di progetto? */
                 <div>
                   <h2 className="mb-3 text-sm font-semibold text-slate-300">What kind of project?</h2>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-3">
                     <Link href="/settings?p=new&type=listening"
                       className="group flex flex-col gap-1.5 rounded-xl border border-[var(--border)] bg-white/[0.02] px-4 py-4 transition hover:border-sky-500/50 hover:bg-sky-500/[0.05]">
                       <span className="flex items-center gap-2 text-sm font-semibold text-slate-100"><Radar className="size-4 text-sky-400" /> Listening</span>
@@ -114,8 +131,27 @@ export default async function SettingsPage({ searchParams }: {
                       <span className="flex items-center gap-2 text-sm font-semibold text-slate-100"><UploadCloud className="size-4 text-sky-400" /> Import file</span>
                       <span className="text-xs leading-snug text-slate-400">Bring your own data from an Excel or CSV file — surveys, exports. Radar analyzes it the same way. No scraping.</span>
                     </Link>
+                    <Link href="/settings?p=new&type=talkwalker"
+                      className="group flex flex-col gap-1.5 rounded-xl border border-[var(--border)] bg-white/[0.02] px-4 py-4 transition hover:border-teal-500/50 hover:bg-teal-500/[0.05]">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-slate-100"><Antenna className="size-4 text-teal-400" /> Talkwalker</span>
+                      <span className="text-xs leading-snug text-slate-400">Read mentions live from your corporate Talkwalker account through its API. No scraping, no files — and it spends Talkwalker credits.</span>
+                    </Link>
                   </div>
                 </div>
+              ) : newType === 'talkwalker' ? (
+                <form action={createTalkwalkerProject} className="flex flex-col gap-4">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300"><Antenna className="size-4 text-teal-400" /> New Talkwalker project</h2>
+                  <p className="text-xs leading-relaxed text-slate-400">
+                    No keywords here: the search is already written in Talkwalker. Point at the project, and Radar takes what it collects — including the tags and corrections made over there.
+                  </p>
+                  <TalkwalkerFields project={null} topics={[]} topicsError={null} />
+                  <TalkwalkerNotice />
+                  <p className="text-xs text-slate-500">Once created, you can narrow it down to specific topics of that Talkwalker project.</p>
+                  <div className="mt-2 flex items-center gap-3 border-t border-[var(--border)] pt-4">
+                    <SubmitButton className={btnCls} pendingLabel="Creating project…">Create project</SubmitButton>
+                    <Link href="/settings?p=new" className="text-xs text-slate-500 hover:text-slate-300">← back</Link>
+                  </div>
+                </form>
               ) : newType === 'import' ? (
                 <form action={createImportProject} className="flex flex-col gap-4">
                   <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300"><UploadCloud className="size-4 text-sky-400" /> New import project</h2>
@@ -145,7 +181,22 @@ export default async function SettingsPage({ searchParams }: {
               )
             ) : selected && (
               <>
-                {selected.mode === 'upload' ? (
+                {selected.mode === 'talkwalker' ? (
+                  <>
+                    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-teal-500/25 bg-teal-500/[0.05] px-4 py-3">
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-teal-200"><Antenna className="size-4" /> Talkwalker project</span>
+                      <span className="text-xs text-slate-400">— mentions come from the corporate Talkwalker API. No other source is queried.</span>
+                    </div>
+                    <form action={updateTalkwalkerProject} className="flex flex-col gap-4">
+                      <input type="hidden" name="id" value={selected.id} />
+                      <TalkwalkerFields project={selected} topics={twTopics} topicsError={twTopicsError} />
+                      <TalkwalkerNotice />
+                      <div className="mt-2 border-t border-[var(--border)] pt-4">
+                        <SubmitButton className={btnCls} pendingLabel="Saving…">Save changes</SubmitButton>
+                      </div>
+                    </form>
+                  </>
+                ) : selected.mode === 'upload' ? (
                   <>
                     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-sky-500/25 bg-sky-500/[0.05] px-4 py-3">
                       <span className="flex items-center gap-1.5 text-sm font-medium text-sky-200"><UploadCloud className="size-4" /> Import project</span>
@@ -272,6 +323,86 @@ export default async function SettingsPage({ searchParams }: {
 }
 
 /** Project fields, shared between create and edit. */
+/**
+ * I campi di un progetto Talkwalker: da dove prendere i dati, non cosa cercare.
+ *
+ * I topic sono quelli già configurati in Talkwalker, letti dalla sua Resources
+ * API: si spuntano, non si scrivono. Nessuna spunta = tutto quello che il
+ * progetto raccoglie, che è il caso di chi vuole i dati prima delle domande.
+ */
+function TalkwalkerFields({ project, topics, topicsError }: {
+  project: Project | null;
+  topics: { id: string; label: string }[];
+  topicsError: string | null;
+}) {
+  const chosen = new Set(project?.talkwalkerTopics ?? []);
+  return (
+    <>
+      <label className="text-xs text-slate-400">
+        Project name (in Radar)
+        <input name="name" defaultValue={project?.name} className={`${inputCls} mt-1`}
+          placeholder="e.g. Corporate reputation" required />
+      </label>
+      <label className="flex items-center gap-2 text-sm text-slate-300">
+        <input type="checkbox" name="shared" defaultChecked={project?.visibility === 'shared'} className="accent-sky-500" />
+        Share this project with the whole team (read-only for others)
+      </label>
+      <label className="text-xs text-slate-400">
+        Talkwalker project id
+        <input name="talkwalkerProject" defaultValue={project?.talkwalkerProject ?? ''}
+          className={`${inputCls} mt-1`} placeholder="e.g. kpnutesu_123456" required />
+        <span className="mt-1 block text-[11px] text-slate-500">
+          Ask your CSM, or read it from the URL of the project inside Talkwalker.
+        </span>
+      </label>
+
+      {project && (
+      <fieldset className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)]/40 px-4 py-3">
+        <legend className="px-1 text-xs text-slate-400">Where the data comes from</legend>
+        {topics.length > 0 ? (
+          <>
+            <p className="mb-2 text-[11px] text-slate-500">
+              Topics configured in that Talkwalker project. <strong>Tick none to take everything</strong> it collects — you can always narrow later.
+            </p>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {topics.map((t) => (
+                <label key={t.id} className="flex items-center gap-1.5 text-sm text-slate-300">
+                  <input type="checkbox" name="talkwalkerTopics" value={t.id}
+                    defaultChecked={chosen.has(t.id)} className="accent-teal-500" />
+                  <span className="truncate" title={t.label}>{t.label}</span>
+                </label>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            {topicsError
+              ? `Topics could not be read from Talkwalker: ${topicsError}. Radar will take everything the project collects.`
+              : 'Once the token is set, the topics configured in this Talkwalker project appear here to tick. Until then Radar takes everything the project collects.'}
+          </p>
+        )}
+      </fieldset>
+      )}
+
+      <label className="text-xs text-slate-400">
+        <span className="text-violet-300">✨ Topic description</span> — optional: it doesn’t change what is fetched, it guides the AI relevance stars
+        <textarea name="semanticContext" defaultValue={project?.semanticContext ?? ''} rows={2}
+          className={`${inputCls} mt-1 resize-y`}
+          placeholder="e.g. Reputation of the group across insurance and mobility" />
+      </label>
+    </>
+  );
+}
+
+/** Il costo non è un dettaglio da nascondere: si spendono soldi del contratto. */
+function TalkwalkerNotice() {
+  return (
+    <p className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-amber-200/90">
+      Each refresh runs one Talkwalker search per block of 40 keywords: <strong>10 credits per call plus 1 per result</strong>, taken from your Talkwalker contract. The token goes in Settings → Sources.
+    </p>
+  );
+}
+
 function ProjectFields({ project }: { project: Project | null }) {
   return (
     <>

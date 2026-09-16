@@ -17,7 +17,7 @@ export type EngineOption = {
 };
 
 /**
- * Settings → Budget panel: pick the AI engine (Claude / OpenAI / Grok), enter
+ * Settings → Budget panel: pick the AI engine (Claude / OpenAI / Grok / Azure), enter
  * its key, and optionally override the fast/smart model ids per provider.
  */
 export function AiEngine({ options, active }: { options: EngineOption[]; active: string }) {
@@ -35,7 +35,7 @@ export function AiEngine({ options, active }: { options: EngineOption[]; active:
       </p>
 
       {/* Provider picker */}
-      <form action={provAction} className="grid gap-2 sm:grid-cols-3">
+      <form action={provAction} className="grid gap-2 sm:grid-cols-2">
         {options.map((o) => (
           <button key={o.id} type="submit" name="provider" value={o.id} disabled={provPending}
             className={`flex flex-col items-start rounded-xl border px-3 py-2.5 text-left transition disabled:opacity-60 ${

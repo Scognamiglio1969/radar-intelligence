@@ -74,10 +74,10 @@ subset of the totals:
 
 ---
 
-## Two kinds of project
+## Three kinds of project
 
-A Radar project starts from one of two places, and everything downstream — charts,
-insights, reports, exports — works the same either way.
+A Radar project starts from one of three places, and everything downstream — charts,
+insights, reports, exports — works the same whichever one you pick.
 
 **Listening**: Radar collects the conversation itself from public sources, and you read
 it as it arrives — relevance stars, sentiment, topics, translation on demand:
@@ -93,6 +93,17 @@ Radar has no field for (`PILLAR`, `CAMPAGNA`, editorial format) are kept as cust
 rather than dropped:
 
 ![Import workspace](docs/screenshots/import-workspace.png)
+
+**Talkwalker**: your company already pays for a listening platform, and the searches are
+already written in it. Point Radar at a project of **Talkwalker (Lumen by Hootsuite)** and
+it reads the **topics configured there** — `topic=<id>`, no query of its own — so it
+inherits the searches, the tags and the corrections your team made inside Talkwalker
+instead of asking you to write them twice. Tick no topic and it takes everything the
+project collects: the data first, the questions later. Each refresh spends credits from
+your Talkwalker contract (10 per call plus 1 per result), so a Talkwalker project queries
+Talkwalker and nothing else, no other project ever touches it, and a daily ceiling
+(`TALKWALKER_DAILY_CREDITS`, 1000 by default — the standard package's daily limit) stops
+a heavy finger on *Refresh now* from burning a day's allowance before lunch.
 
 ### "Did it load correctly?"
 
@@ -336,18 +347,38 @@ Radar never ships with anyone's keys — you bring your own, and everything is s
 
 - **AI engine key** — powers all AI features (sentiment, briefs, ratings, clustering,
   Content Studio, "Ask the data"…). In *Settings → Budget → AI engine* choose your provider —
-  **Claude, OpenAI or Grok** — and paste its key, or set the matching environment variable
-  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY`). The default models per provider
+  **Claude, OpenAI, Grok or Azure OpenAI** — and paste its key, or set the matching
+  environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`, or
+  `AZURE_OPENAI_API_KEY` plus `AZURE_OPENAI_ENDPOINT`). Azure is there for organisations
+  that require the models to run inside their own Microsoft tenant: the v1 API speaks the
+  OpenAI dialect, so the only extras are your resource URL and the deployment names. The default models per provider
   are editable, so a newly released model just needs its id typed in — no code change. No key
   needed just to collect data.
 - **Data-source keys** (X, Instagram, Facebook, TikTok, LinkedIn, NewsAPI, Reddit, YouTube,
-  Discord, Tavily for LinkedIn-web, football-data.org and Alpha Vantage for Sport, Yelp for
-  Reviews) — configured **from the UI** in *Settings → Sources* (or inline on the Sport /
+  Discord, Talkwalker, Tavily for LinkedIn-web, football-data.org and Alpha Vantage for
+  Sport, Yelp for Reviews) — configured **from the UI** in *Settings → Sources* (or inline on the Sport /
   Reviews pages, next to the source they unlock), or via environment variables as a
   fallback.
 
 Nothing requires editing code or redeploying: an admin adds the keys from the app and the
 features turn on immediately.
+
+## Ask it from your own assistant (MCP)
+
+Radar exposes a **Model Context Protocol** endpoint at `/api/mcp` — *streamable HTTP*, the
+transport Microsoft Copilot Studio speaks and Claude accepts for remote servers. Six
+read-only tools (`radar_projects`, `radar_overview`, `radar_mentions`, `radar_trends`,
+`radar_narratives`, `radar_briefs`) return what the pipeline already computed, so nothing
+there spends AI budget or data-source credits.
+
+Set `RADAR_MCP_TOKEN` to enable it: **without that variable the endpoint is off, not open**
+— an endpoint that exposes the whole archive must never stay public by forgetfulness.
+Clients authenticate with `Authorization: Bearer <token>` or `x-api-key`.
+
+Worth knowing if your source is Talkwalker: **Lumen ships its own official MCP server** for
+asking questions in a chat session. Radar's endpoint answers a different need — the
+historicised archive, the aggregates computed over all of it, and every source in one
+place, queried without spending a credit per question.
 
 ## Modules
 

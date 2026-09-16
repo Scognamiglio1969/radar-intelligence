@@ -2,14 +2,16 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE, verifySession } from '@/lib/session';
 
 // Protezione dell'intera app: richiede una sessione utente valida.
-// Esclusi: landing, login, /api/auth, cron (protetto da CRON_SECRET), report condivisi.
+// Esclusi: landing, login, /api/auth, cron (protetto da CRON_SECRET), report
+// condivisi e l'endpoint MCP (protetto dal suo token, non da un cookie).
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   // Public read-only demo: no auth gate at all.
   if (process.env.DEMO_MODE === '1') return NextResponse.next();
   if (pathname.startsWith('/landing') || pathname.startsWith('/login')
     || pathname.startsWith('/api/auth') || pathname.startsWith('/api/cron/')
-    || pathname.startsWith('/share/') || pathname.startsWith('/tour')) {
+    || pathname.startsWith('/share/') || pathname.startsWith('/tour')
+    || pathname.startsWith('/api/mcp')) {
     return NextResponse.next();
   }
   // Verifica la firma del cookie di sessione (senza toccare il DB)

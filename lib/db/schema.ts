@@ -30,8 +30,13 @@ export const projects = pgTable('projects', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   // 'listening' = raccolta automatica da fonti web; 'upload' = ingestion di file
-  // (Excel/CSV) caricati dall'utente, nessuno scraping.
+  // (Excel/CSV) caricati dall'utente, nessuno scraping; 'talkwalker' = i dati
+  // arrivano dall'API Talkwalker aziendale, unica fonte attiva del progetto.
   mode: text('mode').notNull().default('listening'),
+  /** Id del progetto Talkwalker da interrogare (solo mode='talkwalker'). */
+  talkwalkerProject: text('talkwalker_project'),
+  /** Topic Talkwalker da cui prendere i documenti; vuoto = tutto il progetto. */
+  talkwalkerTopics: jsonb('talkwalker_topics').$type<string[]>().notNull().default([]),
   // Proprietario del progetto (chi lo ha creato); null = legacy/condiviso a tutti
   ownerId: integer('owner_id'),
   // 'private' = solo il proprietario e l'admin; 'shared' = tutto il team lo vede

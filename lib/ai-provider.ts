@@ -1,12 +1,14 @@
 // ---------------------------------------------------------------------------
-// Provider-agnostic AI engine. Radar can run on Anthropic (Claude), OpenAI or
-// xAI (Grok): the admin picks the engine and enters its key in Settings →
+// Provider-agnostic AI engine. Radar can run on Anthropic (Claude), OpenAI,
+// xAI (Grok) or Azure OpenAI (Microsoft Foundry) — the last one for companies
+// that require corporate data to stay inside a Microsoft tenant: the admin
+// picks the engine and enters its key in Settings →
 // Budget. Every AI feature goes through lib/claude.ts → this module, so the
 // choice applies app-wide. Models are editable per provider, so future model
 // names work without code changes.
 // ---------------------------------------------------------------------------
 
-export type AiProviderId = 'anthropic' | 'openai' | 'grok';
+export type AiProviderId = 'anthropic' | 'openai' | 'grok' | 'azure';
 
 export type AiProviderDef = {
   id: AiProviderId;
@@ -15,6 +17,13 @@ export type AiProviderDef = {
   keyEnv: string;
   /** OpenAI-compatible chat-completions endpoint (absent for Anthropic: SDK). */
   endpoint?: string;
+  /**
+   * Env/credential name holding a tenant-specific base URL (Azure OpenAI: every
+   * customer has its own resource). When set, it wins over `endpoint`.
+   */
+  endpointEnv?: string;
+  /** How the key travels: bearer token (OpenAI-style) or `api-key` header (Azure). */
+  authHeader?: 'bearer' | 'api-key';
   /** Which body field caps the output ("max_tokens" vs "max_completion_tokens"). */
   maxTokensField?: 'max_tokens' | 'max_completion_tokens';
   /** Default models per tier — overridable from the UI (meta ai_models_<id>). */
@@ -70,6 +79,26 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDef> = {
     },
     defaultPrice: { input: 3, output: 15 },
   },
+  azure: {
+    id: 'azure',
+    label: 'Azure OpenAI (Microsoft)',
+    keyEnv: 'AZURE_OPENAI_API_KEY',
+    endpointEnv: 'AZURE_OPENAI_ENDPOINT',
+    authHeader: 'api-key',
+    maxTokensField: 'max_completion_tokens',
+    // On Azure the "model" is the deployment name chosen by the customer:
+    // these are only the most common ones, editable from the UI.
+    models: { fast: 'gpt-4o-mini', smart: 'gpt-4o' },
+    prices: {
+      'gpt-4o': { input: 2.5, output: 10 },
+      'gpt-4o-mini': { input: 0.15, output: 0.6 },
+      'gpt-4.1': { input: 2, output: 8 },
+      'gpt-4.1-mini': { input: 0.4, output: 1.6 },
+      'gpt-5': { input: 1.25, output: 10 },
+      'gpt-5-mini': { input: 0.25, output: 2 },
+    },
+    defaultPrice: { input: 2.5, output: 10 },
+  },
 };
 
 export const AI_PROVIDER_IDS = Object.keys(AI_PROVIDERS) as AiProviderId[];
@@ -101,6 +130,31 @@ export async function providerKey(provider: AiProviderId): Promise<string | unde
   return key || undefined;
 }
 
+/**
+ * Azure gives you a resource URL, not an endpoint: people paste it in every
+ * shape they find in the portal. Accept them all and build the v1 chat URL —
+ * `https://<resource>.openai.azure.com/openai/v1/chat/completions`, which since
+ * the v1 GA API needs no `api-version` and speaks the OpenAI dialect.
+ */
+export function azureChatUrl(raw: string): string {
+  let base = raw.trim().replace(/\/+$/, '');
+  base = base.replace(/\/chat\/completions$/, '').replace(/\/+$/, '');
+  if (!/\/openai\/v1$/.test(base)) base = `${base.replace(/\/openai$/, '')}/openai/v1`;
+  return `${base}/chat/completions`;
+}
+
+/** Effective chat endpoint: fixed for OpenAI/xAI, tenant-specific for Azure. */
+export async function providerEndpoint(provider: AiProviderId): Promise<string | undefined> {
+  const def = AI_PROVIDERS[provider];
+  if (def.endpointEnv) {
+    const { getStoredKey } = await import('@/lib/connector-credentials');
+    const stored = await getStoredKey(def.endpointEnv);
+    const raw = (stored || process.env[def.endpointEnv] || '').trim();
+    return raw ? azureChatUrl(raw) : undefined;
+  }
+  return def.endpoint;
+}
+
 export function priceFor(provider: AiProviderId, model: string): { input: number; output: number } {
   const def = AI_PROVIDERS[provider];
   return def.prices[model] ?? def.defaultPrice;
@@ -116,7 +170,14 @@ export async function callOpenAICompat(
   provider: AiProviderId, key: string, model: string, system: string, user: string, maxTokens: number,
 ): Promise<AiCallResult> {
   const def = AI_PROVIDERS[provider];
-  if (!def.endpoint) throw new Error(`${provider} has no HTTP endpoint`);
+  const endpoint = await providerEndpoint(provider);
+  if (!endpoint) {
+    throw new Error(
+      def.endpointEnv
+        ? `${def.label}: missing ${def.endpointEnv} (the resource URL, e.g. https://my-resource.openai.azure.com)`
+        : `${provider} has no HTTP endpoint`,
+    );
+  }
   const body: Record<string, unknown> = {
     model,
     messages: [
@@ -125,9 +186,12 @@ export async function callOpenAICompat(
     ],
     [def.maxTokensField ?? 'max_tokens']: maxTokens,
   };
-  const res = await fetch(def.endpoint, {
+  const res = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(def.authHeader === 'api-key' ? { 'api-key': key } : { Authorization: `Bearer ${key}` }),
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) {

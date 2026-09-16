@@ -10,6 +10,16 @@ export interface ListeningQuery {
   languages: string[];
   /** Codici paese ISO (IT, US, …): applicato alle fonti che lo supportano (news) */
   countries: string[];
+  /**
+   * Id del progetto Talkwalker da interrogare (solo per i progetti in modalità
+   * 'talkwalker'). Le altre fonti lo ignorano.
+   */
+  talkwalkerProject?: string;
+  /**
+   * Topic già configurati in Talkwalker da cui prendere i documenti. Se ci
+   * sono, la query booleana di Radar non viene inviata: comanda il topic.
+   */
+  talkwalkerTopics?: string[];
 }
 
 export interface RawMention {

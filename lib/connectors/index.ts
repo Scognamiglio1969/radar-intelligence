@@ -20,12 +20,13 @@ import { github } from './github';
 import { discord } from './discord';
 import { secEdgar } from './sec-edgar';
 import { arxiv } from './arxiv';
+import { talkwalker } from './talkwalker';
 
 export const CONNECTORS: Connector[] = [
   // Gratuite (alcune richiedono una chiave gratuita: reddit, youtube, discord)
   googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss, linkedinWeb, stackExchange, github, discord, secEdgar, arxiv,
   // Premium (si attivano con le chiavi API a pagamento)
-  xTwitter, instagram, facebook, tiktok, linkedin, newsapi,
+  xTwitter, instagram, facebook, tiktok, linkedin, newsapi, talkwalker,
 ];
 
 /**
@@ -41,7 +42,7 @@ export const SOURCE_KIND: Record<string, MentionKind> = {
   reddit: 'post', bluesky: 'post', mastodon: 'post', hackernews: 'post', youtube: 'post',
   x: 'post', telegram: 'post', instagram: 'post', facebook: 'post', tiktok: 'post',
   linkedin: 'post', linkedin_web: 'post', stackexchange: 'post', github: 'post', discord: 'post',
-  arxiv: 'article',
+  arxiv: 'article', talkwalker_news: 'article', talkwalker: 'post',
 };
 /** Fonte sconosciuta: si presume post, la classe più prudente per il valore media. */
 export const kindOf = (source: string): MentionKind => SOURCE_KIND[source] ?? 'post';
@@ -60,7 +61,7 @@ export const SOURCE_CATEGORY: Record<string, SourceCategory> = {
   discord: 'social', linkedin: 'social', linkedin_web: 'social',
   youtube: 'video',
   'sec-edgar': 'finance',
-  arxiv: 'academic',
+  arxiv: 'academic', talkwalker: 'social', talkwalker_news: 'general',
 };
 export const CATEGORY_ORDER: SourceCategory[] = ['general', 'finance', 'academic', 'tech', 'social', 'video'];
 export const CATEGORY_LABEL: Record<SourceCategory, string> = {
@@ -80,6 +81,14 @@ export const NEWS_SOURCES = Object.entries(SOURCE_KIND)
 
 export const SOURCE_META: Record<string, { label: string; color: string; note?: string }> = {
   googlenews: { label: 'Google News', color: '#f59e0b' },
+  talkwalker: {
+    label: 'Talkwalker', color: '#00b8a9',
+    note: 'Mentions pulled live from the corporate Talkwalker (Lumen by Hootsuite) account via its API, inside a project of type "Talkwalker": Radar reads the topics already configured there rather than rewriting the query. Each search spends credits from the Talkwalker contract (10 per call plus 1 per result).',
+  },
+  talkwalker_news: {
+    label: 'Talkwalker (news)', color: '#0d9488',
+    note: 'Editorial articles from the Talkwalker index: same acquisition as "Talkwalker", read as press coverage rather than social posts.',
+  },
   gdelt: { label: 'GDELT', color: '#a78bfa' },
   reddit: { label: 'Reddit', color: '#ff4500' },
   bluesky: { label: 'Bluesky', color: '#38bdf8' },
