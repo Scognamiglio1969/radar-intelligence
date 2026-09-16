@@ -21,10 +21,14 @@ import { discord } from './discord';
 import { secEdgar } from './sec-edgar';
 import { arxiv } from './arxiv';
 import { talkwalker } from './talkwalker';
+import { lemmy } from './lemmy';
+import { newsdata } from './newsdata';
+import { podcastIndex } from './podcastindex';
 
 export const CONNECTORS: Connector[] = [
   // Gratuite (alcune richiedono una chiave gratuita: reddit, youtube, discord)
   googleNews, gdelt, reddit, bluesky, mastodon, hackerNews, youtube, telegram, rss, linkedinWeb, stackExchange, github, discord, secEdgar, arxiv,
+  lemmy, newsdata, podcastIndex,
   // Premium (si attivano con le chiavi API a pagamento)
   xTwitter, instagram, facebook, tiktok, linkedin, newsapi, talkwalker,
 ];
@@ -43,6 +47,10 @@ export const SOURCE_KIND: Record<string, MentionKind> = {
   x: 'post', telegram: 'post', instagram: 'post', facebook: 'post', tiktok: 'post',
   linkedin: 'post', linkedin_web: 'post', stackexchange: 'post', github: 'post', discord: 'post',
   arxiv: 'article', talkwalker_news: 'article', talkwalker: 'post',
+  lemmy: 'post', newsdata: 'article',
+  // Un episodio è prodotto da una redazione, come un articolo: si legge con la
+  // rassegna, non con i post.
+  podcastindex: 'article',
 };
 /** Fonte sconosciuta: si presume post, la classe più prudente per il valore media. */
 export const kindOf = (source: string): MentionKind => SOURCE_KIND[source] ?? 'post';
@@ -52,7 +60,7 @@ export const kindOf = (source: string): MentionKind => SOURCE_KIND[source] ?? 'p
  * organizzare la pagina Fonti: con 22 connettori un unico elenco piatto per
  * livello (gratis/gratis con chiave/a pagamento) è illeggibile.
  */
-export type SourceCategory = 'general' | 'tech' | 'social' | 'video' | 'finance' | 'academic';
+export type SourceCategory = 'general' | 'tech' | 'social' | 'video' | 'audio' | 'finance' | 'academic';
 export const SOURCE_CATEGORY: Record<string, SourceCategory> = {
   googlenews: 'general', gdelt: 'general', newsapi: 'general', rss: 'general',
   hackernews: 'tech', stackexchange: 'tech', github: 'tech',
@@ -62,11 +70,12 @@ export const SOURCE_CATEGORY: Record<string, SourceCategory> = {
   youtube: 'video',
   'sec-edgar': 'finance',
   arxiv: 'academic', talkwalker: 'social', talkwalker_news: 'general',
+  lemmy: 'social', newsdata: 'general', podcastindex: 'audio',
 };
-export const CATEGORY_ORDER: SourceCategory[] = ['general', 'finance', 'academic', 'tech', 'social', 'video'];
+export const CATEGORY_ORDER: SourceCategory[] = ['general', 'finance', 'academic', 'tech', 'social', 'video', 'audio'];
 export const CATEGORY_LABEL: Record<SourceCategory, string> = {
   general: 'General & news', finance: 'Financial & corporate', academic: 'Academic',
-  tech: 'Tech & developer', social: 'Social & messaging', video: 'Video',
+  tech: 'Tech & developer', social: 'Social & messaging', video: 'Video', audio: 'Podcasts & audio',
 };
 
 /**
@@ -129,6 +138,18 @@ export const SOURCE_META: Record<string, { label: string; color: string; note?: 
   arxiv: {
     label: 'arXiv', color: '#b31b1b',
     note: 'Academic papers (CS, physics, math, quantitative biology and more) matching your terms, with the full abstract — official free API, no key. Server-side search does light stemming (verified live: "Claude" also matched an unrelated astronomy survey named "CLAUDS"), so results are re-checked here for a literal match in title or abstract.',
+  },
+  lemmy: {
+    label: 'Lemmy', color: '#00bc8c',
+    note: 'Posts and comments from Lemmy, the federated Reddit-like network, read through lemmy.world, which sees the content of the whole federation — free, no key. Server-side search is broad, so every result is re-checked here for a literal match in title or text.',
+  },
+  newsdata: {
+    label: 'NewsData.io', color: '#6366f1',
+    note: 'News from 100,000+ outlets in 80+ languages. Free key, 200 credits a day, commercial use allowed. One search per project per collection (10 articles, a 100-character boolean query); the remaining terms rotate on the next run. Full text is not in the free plan: articles are enriched afterwards like the others.',
+  },
+  podcastindex: {
+    label: 'Podcast Index', color: '#f43f5e',
+    note: 'Podcast episodes whose title or description mentions your terms, from the open Podcast Index directory (non-profit, free key and secret). The description is read, not the audio: an episode that only names the topic out loud is not found.',
   },
   upload: {
     label: 'Imported file', color: '#94a3b8',

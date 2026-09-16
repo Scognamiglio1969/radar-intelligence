@@ -63,6 +63,13 @@ export const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   newsapi: [
     { env: 'NEWSAPI_KEY', label: 'API Key', hint: 'newsapi.org', secret: true },
   ],
+  newsdata: [
+    { env: 'NEWSDATA_API_KEY', label: 'API Key', hint: 'free, from newsdata.io/register (200 credits a day, commercial use allowed)', secret: true },
+  ],
+  podcastindex: [
+    { env: 'PODCASTINDEX_API_KEY', label: 'API Key', hint: 'free, from api.podcastindex.org (sent by email)', secret: true },
+    { env: 'PODCASTINDEX_API_SECRET', label: 'API Secret', hint: 'the secret delivered together with the key', secret: true },
+  ],
   googleplaces: [
     { env: 'GOOGLE_PLACES_API_KEY', label: 'API Key', hint: 'free-tier key from Google Cloud Console (Places API)', secret: true },
   ],
