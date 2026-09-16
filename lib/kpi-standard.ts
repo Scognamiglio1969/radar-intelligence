@@ -248,7 +248,12 @@ export type CompetitiveRow = {
   engagement: number; soe: number | null;
   positive: number; spv: number | null;
   nss: number | null;
+  /** Menzioni positive + negative: la base del NSS. */
+  sentimentBase: number;
 };
+
+/** Sotto questa base il NSS di un'entità non si mostra: tre post fanno ±100. */
+export const MIN_NSS_BASE = 10;
 
 export type StandardKpis = {
   lang: Lang;
@@ -507,8 +512,24 @@ async function competitiveKpis(
   const sumN = rows.reduce((s, r) => s + r.c.n, 0);
   if (sumN > union.n) {
     notes.push(L(lang,
-      `${sumN - union.n} menzioni citano più di un’entità del set e contano per ciascuna: le quote (SOV, SOE) sono calcolate sulle citazioni.`,
-      `${sumN - union.n} mentions name more than one entity in the set and count for each: shares (SOV, SOE) are computed on citations.`));
+      `${fmtNumber(sumN - union.n, 'it')} menzioni citano più di un’entità del set e contano per ciascuna: le quote (SOV, SOE) sono calcolate sulle citazioni.`,
+      `${fmtNumber(sumN - union.n, 'en')} mentions name more than one entity in the set and count for each: shares (SOV, SOE) are computed on citations.`));
+  }
+
+  const thin = rows.filter((r) => r.c.positive + r.c.negative < MIN_NSS_BASE).map((r) => r.e.name);
+  if (thin.length) {
+    notes.push(L(lang,
+      `NSS non mostrato per ${thin.join(', ')}: meno di ${MIN_NSS_BASE} menzioni positive o negative.`,
+      `NSS not shown for ${thin.join(', ')}: fewer than ${MIN_NSS_BASE} positive or negative mentions.`));
+  }
+  const small = rows.filter((r) => {
+    const b = r.c.positive + r.c.negative;
+    return b >= MIN_NSS_BASE && b < SMALL_SAMPLE;
+  });
+  if (small.length) {
+    notes.push(L(lang,
+      `NSS su campione limitato (meno di ${SMALL_SAMPLE} menzioni con sentiment): ${small.map((r) => `${r.e.name} ${r.c.positive + r.c.negative}`).join(', ')}.`,
+      `NSS on a limited sample (fewer than ${SMALL_SAMPLE} mentions with sentiment): ${small.map((r) => `${r.e.name} ${r.c.positive + r.c.negative}`).join(', ')}.`));
   }
 
   const totN = sumN;
@@ -529,7 +550,8 @@ async function competitiveKpis(
       soe: ratio(eng(c), totEng, 100),
       positive: c.positive,
       spv: ratio(c.positive, totPos, 100),
-      nss: nss(c.positive, c.negative),
+      nss: c.positive + c.negative >= MIN_NSS_BASE ? nss(c.positive, c.negative) : null,
+      sentimentBase: c.positive + c.negative,
     };
   }).sort((a, b) => b.mentions - a.mentions);
 }

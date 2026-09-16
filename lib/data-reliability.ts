@@ -116,20 +116,38 @@ async function engagementShape(projectId: number, from: Date, to: Date) {
   };
 }
 
-/** Contenuti uguali ripetuti: il segnale più semplice di bot e ripubblicazioni. */
-async function duplicateShare(projectId: number, from: Date, to: Date): Promise<number> {
+/**
+ * Contenuti uguali ripetuti: il segnale più semplice di bot e ripubblicazioni.
+ *
+ * Si contano le copie IN PIÙ, non i gruppi interi: un testo pubblicato tre
+ * volte aggiunge due menzioni al volume, non tre. E si riporta il caso
+ * peggiore, perché è quello che dice che cosa escludere: sui dati veri era un
+ * account Mastodon che pubblicava lo stesso post ottantatré volte.
+ */
+async function duplicates(projectId: number, from: Date, to: Date): Promise<{
+  extra: number; top: { text: string; n: number; authors: number; sources: string } | null;
+}> {
   const db = await getDb();
   const res = await db.execute(sql`
-    select coalesce(sum(n), 0)::int as dup from (
-      select count(*) as n from mentions
-      where project_id = ${projectId}
-        and published_at >= ${from.toISOString()}::timestamptz
-        and published_at < ${to.toISOString()}::timestamptz
-        and length(content) > 30
-      group by lower(left(regexp_replace(content, '\\s+', ' ', 'g'), 200))
-      having count(*) > 1
-    ) t`);
-  return Number((res.rows[0] as { dup: number } | undefined)?.dup ?? 0);
+    select count(*)::int as n,
+           count(distinct coalesce(author_handle, author))::int as authors,
+           string_agg(distinct source, ', ') as sources,
+           left(min(content), 80) as text
+    from mentions
+    where project_id = ${projectId}
+      and published_at >= ${from.toISOString()}::timestamptz
+      and published_at < ${to.toISOString()}::timestamptz
+      and length(content) > 30
+    group by lower(left(regexp_replace(content, '\\s+', ' ', 'g'), 200))
+    having count(*) > 1
+    order by 1 desc`);
+  const rows = res.rows as { n: number; authors: number; sources: string; text: string }[];
+  const extra = rows.reduce((s, r) => s + Number(r.n) - 1, 0);
+  const t = rows[0];
+  return {
+    extra,
+    top: t ? { text: t.text, n: Number(t.n), authors: Number(t.authors), sources: t.sources } : null,
+  };
 }
 
 /**
@@ -196,10 +214,10 @@ export async function assessReliability(projectId: number, k: StandardKpis, now 
   }
 
   const retentionCut = new Date(now.getTime() - RETENTION_DAYS * 86400_000);
-  const [engCur, engPrev, dups, hist] = await Promise.all([
+  const [engCur, engPrev, dup, hist] = await Promise.all([
     engagementShape(projectId, k.current.from, k.current.to),
     engagementShape(projectId, k.previous.from, k.previous.to),
-    duplicateShare(projectId, k.current.from, k.current.to),
+    duplicates(projectId, k.current.from, k.current.to),
     history(projectId, k.current.from, days, isUpload ? new Date(0) : retentionCut),
   ]);
 
@@ -280,12 +298,17 @@ export async function assessReliability(projectId: number, k: StandardKpis, now 
     caution('mentions', L(lang, 'volume concentrato su un autore', 'volume concentrated on one author'));
     caution('perDay', L(lang, 'volume concentrato su un autore', 'volume concentrated on one author'));
   }
+  const dups = dup.extra;
   if (dups / cur.n > 0.1 && dups >= 10) {
+    const worst = dup.top
+      ? L(lang, `; il più ripetuto (${fmt(dup.top.n)} volte, ${fmt(dup.top.authors)} ${dup.top.authors === 1 ? 'account' : 'account'}, ${dup.top.sources}): «${dup.top.text}…»`,
+        `; the most repeated (${fmt(dup.top.n)} times, ${fmt(dup.top.authors)} account${dup.top.authors === 1 ? '' : 's'}, ${dup.top.sources}): “${dup.top.text}…”`)
+      : '';
     findings.push({
       id: 'duplicates', area: 'coherence', severity: 'caution',
       observation: L(lang, 'Molti contenuti hanno lo stesso testo', 'Many items share the same text'),
-      evidence: L(lang, `${fmt(dups)} menzioni (${fmt((dups / cur.n) * 100)}%) ripetono un testo già presente`,
-        `${fmt(dups)} mentions (${fmt((dups / cur.n) * 100)}%) repeat a text already present`),
+      evidence: L(lang, `${fmt(dups)} menzioni (${fmt((dups / cur.n) * 100)}%) ripetono un testo già presente${worst}`,
+        `${fmt(dups)} mentions (${fmt((dups / cur.n) * 100)}%) repeat a text already present${worst}`),
       why: L(lang, 'ripubblicazioni, lanci d’agenzia copiati o bot gonfiano il volume senza aggiungere voci.',
         'reposts, copied wire stories or bots inflate volume without adding voices.'),
       confidence: 'medium',
