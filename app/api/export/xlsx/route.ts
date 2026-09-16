@@ -4,6 +4,8 @@ import { getCurrentProject } from '@/lib/data';
 import { collectExportData, parseExportOptions, parseStudioIds, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
 import { resolveStudioBlocks } from '@/lib/studio';
 import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
+import { competitiveTitle, findingGrid, overallLabel, periodLine, verdictGroups, verdictLabel } from '@/lib/kpi-export';
+import type { KpiUnit } from '@/lib/kpi-standard';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -23,6 +25,11 @@ function sheet(wb: ExcelJS.Workbook, name: string, columns: { header: string; ke
   ws.headerFooter = { oddFooter: `&L&7${AI_DISCLOSURE_SHORT}&R&7&P / &N` };
   return ws;
 }
+
+/** Formato numerico di Excel per unità: il valore resta un numero ricalcolabile. */
+const NUM_FMT: Record<KpiUnit, string> = {
+  count: '#,##0', pct: '0.0"%"', points: '0.0', ratio: '0.00', index: '"×"0.0', perDay: '0.0',
+};
 
 export async function GET(req: Request) {
   const project = await getCurrentProject();
@@ -94,6 +101,134 @@ export async function GET(req: Request) {
     { header: 'Mentions (7 days)', key: 'n', width: 18 },
   ]);
   for (const r of data.dashboard.sentimentDist) wsS.addRow({ s: r.sentiment, n: r.n });
+  }
+
+  // 3·kpi. KPI standard — numeri veri, non testo: chi apre il file deve poter
+  // rifare i conti, e una cella "1.234,5" scritta come testo non si somma.
+  if (has('kpiStandard') && data.standard.raw.cur.n > 0) {
+    const k = data.standard;
+    const it = k.lang === 'it';
+    const verdicts = new Map(data.reliability.verdicts.map((v) => [v.id, v]));
+    const wsK = sheet(wb, 'Standard KPIs', [
+      { header: 'KPI', key: 'k', width: 34 },
+      { header: it ? 'Valore' : 'Value', key: 'v', width: 14 },
+      { header: it ? 'Periodo prec.' : 'Previous', key: 'p', width: 14 },
+      { header: 'Δ', key: 'd', width: 12 },
+      { header: it ? 'Δ% (Δ in punti per le percentuali)' : 'Δ% (Δ in points for percentages)', key: 'dp', width: 16 },
+      { header: it ? 'Tipo' : 'Type', key: 't', width: 12 },
+      { header: it ? 'Base (menzioni)' : 'Base (mentions)', key: 'b', width: 14 },
+      { header: it ? 'Affidabilità' : 'Reliability', key: 'r', width: 40 },
+      { header: 'Formula', key: 'f', width: 60 },
+      { header: it ? 'Note' : 'Notes', key: 'n', width: 60 },
+    ]);
+    for (const x of k.kpis) {
+      const v = verdicts.get(x.id);
+      const row = wsK.addRow({
+        k: x.label,
+        v: x.value ?? (it ? 'n.d.' : 'n/a'),
+        p: x.previous ?? (it ? 'n.d.' : 'n/a'),
+        d: x.delta ?? '',
+        dp: x.deltaPct === null ? '' : x.deltaPct / 100,
+        t: x.kind === 'absolute' ? (it ? 'assoluto' : 'absolute') : (it ? 'calcolato' : 'calculated'),
+        b: x.base,
+        r: v ? verdictLabel(v.verdict, k.lang) + (v.verdict !== 'reliable' ? ` — ${v.reason}` : '') : '',
+        f: x.formula ?? '', n: x.note ?? '',
+      });
+      for (const key of ['v', 'p', 'd'] as const) row.getCell(key).numFmt = NUM_FMT[x.unit];
+      row.getCell('dp').numFmt = '0.0%';
+    }
+    wsK.addRow({});
+    wsK.addRow({ k: periodLine(k) });
+    for (const n of k.notes) wsK.addRow({ k: n });
+
+    if (k.channels.length) {
+      const wsCh = sheet(wb, 'KPIs by channel', [
+        { header: it ? 'Canale' : 'Channel', key: 'c', width: 18 },
+        { header: it ? 'Menzioni' : 'Mentions', key: 'm', width: 11 },
+        { header: it ? 'Menzioni periodo prec.' : 'Previous mentions', key: 'pm', width: 14 },
+        { header: it ? '% sul totale' : '% of total', key: 's', width: 11 },
+        { header: it ? 'Reach potenziale' : 'Potential reach', key: 'r', width: 14 },
+        { header: 'Engagement', key: 'e', width: 12 },
+        { header: it ? 'Eng. medio' : 'Avg eng.', key: 'em', width: 11 },
+        { header: 'ER reach %', key: 'er', width: 11 },
+        { header: 'NSS', key: 'nss', width: 8 },
+        { header: it ? 'Δ% menzioni' : 'Δ% mentions', key: 'dm', width: 12 },
+      ]);
+      for (const c of k.channels) {
+        const row = wsCh.addRow({
+          c: sourceLabel(c.source) + (c.previousMentions === 0 && !k.previousIncomplete ? (it ? ' (nuova)' : ' (new)') : ''),
+          m: c.mentions, pm: c.previousMentions,
+          s: c.share === null ? '' : c.share / 100,
+          r: c.reach ?? 'n.d.', e: c.engagement ?? 'n.d.', em: c.engPerMention ?? 'n.d.',
+          er: c.erReach === null ? 'n.d.' : c.erReach / 100,
+          nss: c.nss ?? 'n.d.',
+          dm: c.deltaMentionsPct === null ? '' : c.deltaMentionsPct / 100,
+        });
+        row.getCell('s').numFmt = '0.0%';
+        row.getCell('er').numFmt = '0.00%';
+        row.getCell('dm').numFmt = '0.0%';
+        row.getCell('em').numFmt = '0.00';
+        row.getCell('nss').numFmt = '0.0';
+      }
+    }
+
+    if (k.competitive.length) {
+      const wsCo = sheet(wb, 'Competitive KPIs', [
+        { header: it ? 'Entità' : 'Entity', key: 'n', width: 22 },
+        { header: it ? 'Il tuo brand' : 'Your brand', key: 'b', width: 11 },
+        { header: it ? 'Menzioni' : 'Mentions', key: 'm', width: 11 },
+        { header: 'SOV', key: 'sov', width: 9 },
+        { header: it ? 'Δ SOV (punti)' : 'Δ SOV (points)', key: 'd', width: 13 },
+        { header: 'Engagement', key: 'e', width: 12 },
+        { header: 'SOE', key: 'soe', width: 9 },
+        { header: it ? 'Positive' : 'Positive', key: 'pos', width: 9 },
+        { header: 'Share of Positive Voice', key: 'spv', width: 20 },
+        { header: 'NSS', key: 'nss', width: 8 },
+      ]);
+      for (const c of k.competitive) {
+        const row = wsCo.addRow({
+          n: c.name, b: c.isOwnBrand ? (it ? 'sì' : 'yes') : '',
+          m: c.mentions,
+          sov: c.sov === null ? '' : c.sov / 100,
+          d: k.previousIncomplete || c.sovDeltaPoints === null ? '' : c.sovDeltaPoints,
+          e: c.engagement,
+          soe: c.soe === null ? '' : c.soe / 100,
+          pos: c.positive,
+          spv: c.spv === null ? '' : c.spv / 100,
+          nss: c.nss ?? 'n.d.',
+        });
+        for (const key of ['sov', 'soe', 'spv'] as const) row.getCell(key).numFmt = '0.0%';
+        row.getCell('d').numFmt = '+0.0;-0.0;0.0';
+        row.getCell('nss').numFmt = '0.0';
+      }
+      wsCo.addRow({});
+      wsCo.addRow({ n: competitiveTitle(k.lang) });
+    }
+  }
+
+  // 3·affidabilità. L'analisi critica L1 — rilievi, cosa non dire, verdetti.
+  if (has('reliability') && data.standard.raw.cur.n > 0) {
+    const r = data.reliability;
+    const lang = data.standard.lang;
+    const it = lang === 'it';
+    const g = findingGrid(r, lang);
+    const wsR = sheet(wb, 'Data reliability', g.headers.map((h, i) => ({ header: h, key: `c${i}`, width: [40, 50, 50, 12, 45][i] })));
+    for (const row of g.rows) {
+      const added = wsR.addRow(Object.fromEntries(row.map((v, i) => [`c${i}`, v])));
+      added.alignment = { wrapText: true, vertical: 'top' };
+    }
+    wsR.addRow({});
+    wsR.addRow({ c0: `${overallLabel(r, lang)} — ${r.overallReason}` }).font = { bold: true };
+    if (r.cannotSay.length) {
+      wsR.addRow({});
+      wsR.addRow({ c0: it ? 'Cosa non si può scrivere nel report' : 'What the report cannot say' }).font = { bold: true };
+      for (const c of r.cannotSay) wsR.addRow({ c0: c });
+    }
+    for (const grp of verdictGroups(r, lang)) {
+      wsR.addRow({});
+      wsR.addRow({ c0: grp.title }).font = { bold: true };
+      for (const item of grp.items) wsR.addRow({ c0: item });
+    }
   }
 
   // 3a. Health Index (market + brand + confronto)

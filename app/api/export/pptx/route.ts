@@ -5,6 +5,10 @@ import { briefToBlocks, collectExportData, parseExportOptions, parseStudioIds, s
 import { resolveStudioBlocks } from '@/lib/studio';
 import { SOURCE_META } from '@/lib/connectors';
 import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
+import {
+  cannotSayTitle, channelGrid, channelTitle, competitiveGrid, competitiveTitle, findingGrid, kpiGrid, kpiTitle,
+  overallLabel, peaksLine, periodLine, reliabilityTitle,
+} from '@/lib/kpi-export';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -104,6 +108,82 @@ export async function GET(req: Request) {
       { x: 0.5, y: 4.55, w: 12.3, h: 1.4, fontSize: 15, color: ACCENT },
     );
   }
+  }
+
+  // Una griglia di testo come tabella di slide: intestazione evidenziata,
+  // numeri allineati a destra (tutte le colonne tranne la prima e le ultime
+  // testuali).
+  const gridTable = (
+    slide: ReturnType<typeof newSlide>,
+    g: { headers: string[]; rows: string[][] },
+    o: { x: number; y: number; w: number; colW: number[]; fontSize?: number; textCols?: number[] },
+  ) => {
+    const fs = o.fontSize ?? 10;
+    const isText = (i: number) => i === 0 || (o.textCols ?? []).includes(i);
+    slide.addTable([
+      g.headers.map((t) => ({ text: t, options: { bold: true, color: TEXT, fill: { color: PANEL }, fontSize: fs } })),
+      ...g.rows.map((r) => r.map((t, i) => ({
+        text: t, options: { color: TEXT, fontSize: fs, align: (isText(i) ? 'left' : 'right') as 'left' | 'right' },
+      }))),
+    ], { x: o.x, y: o.y, w: o.w, colW: o.colW, border: { type: 'solid', color: '1E2A4A', pt: 1 } });
+  };
+
+  // ── KPI standard
+  if (has('kpiStandard') && data.standard.raw.cur.n > 0) {
+    const k = data.standard;
+    const sk = newSlide();
+    sk.addText(kpiTitle(k.lang), titleOpts);
+    sk.addText(periodLine(k), { x: 0.5, y: 0.95, w: 12.3, h: 0.3, fontSize: 10, color: MUTED });
+    const g = kpiGrid(k, data.reliability);
+    // L'affidabilità qui è solo l'etichetta: il motivo sta nella slide dedicata.
+    const rows = g.rows.map((r) => [...r.slice(0, 5), r[5].split(' — ')[0]]);
+    gridTable(sk, { headers: g.headers, rows }, { x: 0.5, y: 1.35, w: 12.3, colW: [4.3, 1.7, 1.7, 1.4, 1.2, 2.0], fontSize: 9, textCols: [5] });
+
+    if (k.channels.length || k.competitive.length) {
+      const sc = newSlide();
+      sc.addText(channelTitle(k.lang), titleOpts);
+      let y = 1.2;
+      if (k.channels.length) {
+        const ch = channelGrid(k);
+        const rowsCh = ch.rows.slice(0, 8);
+        gridTable(sc, { headers: ch.headers, rows: rowsCh }, { x: 0.5, y, w: 12.3, colW: [2.3, 1.2, 1.2, 1.4, 1.4, 1.2, 1.2, 1.1, 1.3], fontSize: 10 });
+        y += 0.32 * (rowsCh.length + 1) + 0.3;
+      }
+      const peaks = peaksLine(k);
+      if (peaks) { sc.addText(peaks, { x: 0.5, y, w: 12.3, h: 0.4, fontSize: 11, color: MUTED }); y += 0.5; }
+      if (k.competitive.length && y < 5.4) {
+        sc.addText(competitiveTitle(k.lang), { x: 0.5, y, w: 12.3, h: 0.35, fontSize: 13, bold: true, color: MUTED });
+        const cg = competitiveGrid(k);
+        gridTable(sc, { headers: cg.headers, rows: cg.rows.slice(0, Math.max(1, Math.floor((6.8 - y - 0.4) / 0.32) - 1)) },
+          { x: 0.5, y: y + 0.4, w: 12.3, colW: [3.3, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5], fontSize: 10 });
+      }
+    }
+  }
+
+  // ── Affidabilità dei dati (L1)
+  if (has('reliability') && data.standard.raw.cur.n > 0) {
+    const r = data.reliability;
+    const lang = data.standard.lang;
+    const sr = newSlide();
+    sr.addText(reliabilityTitle(lang), titleOpts);
+    const col = r.overall === 'suitable' ? '34D399' : r.overall === 'caution' ? 'FBBF24' : 'F87171';
+    sr.addText(`${overallLabel(r, lang)} — ${r.overallReason}`, { x: 0.5, y: 1.05, w: 12.3, h: 0.45, fontSize: 16, bold: true, color: col });
+    let y = 1.6;
+    if (r.cannotSay.length) {
+      sr.addText(cannotSayTitle(lang), { x: 0.5, y, w: 12.3, h: 0.35, fontSize: 13, bold: true, color: MUTED });
+      sr.addText(r.cannotSay.map((c) => ({ text: c, options: { bullet: true, breakLine: true } })),
+        { x: 0.5, y: y + 0.35, w: 12.3, h: 0.34 * r.cannotSay.length + 0.1, fontSize: 11, color: TEXT, valign: 'top' });
+      y += 0.45 + 0.34 * r.cannotSay.length + 0.15;
+    }
+    if (r.findings.length) {
+      const g = findingGrid(r, lang);
+      // Osservazione, evidenza e verifica: il "perché" e la confidenza restano
+      // nel documento, in una slide non ci stanno senza diventare illeggibili.
+      const pick = (row: string[]) => [row[0], row[1], row[4]];
+      const maxRows = Math.max(1, Math.floor((6.8 - y) / 0.62) - 1);
+      gridTable(sr, { headers: pick(g.headers), rows: g.rows.slice(0, maxRows).map(pick) },
+        { x: 0.5, y, w: 12.3, colW: [3.6, 4.7, 4.0], fontSize: 9, textCols: [1, 2] });
+    }
   }
 
   // ── Health Index (market + brand + confronto)

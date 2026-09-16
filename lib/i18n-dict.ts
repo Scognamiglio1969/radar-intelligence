@@ -37,6 +37,7 @@ const IT: Record<string, string> = {
   'nav.changes': 'Cosa è cambiato',
   'nav.audience': 'Pubblico',
   'nav.benchmark': 'Benchmark',
+  'nav.kpi': 'KPI e affidabilità',
   'nav.content': 'Contenuti top',
   'nav.messages': 'Ripresa dei messaggi',
   'nav.emv': 'Valore media',

@@ -25,6 +25,14 @@ function emptyData() {
     health: { theme: { total: 0, score: 0, grade: '', components: [] }, brand: null, compare: [] },
     pov: { facts: {}, pov: null },
     people: { ranking: [], cards: [] },
+    standard: {
+      lang: 'it', kpis: [], channels: [], daily: [], peaks: [], anomalies: [], topAuthors: [],
+      competitive: [], notes: [], previousIncomplete: false,
+      current: { from: new Date(0), to: new Date(0), days: 30 },
+      previous: { from: new Date(0), to: new Date(0), days: 30 },
+      raw: { cur: { n: 0 }, prev: { n: 0 } },
+    },
+    reliability: { overall: 'unsuitable', overallReason: '', findings: [], verdicts: [], cannotSay: [], historyWindows: 0 },
     allMentions: [],
   } as unknown as Parameters<typeof sectionFacts>[0];
 }

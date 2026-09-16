@@ -160,7 +160,8 @@ function provenanceNote(p: Provenance): string {
 
 /** Le sezioni che compongono un'edizione, nell'ordine. Quelle senza dati saltano. */
 const OUTLINE: { title: string; sections: SectionId[] }[] = [
-  { title: 'Il periodo in numeri', sections: ['kpi', 'volume', 'sentiment', 'topics'] },
+  { title: 'Il periodo in numeri', sections: ['kpi', 'kpiStandard', 'volume', 'sentiment', 'topics'] },
+  { title: 'Quanto reggono i numeri', sections: ['reliability'] },
   { title: 'La tesi', sections: ['pov'] },
   { title: 'I fatti del periodo', sections: ['brief', 'alerts', 'timeline'] },
   { title: 'Il confronto', sections: ['benchmark', 'sov'] },

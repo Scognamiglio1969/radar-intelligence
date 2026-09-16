@@ -7,6 +7,10 @@ import { getCurrentProject } from '@/lib/data';
 import { briefToBlocks, collectExportData, parseExportOptions, parseStudioIds, slugify, sourceLabel, todayStamp } from '@/lib/export-data';
 import { resolveStudioBlocks } from '@/lib/studio';
 import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
+import {
+  cannotSayTitle, channelGrid, channelTitle, competitiveGrid, competitiveTitle, findingGrid, kpiGrid, kpiTitle,
+  overallLabel, peaksLine, periodLine, reliabilityTitle, verdictGroups,
+} from '@/lib/kpi-export';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -85,6 +89,47 @@ export async function GET(req: Request) {
       bullet(`Overall sentiment: ${sentimentLabel}${kpi.avgSentiment !== null ? ` (score ${kpi.avgSentiment.toFixed(2)})` : ''}`),
       bullet(`${data.dashboard.topTopics.length} topics detected, ${data.alerts.length} recent alerts`),
     );
+  }
+
+  // KPI standard, con le formule
+  if (has('kpiStandard') && data.standard.raw.cur.n > 0) {
+    const k = data.standard;
+    const g = kpiGrid(k, data.reliability);
+    children.push(h1(kpiTitle(k.lang)), p(periodLine(k), { muted: true, size: 16 }), table(g.headers, g.rows));
+    for (const n of k.notes) children.push(p(n, { muted: true, size: 16 }));
+    children.push(h2(k.lang === 'it' ? 'Formule e note' : 'Formulas and notes'));
+    for (const x of k.kpis.filter((y) => y.formula || y.note)) {
+      children.push(bullet(`${x.label}: ${[x.formula, x.note].filter(Boolean).join(' · ')}`));
+    }
+    if (k.channels.length) {
+      const ch = channelGrid(k);
+      children.push(h2(channelTitle(k.lang)), table(ch.headers, ch.rows));
+    }
+    const peaks = peaksLine(k);
+    if (peaks) children.push(p(peaks));
+    if (k.competitive.length) {
+      const cg = competitiveGrid(k);
+      children.push(h2(competitiveTitle(k.lang)), table(cg.headers, cg.rows));
+    }
+  }
+
+  // Affidabilità dei dati (analisi critica L1)
+  if (has('reliability') && data.standard.raw.cur.n > 0) {
+    const r = data.reliability;
+    const lang = data.standard.lang;
+    children.push(h1(reliabilityTitle(lang)), p(`${overallLabel(r, lang)} — ${r.overallReason}`, { bold: true }));
+    if (r.cannotSay.length) {
+      children.push(h2(cannotSayTitle(lang)));
+      for (const c of r.cannotSay) children.push(bullet(c));
+    }
+    if (r.findings.length) {
+      const g = findingGrid(r, lang);
+      children.push(table(g.headers, g.rows));
+    }
+    for (const grp of verdictGroups(r, lang)) {
+      children.push(h2(grp.title));
+      for (const item of grp.items) children.push(bullet(item));
+    }
   }
 
   // Health Index (market + brand + confronto)

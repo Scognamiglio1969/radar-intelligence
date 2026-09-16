@@ -12,6 +12,9 @@ import { geoDistribution, emotionDistribution, brandHealthReport, momentumQuadra
 import { getPovCached } from '@/lib/pov';
 import { detectPeople, personCard, peopleRanking } from '@/lib/people-insights';
 import { SOURCE_META } from '@/lib/connectors';
+import { standardKpis } from '@/lib/kpi-standard';
+import { assessReliability } from '@/lib/data-reliability';
+import { getContentLocale } from '@/lib/content-locale';
 import type { projects } from '@/lib/db/schema';
 
 export type Project = typeof projects.$inferSelect;
@@ -85,7 +88,14 @@ export async function collectExportData(project: Project, days = 30) {
   // Solo se già generato: l'export non deve mai far scattare una spesa AI.
   const pov = await getPovCached(project.id, 90);
 
-  return { project, people, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, sov, flow, network, crisis, pyramid, health, pov, allMentions };
+  // I KPI standard e il loro giudizio di affidabilità, sulla stessa finestra
+  // dell'export: sono SQL, non costano niente. La lingua è quella dei contenuti,
+  // perché note e rilievi sono testo che finisce nel documento.
+  const lang = await getContentLocale();
+  const standard = await standardKpis(project.id, days, lang);
+  const reliability = await assessReliability(project.id, standard);
+
+  return { project, people, standard, reliability, dashboard, benchmark, audience, ratings, briefs, alerts, trends, narratives, timeline, geo, emotions, momentum, constellation, sov, flow, network, crisis, pyramid, health, pov, allMentions };
 }
 
 export type ExportData = Awaited<ReturnType<typeof collectExportData>>;

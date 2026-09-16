@@ -3,6 +3,10 @@ import { SOURCE_META } from '@/lib/connectors';
 import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
 import { briefToBlocks, sourceLabel, type ExportData, type Project } from '@/lib/export-data';
 import type { SectionId } from '@/lib/export-sections';
+import {
+  cannotSayTitle, channelGrid, channelTitle, competitiveGrid, competitiveTitle, findingGrid, kpiGrid, kpiTitle,
+  overallLabel, peaksLine, periodLine, reliabilityTitle, verdictGroups,
+} from '@/lib/kpi-export';
 
 // ---------------------------------------------------------------------------
 // Motore PDF condiviso.
@@ -200,6 +204,65 @@ export const SECTION_RENDERERS: Record<SectionId, Section> = {
         c.doc.font('Helvetica-Bold').fontSize(18).fillColor(TEXT).text(value, x + 8, y0 + 26, { width: cw - 16 });
       });
       c.doc.y = y0 + 72;
+    },
+  },
+
+  kpiStandard: {
+    has: (d) => d.standard.raw.cur.n > 0,
+    render: (c, d) => {
+      const k = d.standard;
+      c.heading(kpiTitle(k.lang));
+      c.para(periodLine(k), { size: 8, color: MUTED, gap: 0.3 });
+      const g = kpiGrid(k, d.reliability);
+      c.table(g.headers, g.rows, [0.3, 0.12, 0.12, 0.1, 0.1, 0.26], ['left', 'right', 'right', 'right', 'right', 'left']);
+      for (const n of k.notes) c.para(n, { size: 8, color: MUTED, gap: 0.2 });
+      // Le formule sotto la tabella, non dentro: in una colonna stretta di A4
+      // sarebbero illeggibili, e chi rifà il conto le cerca comunque qui.
+      const formulas = k.kpis.filter((x) => x.formula || x.note);
+      if (formulas.length) {
+        c.para(k.lang === 'it' ? 'Formule e note' : 'Formulas and notes', { bold: true, size: 9, gap: 0.1 });
+        for (const x of formulas) {
+          c.para(`${x.label}: ${[x.formula, x.note].filter(Boolean).join(' · ')}`, { size: 7.5, color: MUTED, gap: 0.05 });
+        }
+        c.para('', { gap: 0.3 });
+      }
+      if (k.channels.length) {
+        c.para(channelTitle(k.lang), { bold: true, size: 10, gap: 0.2 });
+        const ch = channelGrid(k);
+        c.table(ch.headers, ch.rows, [0.19, 0.1, 0.1, 0.11, 0.11, 0.09, 0.09, 0.09, 0.12],
+          ['left', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right']);
+      }
+      const peaks = peaksLine(k);
+      if (peaks) c.para(peaks, { size: 9, gap: 0.4 });
+      if (k.competitive.length) {
+        c.para(competitiveTitle(k.lang), { bold: true, size: 10, gap: 0.2 });
+        const cg = competitiveGrid(k);
+        c.table(cg.headers, cg.rows, [0.28, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12],
+          ['left', 'right', 'right', 'right', 'right', 'right', 'right']);
+      }
+    },
+  },
+
+  reliability: {
+    has: (d) => d.standard.raw.cur.n > 0,
+    render: (c, d) => {
+      const r = d.reliability;
+      const lang = d.standard.lang;
+      c.heading(reliabilityTitle(lang));
+      c.para(`${overallLabel(r, lang)} — ${r.overallReason}`, { bold: true, size: 11, gap: 0.4 });
+      if (r.cannotSay.length) {
+        c.para(cannotSayTitle(lang), { bold: true, size: 10, gap: 0.1 });
+        for (const x of r.cannotSay) c.para(`•  ${x}`, { size: 9, gap: 0.1 });
+        c.para('', { gap: 0.3 });
+      }
+      if (r.findings.length) {
+        const g = findingGrid(r, lang);
+        c.table(g.headers, g.rows, [0.22, 0.24, 0.24, 0.1, 0.2]);
+      }
+      for (const grp of verdictGroups(r, lang)) {
+        c.para(grp.title, { bold: true, size: 9.5, gap: 0.1 });
+        c.para(grp.items.join(' · '), { size: 8.5, color: MUTED, gap: 0.3 });
+      }
     },
   },
 

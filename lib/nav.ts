@@ -3,7 +3,7 @@ import {
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, MonitorPlay, Network, History, LayoutGrid, Lightbulb,
   MessageSquareQuote, Euro, Award, Trophy, FileClock, BookOpen, LineChart,
-  UserRound, Shapes, UploadCloud,
+  UserRound, Shapes, UploadCloud, Gauge,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -51,6 +51,7 @@ export const NAV: NavItem[] = [
   { href: '/insights', label: 'Explore insights', key: 'nav.insights', icon: LayoutGrid, primary: true, also: ['charts', 'galaxy', 'map', 'emotions', 'flow'] },
   { href: '/audience', label: 'Audience', key: 'nav.audience', icon: Users, also: ['authors', 'communities'] },
   { href: '/benchmark', label: 'Benchmark', key: 'nav.benchmark', icon: BarChart3, also: ['competitors', 'share of voice', 'sov', 'trends'] },
+  { href: '/kpi', label: 'KPIs & reliability', key: 'nav.kpi', icon: Gauge, also: ['kpi', 'nss', 'net sentiment', 'soe', 'share of engagement', 'engagement rate', 'affidabilità', 'reliability', 'formule', 'glossario', 'analisi critica'] },
   { href: '/content', label: 'Top content', key: 'nav.content', icon: Star, also: ['best posts', 'quality'] },
   { href: '/emv', label: 'Media value', key: 'nav.emv', icon: Euro, also: ['emv', 'earned'] },
   { href: '/measures', label: 'Measures & people', key: 'nav.measures', icon: LineChart, also: ['people', 'personal branding', 'followers', 'metrics', 'spreadsheet'] },

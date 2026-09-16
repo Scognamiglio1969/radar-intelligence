@@ -9,6 +9,8 @@ export type ExportSection = { id: string; label: string; group: string };
 export const EXPORT_SECTIONS = [
   // Overview — il colpo d'occhio del progetto
   { id: 'kpi', label: 'Summary (KPIs)', group: 'Overview' },
+  { id: 'kpiStandard', label: 'Standard KPIs (with formulas)', group: 'Overview' },
+  { id: 'reliability', label: 'Data reliability (critical analysis L1)', group: 'Overview' },
   { id: 'health', label: 'Brand Health Index', group: 'Overview' },
   { id: 'trends', label: 'Emerging trends', group: 'Overview' },
   { id: 'volume', label: 'Volume by source', group: 'Overview' },

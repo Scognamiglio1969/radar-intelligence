@@ -119,6 +119,37 @@ export function sectionFacts(d: ExportData, id: SectionId): string {
         `temi rilevati: ${d.dashboard.topTopics.length}`,
       ].join('\n');
     }
+    case 'kpiStandard': {
+      const k = d.standard;
+      if (!k.raw.cur.n) return '';
+      const verdicts = new Map(d.reliability.verdicts.map((v) => [v.id, v.verdict]));
+      const lines = [`periodo ${k.current.from.toISOString().slice(0, 10)} → ${k.current.to.toISOString().slice(0, 10)}, confronto con i ${k.current.days} giorni precedenti`];
+      for (const x of k.kpis) {
+        if (x.value === null) { lines.push(`${x.label}: non disponibile (${x.note ?? 'dato assente'})`); continue; }
+        const dlt = x.deltaPct !== null ? `, variazione ${x.deltaPct.toFixed(1)}%`
+          : x.delta !== null ? `, variazione ${x.delta.toFixed(1)} ${x.unit === 'pct' || x.unit === 'points' ? 'punti' : ''}` : '';
+        lines.push(`${x.label}: ${x.value.toFixed(x.unit === 'count' ? 0 : 2)}${dlt}; affidabilità: ${verdicts.get(x.id) ?? 'n.d.'}`);
+      }
+      for (const c of k.channels.slice(0, 6)) {
+        lines.push(`canale ${sourceLabel(c.source)}: ${c.mentions} menzioni${c.previousMentions === 0 ? ' (fonte nuova nel periodo)' : ''}, NSS ${c.nss === null ? 'n.d.' : c.nss.toFixed(0)}`);
+      }
+      for (const c of k.competitive) {
+        lines.push(`${c.name}${c.isOwnBrand ? ' (brand)' : ''}: SOV ${c.sov?.toFixed(1) ?? 'n.d.'}%, SOE ${c.soe?.toFixed(1) ?? 'n.d.'}%, NSS ${c.nss?.toFixed(0) ?? 'n.d.'}`);
+      }
+      lines.push(...k.notes);
+      return lines.join('\n');
+    }
+    case 'reliability': {
+      const r = d.reliability;
+      if (!d.standard.raw.cur.n) return '';
+      // Il commento deve rispettare questi limiti: sono le cose che i numeri
+      // NON permettono di dire, e il modello le riceve come fatti.
+      return [
+        `giudizio complessivo sui dati: ${r.overall} (${r.overallReason})`,
+        ...r.findings.map((f) => `rilievo (${f.severity}): ${f.observation} — ${f.evidence}`),
+        ...r.cannotSay.map((c) => `vincolo: ${c}`),
+      ].join('\n');
+    }
     case 'health': {
       const t = d.health.theme;
       if (!t.total) return '';
