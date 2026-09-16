@@ -37,6 +37,12 @@ export const projects = pgTable('projects', {
   talkwalkerProject: text('talkwalker_project'),
   /** Topic Talkwalker da cui prendere i documenti; vuoto = tutto il progetto. */
   talkwalkerTopics: jsonb('talkwalker_topics').$type<string[]>().notNull().default([]),
+  /**
+   * Che cosa seguire negli studi clinici: farmaci, condizioni, sponsor.
+   * Vuoto = la sezione è spenta. Non si riusano le parole chiave del progetto:
+   * "Juventus" o "Bitcoin" in un registro di studi clinici trovano solo rumore.
+   */
+  evidenceTerms: jsonb('evidence_terms').$type<string[]>().notNull().default([]),
   // Proprietario del progetto (chi lo ha creato); null = legacy/condiviso a tutti
   ownerId: integer('owner_id'),
   // 'private' = solo il proprietario e l'admin; 'shared' = tutto il team lo vede
@@ -532,4 +538,73 @@ export const studioCharts = pgTable('studio_charts', {
   commentFor: text('comment_for'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Le verifiche dei fact-checker (Google Fact Check Tools).
+//
+// Una riga per affermazione verificata, per progetto. Le recensioni di più
+// testate sulla stessa affermazione stanno insieme: che due fact-checker
+// arrivino a verdetti diversi è un'informazione, non un doppione.
+// ---------------------------------------------------------------------------
+export type FactReview = {
+  publisher: string; site?: string; url: string; title?: string;
+  reviewDate?: string; rating: string; language?: string;
+};
+export type Circulation = {
+  total: number; last7: number; prev7: number;
+  sources: Record<string, number>;
+  sampleIds: number[];
+  lastSeen: string | null;
+  /** Le parole con cui l'affermazione è stata cercata nelle menzioni. */
+  terms: string[];
+  at: string;
+};
+export const factChecks = pgTable('fact_checks', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  claimKey: text('claim_key').notNull(),
+  claim: text('claim').notNull(),
+  claimant: text('claimant'),
+  claimDate: timestamp('claim_date', { withTimezone: true }),
+  reviews: jsonb('reviews').$type<FactReview[]>().notNull().default([]),
+  /** false | misleading | mixed | true | unverifiable | other */
+  verdict: text('verdict').notNull(),
+  language: text('language'),
+  query: text('query').notNull(),
+  firstSeen: timestamp('first_seen', { withTimezone: true }).notNull().defaultNow(),
+  lastSeen: timestamp('last_seen', { withTimezone: true }).notNull().defaultNow(),
+  /** Quanto l'affermazione circola nelle menzioni del progetto. */
+  circulation: jsonb('circulation').$type<Circulation>(),
+});
+
+// ---------------------------------------------------------------------------
+// Gli studi clinici (ClinicalTrials.gov).
+// ---------------------------------------------------------------------------
+export type TrialNews = {
+  total: number; last30: number; sampleIds: number[]; terms: string[]; at: string;
+};
+export const clinicalTrials = pgTable('clinical_trials', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  nctId: text('nct_id').notNull(),
+  title: text('title').notNull(),
+  status: text('status').notNull(),
+  phases: jsonb('phases').$type<string[]>().notNull().default([]),
+  studyType: text('study_type'),
+  sponsor: text('sponsor'),
+  sponsorClass: text('sponsor_class'),
+  conditions: jsonb('conditions').$type<string[]>().notNull().default([]),
+  interventions: jsonb('interventions').$type<{ type: string; name: string }[]>().notNull().default([]),
+  enrollment: integer('enrollment'),
+  startDate: text('start_date'),
+  completionDate: text('completion_date'),
+  firstPosted: text('first_posted'),
+  lastUpdate: text('last_update'),
+  hasResults: integer('has_results').notNull().default(0),
+  countries: jsonb('countries').$type<string[]>().notNull().default([]),
+  query: text('query').notNull(),
+  /** Quanto le notizie del progetto parlano di questo studio. */
+  news: jsonb('news').$type<TrialNews>(),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
 });

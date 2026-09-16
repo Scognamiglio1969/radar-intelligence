@@ -16,7 +16,7 @@ import { NAV_TABS } from '@/lib/nav';
 // morire per una riorganizzazione del menù.
 // ---------------------------------------------------------------------------
 
-const GROUPS: Record<string, { href: string; label: string }[]> = {
+const GROUPS: Record<string, { href: string; label: string; it?: string }[]> = {
   story: [
     { href: '/narratives', label: 'Narratives' },
     { href: '/timeline', label: 'Timeline' },
@@ -27,9 +27,15 @@ const GROUPS: Record<string, { href: string; label: string }[]> = {
     { href: '/measures', label: 'Measures' },
     { href: '/people', label: 'People' },
   ],
+  facts: [
+    { href: '/riscontri', label: 'Cross-checks', it: 'Riscontri' },
+    { href: '/verifiche', label: 'Fact checks', it: 'Verifiche' },
+    { href: '/evidenze', label: 'Clinical trials', it: 'Studi clinici' },
+    { href: '/podcast', label: 'Podcasts', it: 'Podcast' },
+  ],
 };
 
-export function SectionTabs({ group }: { group: keyof typeof GROUPS | string }) {
+export function SectionTabs({ group, lang = 'en' }: { group: keyof typeof GROUPS | string; lang?: 'it' | 'en' }) {
   const pathname = usePathname();
   const tabs = GROUPS[group] ?? [];
   if (!tabs.length) return null;
@@ -49,7 +55,7 @@ export function SectionTabs({ group }: { group: keyof typeof GROUPS | string }) 
                 : 'border-[var(--border)] text-slate-400 hover:bg-white/5 hover:text-slate-200'
             }`}>
             {Icon && <Icon className="size-3.5 shrink-0" />}
-            {t.label}
+            {lang === 'it' && t.it ? t.it : t.label}
           </Link>
         );
       })}

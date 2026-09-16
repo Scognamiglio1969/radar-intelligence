@@ -181,6 +181,8 @@ function NavLinks({ pathname, alertCount = 0, peopleCount = 0, t, onNavigate }: 
         // e una scheda accende la voce della famiglia a cui appartiene.
         const active = href === '/insights'
           ? pathname.startsWith('/insights')
+          : href === '/riscontri'
+            ? ['/riscontri', '/verifiche', '/evidenze', '/podcast'].includes(pathname)
           : href === '/story'
             ? ['/narratives', '/timeline', '/stakeholders', '/messages'].includes(pathname)
             : href === '/measures'

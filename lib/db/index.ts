@@ -390,6 +390,51 @@ const DDL = [
   `ALTER TABLE studio_charts ADD COLUMN IF NOT EXISTS comment_for TEXT`,
   `ALTER TABLE import_files ADD COLUMN IF NOT EXISTS constants JSONB NOT NULL DEFAULT '{}'`,
   `ALTER TABLE periodic_reports ADD COLUMN IF NOT EXISTS pov JSONB`,
+  // Verifiche dei fact-checker e studi clinici: fatti con una data e una
+  // fonte, non menzioni da interpretare (lib/factcheck, lib/trials).
+  `CREATE TABLE IF NOT EXISTS fact_checks (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    claim_key TEXT NOT NULL,
+    claim TEXT NOT NULL,
+    claimant TEXT,
+    claim_date TIMESTAMPTZ,
+    reviews JSONB NOT NULL DEFAULT '[]',
+    verdict TEXT NOT NULL,
+    language TEXT,
+    query TEXT NOT NULL,
+    first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+    circulation JSONB,
+    UNIQUE (project_id, claim_key)
+  )`,
+  `CREATE INDEX IF NOT EXISTS fact_checks_project ON fact_checks (project_id, verdict)`,
+  `CREATE TABLE IF NOT EXISTS clinical_trials (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    nct_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL,
+    phases JSONB NOT NULL DEFAULT '[]',
+    study_type TEXT,
+    sponsor TEXT,
+    sponsor_class TEXT,
+    conditions JSONB NOT NULL DEFAULT '[]',
+    interventions JSONB NOT NULL DEFAULT '[]',
+    enrollment INTEGER,
+    start_date TEXT,
+    completion_date TEXT,
+    first_posted TEXT,
+    last_update TEXT,
+    has_results INTEGER NOT NULL DEFAULT 0,
+    countries JSONB NOT NULL DEFAULT '[]',
+    query TEXT NOT NULL,
+    news JSONB,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (project_id, nct_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS clinical_trials_project ON clinical_trials (project_id, status)`,
+  `ALTER TABLE projects ADD COLUMN IF NOT EXISTS evidence_terms JSONB NOT NULL DEFAULT '[]'`,
 ];
 
 async function ensureSchema(db: DB) {

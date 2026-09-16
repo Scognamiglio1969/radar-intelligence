@@ -3,7 +3,7 @@ import {
   Star, Bell, FileText, Settings, MessageSquareText, GitBranch,
   Diff, PenLine, MonitorPlay, Network, History, LayoutGrid, Lightbulb,
   MessageSquareQuote, Euro, Award, Trophy, FileClock, BookOpen, LineChart,
-  UserRound, Shapes, UploadCloud, Gauge,
+  UserRound, Shapes, UploadCloud, Gauge, SearchCheck, FlaskConical, Podcast,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -59,6 +59,7 @@ export const NAV: NavItem[] = [
 
   { section: 'Interpret', key: 'nav.interpret' },
   { href: '/pov', label: 'Point of View', key: 'nav.pov', icon: Lightbulb, also: ['thesis', 'pov'] },
+  { href: '/riscontri', label: 'Facts & checks', key: 'nav.facts', icon: SearchCheck, also: ['fact check', 'verifiche', 'bufale', 'disinformazione', 'studi clinici', 'clinical trials', 'evidenze', 'podcast', 'riscontri', 'hype'] },
   { href: '/story', label: 'Story & stakeholders', key: 'nav.story', icon: GitBranch, also: ['narratives', 'timeline', 'stakeholders', 'messages', 'pull-through'] },
   { href: '/ask', label: 'Ask the data', key: 'nav.ask', icon: MessageSquareText, also: ['question', 'chat'] },
 
@@ -94,6 +95,9 @@ export const NAV_TABS: NavLink[] = [
   { href: '/stakeholders', label: 'Stakeholder map', key: 'nav.stakeholders', icon: Network },
   { href: '/messages', label: 'Message pull-through', key: 'nav.messages', icon: MessageSquareQuote },
   { href: '/people', label: 'People', key: 'nav.people', icon: UserRound },
+  { href: '/verifiche', label: 'Fact checks', key: 'nav.factchecks', icon: SearchCheck, also: ['fact check', 'bufale', 'debunk'] },
+  { href: '/evidenze', label: 'Clinical trials', key: 'nav.trials', icon: FlaskConical, also: ['clinicaltrials', 'studi clinici', 'farmaci'] },
+  { href: '/podcast', label: 'Podcasts', key: 'nav.podcasts', icon: Podcast, also: ['audio', 'episodi'] },
 ];
 
 /** Tutto ciò che la ricerca rapida può aprire. */

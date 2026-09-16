@@ -7,6 +7,8 @@ import { ingestReviews } from '@/lib/reviews';
 import { ingestSport } from '@/lib/sport';
 import { ingestSearchInterest } from '@/lib/search-interest';
 import { ingestWikiEdits } from '@/lib/wikipedia';
+import { ingestFactChecks } from '@/lib/factcheck';
+import { ingestTrials } from '@/lib/trials';
 import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import {
   analyzePendingMentions, clusterNewsStories, generateDailyBrief, scoreTopContent,
@@ -122,6 +124,20 @@ export async function runPipeline(opts: { full?: boolean; digest?: boolean; proj
         return { tried: 0, edits: 0 };
       });
       if (wiki.tried) console.log(`[pipeline] wikipedia: ${wiki.edits} revisioni`);
+
+      // Verifiche e studi clinici: fatti con una data e una fonte, senza costo
+      // AI. Vanno DOPO l'ingestion, perché misurano quanto le affermazioni e
+      // i trattamenti circolano nelle menzioni appena raccolte.
+      const facts = await ingestFactChecks(project.id).catch((e) => {
+        console.error(`[pipeline] verifiche fallite per "${project.name}":`, e);
+        return { tried: 0, claims: 0 };
+      });
+      if (facts.tried) console.log(`[pipeline] verifiche: ${facts.claims} affermazioni`);
+      const trials = await ingestTrials(project.id).catch((e) => {
+        console.error(`[pipeline] studi clinici falliti per "${project.name}":`, e);
+        return { tried: 0, trials: 0 };
+      });
+      if (trials.tried) console.log(`[pipeline] studi clinici: ${trials.trials}`);
 
       // Se il proprietario è "dormiente" (membro senza AI), si raccolgono i dati
       // ma si saltano tutte le analisi Claude (nessun costo API).
