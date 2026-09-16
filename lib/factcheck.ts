@@ -191,11 +191,14 @@ export async function ingestFactChecks(projectId: number): Promise<{ tried: numb
       const rows = (await searchClaims(c.q, key, c.lang))
         .map((x) => toRow(x, c.q))
         .filter((r): r is NonNullable<typeof r> => r !== null);
-      for (const r of rows) {
-        await db.insert(factChecks).values({ projectId, ...r })
+      // A blocchi, e senza doppioni nello stesso blocco (una query che trova
+      // la stessa affermazione due volte romperebbe l'aggiornamento).
+      const unique = [...new Map(rows.map((r) => [r.claimKey, r])).values()];
+      for (let i = 0; i < unique.length; i += 50) {
+        await db.insert(factChecks).values(unique.slice(i, i + 50).map((r) => ({ projectId, ...r })))
           .onConflictDoUpdate({
             target: [factChecks.projectId, factChecks.claimKey],
-            set: { reviews: r.reviews, verdict: r.verdict, lastSeen: new Date() },
+            set: { reviews: sql`excluded.reviews`, verdict: sql`excluded.verdict`, lastSeen: sql`now()` },
           });
       }
       stored += rows.length;
@@ -237,6 +240,10 @@ export function signalOf(verdict: Verdict, c: Pick<Circulation, 'last7' | 'prev7
  * Per ogni affermazione: quante menzioni degli ultimi 90 giorni contengono
  * tutte le sue parole distintive, quante nell'ultima settimana e in quella
  * prima, da quali fonti, e le più viste come prova.
+ *
+ * Una sola lettura dell'archivio (ricerca full-text con tutte le
+ * affermazioni in OR), poi l'attribuzione qui: una ricerca per affermazione
+ * su un progetto da centomila menzioni erano centoventi letture complete.
  */
 export async function measureCirculation(projectId: number, now = new Date()): Promise<number> {
   const db = await getDb();
@@ -246,39 +253,60 @@ export async function measureCirculation(projectId: number, now = new Date()): P
   const since = new Date(now.getTime() - 90 * DAY);
   const d7 = now.getTime() - 7 * DAY;
   const d14 = now.getTime() - 14 * DAY;
-  const text = sql`(coalesce(${mentions.title}, '') || ' ' || ${mentions.content})`;
 
-  for (const c of claims) {
-    const terms = distinctiveTerms(c.claim);
-    if (terms.length < 2) continue;
-    const rows = await db.select({
-      id: mentions.id, source: mentions.source,
-      at: mentions.publishedAt, eng: mentions.engagementScore,
+  const withTerms = claims
+    .map((c) => ({ ...c, terms: distinctiveTerms(c.claim) }))
+    .filter((c) => c.terms.length >= 2);
+
+  type Hit = { id: number; source: string; at: Date; eng: number; text: string };
+  let rows: Hit[] = [];
+  if (withTerms.length) {
+    const query = sql.join(
+      withTerms.map((c) => sql`plainto_tsquery('simple', ${c.terms.join(' ')})`),
+      sql` || `,
+    );
+    rows = await db.select({
+      id: mentions.id, source: mentions.source, at: mentions.publishedAt, eng: mentions.engagementScore,
+      text: sql<string>`lower(coalesce(${mentions.title}, '') || ' ' || ${mentions.content})`,
     }).from(mentions).where(and(
       eq(mentions.projectId, projectId),
       gte(mentions.publishedAt, since),
-      ...terms.map((t) => sql`${text} ilike ${`%${t}%`}`),
-    )).limit(2000);
+      sql`to_tsvector('simple', coalesce(${mentions.title}, '') || ' ' || ${mentions.content}) @@ (${query})`,
+    )).limit(20000);
+  }
 
+  const updates: { id: number; circulation: Circulation }[] = [];
+  for (const c of withTerms) {
+    const needles = c.terms.map((t) => t.toLowerCase());
+    const mine = rows.filter((r) => needles.every((t) => r.text.includes(t)));
     const sources: Record<string, number> = {};
     let last7 = 0;
     let prev7 = 0;
     let lastSeen: Date | null = null;
-    for (const r of rows) {
+    for (const r of mine) {
       sources[r.source] = (sources[r.source] ?? 0) + 1;
       const t = r.at.getTime();
       if (t >= d7) last7++;
       else if (t >= d14) prev7++;
       if (!lastSeen || r.at > lastSeen) lastSeen = r.at;
     }
-    const circulation: Circulation = {
-      total: rows.length, last7, prev7, sources,
-      sampleIds: [...rows].sort((a, b) => b.eng - a.eng).slice(0, 8).map((r) => r.id),
-      lastSeen: lastSeen?.toISOString() ?? null,
-      terms,
-      at: now.toISOString(),
-    };
-    await db.update(factChecks).set({ circulation }).where(eq(factChecks.id, c.id));
+    updates.push({
+      id: c.id,
+      circulation: {
+        total: mine.length, last7, prev7, sources,
+        sampleIds: [...mine].sort((a, b) => b.eng - a.eng).slice(0, 8).map((r) => r.id),
+        lastSeen: lastSeen?.toISOString() ?? null,
+        terms: c.terms,
+        at: now.toISOString(),
+      },
+    });
+  }
+  for (let i = 0; i < updates.length; i += 100) {
+    const values = sql.join(updates.slice(i, i + 100).map((u) => sql`(${u.id}::int, ${JSON.stringify(u.circulation)}::jsonb)`), sql`, `);
+    await db.execute(sql`
+      update fact_checks as f set circulation = v.circulation
+      from (values ${values}) as v(id, circulation)
+      where f.id = v.id`);
   }
   return claims.length;
 }

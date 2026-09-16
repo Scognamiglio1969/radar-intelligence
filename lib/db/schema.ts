@@ -583,6 +583,8 @@ export const factChecks = pgTable('fact_checks', {
 // ---------------------------------------------------------------------------
 export type TrialNews = {
   total: number; last30: number; sampleIds: number[]; terms: string[]; at: string;
+  /** Le stesse misure per ciascun nome cercato (in minuscolo). */
+  byTerm?: Record<string, { total: number; last30: number; sampleIds: number[] }>;
 };
 export const clinicalTrials = pgTable('clinical_trials', {
   id: serial('id').primaryKey(),

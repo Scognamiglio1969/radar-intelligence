@@ -17,6 +17,8 @@ import { saveEvidenceTermsAction } from './actions';
 // ---------------------------------------------------------------------------
 
 export const metadata = { title: 'Clinical trials' };
+// Il primo "Salva e cerca" raccoglie gli studi e li collega alle notizie.
+export const maxDuration = 120;
 
 const STATUS_EN: Record<string, string> = {
   RECRUITING: 'recruiting', NOT_YET_RECRUITING: 'not yet recruiting', ACTIVE_NOT_RECRUITING: 'active',

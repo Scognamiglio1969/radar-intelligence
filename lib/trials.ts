@@ -242,14 +242,20 @@ export async function ingestTrials(projectId: number): Promise<{ tried: number; 
     const rows = (await searchStudies(term))
       .map((s) => toTrialRow(s, term))
       .filter((r): r is NonNullable<typeof r> => r !== null);
-    for (const r of rows) {
-      await db.insert(clinicalTrials).values({ projectId, ...r })
+    // A blocchi, non uno per uno: cento studi erano cento andate e ritorno.
+    // Lo stesso studio può tornare due volte nella stessa pagina di risultati,
+    // e un blocco non può aggiornare due volte la stessa riga.
+    const unique = [...new Map(rows.map((r) => [r.nctId, r])).values()];
+    for (let i = 0; i < unique.length; i += 50) {
+      await db.insert(clinicalTrials).values(unique.slice(i, i + 50).map((r) => ({ projectId, ...r })))
         .onConflictDoUpdate({
           target: [clinicalTrials.projectId, clinicalTrials.nctId],
           set: {
-            title: r.title, status: r.status, phases: r.phases, enrollment: r.enrollment,
-            completionDate: r.completionDate, lastUpdate: r.lastUpdate, hasResults: r.hasResults,
-            interventions: r.interventions, countries: r.countries, fetchedAt: new Date(),
+            title: sql`excluded.title`, status: sql`excluded.status`, phases: sql`excluded.phases`,
+            enrollment: sql`excluded.enrollment`, completionDate: sql`excluded.completion_date`,
+            lastUpdate: sql`excluded.last_update`, hasResults: sql`excluded.has_results`,
+            interventions: sql`excluded.interventions`, countries: sql`excluded.countries`,
+            fetchedAt: sql`now()`,
           },
         });
     }
@@ -261,43 +267,78 @@ export async function ingestTrials(projectId: number): Promise<{ tried: number; 
 
 const DAY = 86400_000;
 
-/** Quante menzioni del progetto nominano ciascuno studio o i suoi trattamenti. */
+/**
+ * Quante menzioni del progetto nominano ciascuno studio o i suoi trattamenti.
+ *
+ * UNA sola lettura delle menzioni: una ricerca con tutti i nomi trova le
+ * menzioni che ne contengono almeno uno, e solo su quelle si guarda quale. La prima versione interrogava l'archivio una volta per nome,
+ * e su un progetto da ventimila menzioni ci metteva più di due minuti.
+ *
+ * I conteggi restano PER NOME: un trattamento ha le sue menzioni, non quelle
+ * dello studio in cui compare accanto a un farmaco più famoso.
+ */
 export async function linkTrialNews(projectId: number, now = new Date()): Promise<void> {
   const db = await getDb();
   const trials = await db.select({ id: clinicalTrials.id, nctId: clinicalTrials.nctId, interventions: clinicalTrials.interventions })
     .from(clinicalTrials).where(eq(clinicalTrials.projectId, projectId));
+  if (!trials.length) return;
   const since = new Date(now.getTime() - 90 * DAY);
   const d30 = now.getTime() - 30 * DAY;
-  const text = sql`(coalesce(${mentions.title}, '') || ' ' || ${mentions.content})`;
 
-  // Molti studi condividono lo stesso trattamento: si interroga una volta per
-  // nome, non una volta per studio.
-  const cache = new Map<string, { id: number; at: Date; eng: number }[]>();
-  const find = async (term: string) => {
-    const key = term.toLowerCase();
-    if (!cache.has(key)) {
-      const rows = await db.select({ id: mentions.id, at: mentions.publishedAt, eng: mentions.engagementScore })
-        .from(mentions)
-        .where(and(eq(mentions.projectId, projectId), gte(mentions.publishedAt, since), sql`${text} ilike ${`%${term}%`}`))
-        .limit(1000);
-      cache.set(key, rows);
+  const termsOf = new Map(trials.map((t) => [t.id, newsTerms(t)]));
+  const allTerms = [...new Set([...termsOf.values()].flat().map((t) => t.toLowerCase()))];
+  if (!allTerms.length) return;
+  // Ricerca full-text di Postgres, non un'espressione regolare: sui dati
+  // veri (96.634 menzioni, 265 nomi) 9,5 secondi contro 59. Trova le
+  // menzioni candidate; quale nome contengano lo decide il confronto qui sotto.
+  const query = sql.join(allTerms.map((t) => sql`phraseto_tsquery('simple', ${t})`), sql` || `);
+
+  const rows = await db.select({
+    id: mentions.id, at: mentions.publishedAt, eng: mentions.engagementScore,
+    text: sql<string>`lower(coalesce(${mentions.title}, '') || ' ' || ${mentions.content})`,
+  }).from(mentions).where(and(
+    eq(mentions.projectId, projectId),
+    gte(mentions.publishedAt, since),
+    sql`to_tsvector('simple', coalesce(${mentions.title}, '') || ' ' || ${mentions.content}) @@ (${query})`,
+  )).limit(20000);
+
+  const byTerm = new Map<string, { id: number; at: Date; eng: number }[]>();
+  for (const r of rows) {
+    for (const term of allTerms) {
+      if (!r.text.includes(term)) continue;
+      const list = byTerm.get(term) ?? [];
+      list.push({ id: r.id, at: r.at, eng: r.eng });
+      byTerm.set(term, list);
     }
-    return cache.get(key)!;
-  };
+  }
 
+  const summarize = (list: { id: number; at: Date; eng: number }[]) => ({
+    total: list.length,
+    last30: list.filter((r) => r.at.getTime() >= d30).length,
+    sampleIds: [...list].sort((a, b) => b.eng - a.eng).slice(0, 8).map((r) => r.id),
+  });
+
+  const updates: { id: number; news: TrialNews }[] = [];
   for (const t of trials) {
-    const terms = newsTerms(t);
-    const hits = new Map<number, { at: Date; eng: number }>();
-    for (const term of terms) for (const r of await find(term)) hits.set(r.id, r);
-    const list = [...hits.entries()];
-    const news: TrialNews = {
-      total: list.length,
-      last30: list.filter(([, r]) => r.at.getTime() >= d30).length,
-      sampleIds: list.sort((a, b) => b[1].eng - a[1].eng).slice(0, 8).map(([id]) => id),
-      terms,
-      at: now.toISOString(),
-    };
-    await db.update(clinicalTrials).set({ news }).where(eq(clinicalTrials.id, t.id));
+    const terms = termsOf.get(t.id) ?? [];
+    const union = new Map<number, { id: number; at: Date; eng: number }>();
+    const perTerm: Record<string, { total: number; last30: number; sampleIds: number[] }> = {};
+    for (const term of terms) {
+      const list = byTerm.get(term.toLowerCase()) ?? [];
+      perTerm[term.toLowerCase()] = summarize(list);
+      for (const r of list) union.set(r.id, r);
+    }
+    updates.push({ id: t.id, news: { ...summarize([...union.values()]), terms, byTerm: perTerm, at: now.toISOString() } });
+  }
+  // Un'istruzione per blocco invece di una per studio: centoquaranta
+  // aggiornamenti singoli costavano più di un minuto di andata e ritorno.
+  for (let i = 0; i < updates.length; i += 100) {
+    const chunk = updates.slice(i, i + 100);
+    const values = sql.join(chunk.map((u) => sql`(${u.id}::int, ${JSON.stringify(u.news)}::jsonb)`), sql`, `);
+    await db.execute(sql`
+      update clinical_trials as c set news = v.news
+      from (values ${values}) as v(id, news)
+      where c.id = v.id`);
   }
 }
 
@@ -340,6 +381,16 @@ export async function trialsData(projectId: number) {
   const today = new Date().toISOString().slice(0, 10);
   const inYear = new Date(Date.now() + 365 * DAY).toISOString().slice(0, 10);
 
+  // "Semaglutide 1.0 mg" e "Semaglutide Pen Injector" sono la semaglutide:
+  // contate a parte, lo stesso farmaco occupa mezza tabella. Un nome che
+  // comincia con un altro nome già presente si riporta a quello.
+  const allNames = [...new Set(rows.flatMap((t) => newsTerms(t).slice(1)).map((n) => n.toLowerCase()))]
+    .sort((a, b) => a.length - b.length);
+  const canonical = (name: string) => {
+    const n = name.toLowerCase();
+    return allNames.find((base) => base !== n && n.startsWith(`${base} `)) ?? n;
+  };
+
   const interventions = new Map<string, InterventionRow>();
   for (const t of rows) {
     byStatus.set(t.status, (byStatus.get(t.status) ?? 0) + 1);
@@ -356,10 +407,16 @@ export async function trialsData(projectId: number) {
     if (t.completionDate && t.completionDate >= today && t.completionDate <= inYear
       && !['COMPLETED', 'TERMINATED', 'WITHDRAWN'].includes(t.status)) upcoming.push(t);
 
+    const seen = new Set<string>();
     for (const i of newsTerms(t).slice(1)) {
-      const key = i.toLowerCase();
+      const own = i.toLowerCase();
+      const key = canonical(i);
+      // Uno studio conta una volta per farmaco, anche se ne elenca tre dosi.
+      if (seen.has(key)) continue;
+      seen.add(key);
       const cur = interventions.get(key) ?? {
-        name: i, trials: 0, maxPhase: 0, anyResults: false, recruiting: 0, sponsors: [],
+        name: key === own ? i : (newsTerms(t).slice(1).find((x) => x.toLowerCase() === key) ?? key.replace(/^./, (c) => c.toUpperCase())),
+        trials: 0, maxPhase: 0, anyResults: false, recruiting: 0, sponsors: [],
         mentions: 0, last30: 0, gap: 'quiet' as Gap, sampleIds: [],
       };
       cur.trials++;
@@ -367,12 +424,15 @@ export async function trialsData(projectId: number) {
       cur.anyResults ||= t.hasResults === 1;
       if (t.status === 'RECRUITING') cur.recruiting++;
       if (t.sponsor && !cur.sponsors.includes(t.sponsor)) cur.sponsors.push(t.sponsor);
-      // Le menzioni di un trattamento sono quelle trovate per QUEL nome in
-      // qualunque studio: si prende il massimo, non la somma, perché sono le
-      // stesse menzioni viste da più studi.
-      cur.mentions = Math.max(cur.mentions, t.news?.total ?? 0);
-      cur.last30 = Math.max(cur.last30, t.news?.last30 ?? 0);
-      if ((t.news?.sampleIds.length ?? 0) > cur.sampleIds.length) cur.sampleIds = t.news!.sampleIds;
+      // Le menzioni di un trattamento sono quelle del SUO nome, non quelle
+      // dello studio: uno studio che confronta l'insulina con la semaglutide
+      // non deve prestare all'insulina le notizie sulla semaglutide.
+      const counts = t.news?.byTerm?.[key] ?? t.news?.byTerm?.[own];
+      if (counts) {
+        cur.mentions = Math.max(cur.mentions, counts.total);
+        cur.last30 = Math.max(cur.last30, counts.last30);
+        if (counts.sampleIds.length > cur.sampleIds.length) cur.sampleIds = counts.sampleIds;
+      }
       interventions.set(key, cur);
     }
   }
