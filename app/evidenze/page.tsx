@@ -1,6 +1,8 @@
 import { ExternalLink } from 'lucide-react';
 import { getCurrentProject } from '@/lib/data';
 import { getLocale } from '@/lib/i18n';
+import { getMeta } from '@/lib/db';
+import type { TermResolution } from '@/lib/trials';
 import { phaseLabel, STATUS_LABEL, trialsData } from '@/lib/trials';
 import { fmtNumber, type Lang } from '@/lib/kpi-standard';
 import { PageHeader, EmptyState } from '@/components/ui';
@@ -29,6 +31,7 @@ export default async function TrialsPage() {
   const project = await getCurrentProject();
   if (!project) return <EmptyState message={L(lang, 'Nessun progetto selezionato.', 'No project selected.')} />;
   const d = await trialsData(project.id);
+  const termNote = await getMeta<{ notes: TermResolution[]; at: string }>(`evidence_terms_note_${project.id}`);
   const recruiting = d.trials.filter((t) => t.status === 'RECRUITING').length;
   const withResults = d.trials.filter((t) => t.hasResults === 1).length;
   const hype = d.interventions.filter((i) => i.gap === 'hype');
@@ -59,6 +62,16 @@ export default async function TrialsPage() {
             {L(lang, 'Salva e cerca', 'Save and search')}
           </SubmitButton>
         </form>
+        {termNote?.notes.map((n) => (
+          <p key={n.input} className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-100">
+            {L(lang, `“${n.input}” non trova studi così com’è: il registro è in inglese e cerca per parole.`,
+              `“${n.input}” finds no trials as written: the registry is in English and searches by keyword.`)}{' '}
+            {n.kept.length
+              ? <>{L(lang, 'Seguo invece: ', 'Following instead: ')}{n.kept.map((k) => `${k.term} (${fmtNumber(k.studies, lang)} ${L(lang, 'studi', 'trials')})`).join(', ')}.</>
+              : L(lang, 'Nessuna delle sue parole trova studi: prova con il nome di un farmaco o di una condizione in inglese.', 'None of its words finds trials: try a drug or condition name in English.')}
+            {n.dropped.length > 0 && <span className="text-amber-200/60"> {L(lang, 'Scartati:', 'Dropped:')} {n.dropped.join(', ')}.</span>}
+          </p>
+        ))}
         {/* Fuori dal form: un bottone dentro un form lo invierebbe. */}
         {d.terms.length > 0 && (
           <div className="mt-2">

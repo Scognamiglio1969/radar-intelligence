@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gapOf, newsTerms, phaseLabel, phaseRank, toTrialRow } from '../lib/trials';
+import { candidateTerms, gapOf, newsTerms, phaseLabel, phaseRank, toTrialRow } from '../lib/trials';
 
 test('la fase più avanzata vince', () => {
   assert.equal(phaseRank(['PHASE2', 'PHASE3']), 3);
@@ -61,4 +61,11 @@ test('le procedure generiche non sono un nome da cercare nelle notizie', () => {
     { type: 'BIOLOGICAL', name: 'Pembrolizumab' },
   ] });
   assert.deepEqual(t, ['NCT9', 'MatchMiner-AI Artificial Intelligence Tool', 'Pembrolizumab']);
+});
+
+test('una frase in italiano diventa termini da registro', () => {
+  // Visto dal vivo: questa frase trovava zero studi.
+  assert.deepEqual(candidateTerms('semaglutide e ricerca AI sul tema obesità'), ['semaglutide', 'artificial intelligence', 'obesity']);
+  assert.deepEqual(candidateTerms('intelligenza artificiale, diabete'), ['artificial intelligence', 'diabetes']);
+  assert.deepEqual(candidateTerms('tirzepatide'), ['tirzepatide']);
 });

@@ -84,6 +84,108 @@ async function searchStudies(term: string): Promise<Study[]> {
   return data.studies ?? [];
 }
 
+// --- Dai termini dell'utente ai termini del registro -------------------------------
+
+/** Quanti studi trova un termine: la prova che il registro lo capisce. */
+export async function countStudies(term: string): Promise<number> {
+  const params = new URLSearchParams({ 'query.term': term, pageSize: '1', countTotal: 'true', format: 'json' });
+  const res = await fetch(`${API}?${params}`, {
+    headers: { 'User-Agent': UA, Accept: 'application/json' },
+    signal: AbortSignal.timeout(15000), cache: 'no-store',
+  });
+  if (!res.ok) return 0;
+  const data = await res.json() as { totalCount?: number };
+  return data.totalCount ?? 0;
+}
+
+// Il registro è in inglese. I termini medici italiani più comuni si traducono
+// qui, senza modello: una tabella corta sbaglia meno di una traduzione libera,
+// e quello che non conosce lo dice invece di inventarlo.
+const IT_EN: Record<string, string> = {
+  obesita: 'obesity', sovrappeso: 'overweight', diabete: 'diabetes', tumore: 'cancer', tumori: 'cancer',
+  cancro: 'cancer', carcinoma: 'carcinoma', leucemia: 'leukemia', linfoma: 'lymphoma', melanoma: 'melanoma',
+  ictus: 'stroke', infarto: 'myocardial infarction', cuore: 'heart disease', cardiopatia: 'heart disease',
+  ipertensione: 'hypertension', colesterolo: 'cholesterol', alzheimer: 'alzheimer', demenza: 'dementia',
+  parkinson: 'parkinson', depressione: 'depression', ansia: 'anxiety', autismo: 'autism', schizofrenia: 'schizophrenia',
+  emicrania: 'migraine', dolore: 'pain', asma: 'asthma', artrite: 'arthritis', osteoporosi: 'osteoporosis',
+  sclerosi: 'sclerosis', epilessia: 'epilepsy', insonnia: 'insomnia', sonno: 'sleep', fumo: 'smoking',
+  alcol: 'alcohol', vaccino: 'vaccine', vaccini: 'vaccine', gravidanza: 'pregnancy', menopausa: 'menopause',
+  fertilita: 'fertility', reni: 'kidney disease', rene: 'kidney disease', fegato: 'liver disease',
+  epatite: 'hepatitis', polmonite: 'pneumonia', influenza: 'influenza', malaria: 'malaria', tubercolosi: 'tuberculosis',
+  anziani: 'aging', invecchiamento: 'aging', nutrizione: 'nutrition', dieta: 'diet', esercizio: 'exercise',
+  riabilitazione: 'rehabilitation', telemedicina: 'telemedicine', ia: 'artificial intelligence',
+  ai: 'artificial intelligence', intelligenza: 'artificial intelligence', artificiale: 'artificial intelligence',
+  robotica: 'robotic surgery', genetica: 'genetic', terapia: 'therapy', farmaco: 'drug', dimagrimento: 'weight loss',
+  peso: 'weight loss',
+};
+
+const NOISE = new Set(['ricerca', 'tema', 'sul', 'sulla', 'studio', 'studi', 'nuovo', 'nuova', 'effetti', 'trattamento',
+  'della', 'delle', 'degli', 'nella', 'nelle', 'research', 'study', 'studies', 'about', 'with', 'from', 'effect', 'effects']);
+
+const foldIt = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/** Le parole di una frase che possono essere un termine del registro, tradotte se servono. */
+export function candidateTerms(phrase: string): string[] {
+  const out: string[] = [];
+  for (const raw of phrase.split(/[\s,;/]+/)) {
+    const w = foldIt(raw).replace(/[^a-z0-9-]/g, '');
+    if (!w || NOISE.has(w)) continue;
+    const t = IT_EN[w] ?? (w.length >= 5 ? raw.replace(/[^\p{L}\p{N}-]/gu, '') : null);
+    if (t && !out.some((x) => foldIt(x) === foldIt(t))) out.push(t);
+  }
+  return out;
+}
+
+export type TermResolution = { input: string; kept: { term: string; studies: number }[]; dropped: string[] };
+
+/**
+ * Trasforma quello che l'utente ha scritto in termini che il registro capisce.
+ *
+ * Un termine che trova studi resta com'è. Una frase che non ne trova ("semaglutide
+ * e ricerca AI sul tema obesità", visto dal vivo: zero studi) si spezza nelle
+ * parole utili, si traduce dove serve e si tiene solo ciò che il registro
+ * riconosce — dicendolo, perché l'utente deve sapere che cosa si sta seguendo.
+ */
+export async function resolveTrialTerms(inputs: string[], max = 5): Promise<{ terms: string[]; notes: TermResolution[] }> {
+  const terms: { term: string; studies: number }[] = [];
+  const notes: TermResolution[] = [];
+  for (const input of inputs) {
+    const direct = await countStudies(input);
+    if (direct > 0) { terms.push({ term: input, studies: direct }); continue; }
+    const candidates = candidateTerms(input).slice(0, 6);
+    // Prima l'incrocio: chi scrive "semaglutide e ricerca AI sul tema obesità"
+    // intende gli studi che tengono insieme le tre cose, non tutti gli studi
+    // sull'obesità (ventimila). Il registro cerca le parole tutte insieme.
+    if (candidates.length > 1) {
+      const combined = candidates.join(' ');
+      const n = await countStudies(combined);
+      if (n >= 5) {
+        notes.push({ input, kept: [{ term: combined, studies: n }], dropped: [] });
+        terms.push({ term: combined, studies: n });
+        continue;
+      }
+    }
+    const counted = await Promise.all(candidates.map(async (c) => ({ term: c, studies: await countStudies(c) })));
+    // Dal più specifico al più generico: con un tetto di termini, quelli che
+    // trovano poche centinaia di studi dicono di più di quelli che ne trovano
+    // ventimila.
+    const found = counted.filter((c) => c.studies > 0).sort((a, b) => a.studies - b.studies);
+    // Il termine più specifico fa da ancora: un termine generico gli si
+    // aggancia quando la coppia trova ancora studi ("semaglutide obesity"
+    // invece di tutti i ventimila studi sull'obesità).
+    const kept: { term: string; studies: number }[] = found.slice(0, 1);
+    for (const other of found.slice(1)) {
+      const pair = `${found[0].term} ${other.term}`;
+      const n = await countStudies(pair);
+      kept.push(n >= 5 ? { term: pair, studies: n } : other);
+    }
+    notes.push({ input, kept, dropped: counted.filter((c) => c.studies === 0).map((c) => c.term) });
+    terms.push(...kept);
+  }
+  const unique = terms.filter((t, i) => terms.findIndex((x) => foldIt(x.term) === foldIt(t.term)) === i);
+  return { terms: unique.slice(0, max).map((t) => t.term), notes };
+}
+
 // --- Le fasi, lette come un lettore le intende ---------------------------------------
 
 /** 0 = nessuna fase dichiarata (studi osservazionali), 0.5 = fase 1 precoce, poi 1…4. */
