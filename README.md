@@ -5,12 +5,12 @@
 ### Open-source media intelligence & social listening
 
 **The alternative to Talkwalker or Brandwatch that doesn't cost thousands a month.**
-21 data sources, an AI engine of your choice, and a set of signals enterprise tools
+25 data sources, an AI query builder that turns a sentence into tested boolean queries, an AI engine of your choice, and a set of signals enterprise tools
 don't have at all — self-hosted, bring-your-own-keys, running in 30 seconds flat.
 
 ![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
-![Connectors](https://img.shields.io/badge/connectors-21-success)
+![Connectors](https://img.shields.io/badge/connectors-25-success)
 ![AI](https://img.shields.io/badge/AI-Claude%20%7C%20OpenAI%20%7C%20Grok-8a63d2)
 ![Self-hosted](https://img.shields.io/badge/self--hosted-zero%20config-orange)
 
@@ -28,6 +28,58 @@ don't have at all — self-hosted, bring-your-own-keys, running in 30 seconds fl
 > mentions, topics and sentiment stay in their original language, because the interface
 > language must not alter the dataset. More languages are welcome as contributions — a
 > missing translation simply falls back to English.
+
+## Describe it in a sentence — Radar writes the queries
+
+Boolean queries are where most listening projects quietly go wrong: a missing synonym, a
+brand name that is also an everyday word, a competitor nobody remembered. So Radar doesn't
+hand you three boxes labelled *OR*, *AND* and *NOT*. You write what you want to follow the
+way you would say it to a colleague —
+
+> *Monitor the company Aurora Mobility in relation to the riders' strike and to city bans
+> on e-scooters, and against its competitors Volta Ride, Ruota and Metrolink.*
+
+— and the **query builder** (Setup → *Queries*) turns it into **building blocks**: a
+*subject*, the *contexts* to relate it to, the *competitors*, and an *exclude* block for the
+meanings you don't want. Each block is an OR of the ways people actually write it, in every
+language you follow; the AI adds the variants you would have forgotten and explains why
+each block exists. *(Fictional company and data throughout.)*
+
+![AI query builder](docs/screenshots/query-builder.png)
+
+From the blocks it composes **N queries** — the subject alone, the subject × each context,
+the subject against each competitor, each competitor on its own — every one an AND of
+blocks minus the noise. Edit a block once and every query using it changes; switch a query
+off, rename it, add a block by hand, or start from scratch without the AI at all (a rule-based
+parser understands the same kind of sentence, in Italian or English).
+
+**Test before you save.** *Test on real news* runs every term and every query against the
+last 7 days of Google News, so the numbers appear on the blocks before a single credit is
+spent. Radar then tells you what a person would notice only weeks later: a term that finds
+nothing (*misspelled, too specific, another language?*), a term that alone brings 94% of the
+results (*too generic or ambiguous* — "Ruota" also means *wheel*), a combination too narrow
+to ever fire, a competitor worth keeping as a sentinel:
+
+![Field test on real news](docs/screenshots/query-probe.png)
+
+Each query reads as a sentence, shows its **boolean syntax ready to copy** into Talkwalker,
+Brandwatch or any other tool, a sample of what it finds and how much the archive already
+holds:
+
+![The generated queries](docs/screenshots/query-queries.png)
+
+On save, collection follows the plan — each connector receives the groups in its own syntax,
+the slow ones rotate the queries across runs — and **every mention is tagged with the queries
+it satisfies**, the archive included. In Listening each query becomes a filter, so "Aurora ×
+riders' strike" is one click away:
+
+![Listening filtered by query](docs/screenshots/listening-queries.png)
+
+The model proposes, the data validates: the plan is checked against closed limits (16 blocks,
+20 terms each, 8 active queries), noise can never become a requirement, and projects created
+before the builder are converted without losing a keyword.
+
+---
 
 ## Screenshots
 
@@ -77,7 +129,11 @@ subset of the totals:
 ## Three kinds of project
 
 A Radar project starts from one of three places, and everything downstream — charts,
-insights, reports, exports — works the same whichever one you pick.
+insights, reports, exports — works the same whichever one you pick. Creating one asks only
+where the data comes from and what you want to monitor; the queries are built afterwards,
+in their own page.
+
+![Three kinds of project](docs/screenshots/project-types.png)
 
 **Listening**: Radar collects the conversation itself from public sources, and you read
 it as it arrives — relevance stars, sentiment, topics, translation on demand:
@@ -104,6 +160,18 @@ your Talkwalker contract (10 per call plus 1 per result), so a Talkwalker projec
 Talkwalker and nothing else, no other project ever touches it, and a daily ceiling
 (`TALKWALKER_DAILY_CREDITS`, 1000 by default — the standard package's daily limit) stops
 a heavy finger on *Refresh now* from burning a day's allowance before lunch.
+
+Connection happens with your own Talkwalker API token; Radar then lists the project's
+topics and you tick the ones to read:
+
+![Talkwalker project](docs/screenshots/talkwalker-project.png)
+
+For a Talkwalker project the query builder works as a **lens**, never as a search: it does
+not rewrite what Talkwalker collects and spends no extra credit. It tags the incoming
+documents by subject, context and competitor so you can filter them in Listening, and every
+query can be copied as boolean syntax to paste back into Talkwalker if you decide to:
+
+![Query builder as a lens on a Talkwalker project](docs/screenshots/talkwalker-lens.png)
 
 ### "Did it load correctly?"
 
@@ -181,6 +249,41 @@ slide in PowerPoint):
 Every exported file carries the **AI Act disclosure** (Reg. (EU) 2024/1689, art. 50) in
 its notes and in its file metadata — not in the title and not in the body, where it would
 read as part of the analysis.
+
+---
+
+## KPIs you can defend
+
+**KPIs & reliability** lists the standard social-listening indicators — mentions, velocity,
+unique authors, potential reach, engagement and its parts, amplification and conversation
+rates, net sentiment — each **with its formula on screen**, the previous period and the delta.
+Next to every number sits a judgement on how solid it is: reach computed on 40% of the
+mentions because the others don't carry it, days without collection, a net sentiment on too
+small a base. The summary on top says whether the data is fit for a report and which caveats
+must be disclosed; the same section travels into every export.
+
+![KPIs & reliability](docs/screenshots/kpi.png)
+
+## Facts & checks — what is said, next to what is known
+
+Not every source is listening. **Facts & checks** puts the conversation next to the sources
+that verify it:
+
+- **Cross-checks** — the page that ties them together: debunked claims still going around,
+  hot topics no fact-checker has ever looked at, news running ahead of the clinical evidence,
+  the voices that return every week in audio.
+- **Fact checks** — claims already rated by fact-checkers (Google Fact Check Tools, i.e. the
+  ClaimReview network), with **how much each one still circulates** in your mentions, whether
+  it is spreading more or less, and where verdicts conflict.
+- **Clinical trials** — ClinicalTrials.gov studies on the terms you follow, linked to the
+  news that cites them, so you can see when coverage is ahead of the evidence.
+- **Podcasts** — episodes from Podcast Index, with the shows that talk about the topic
+  every week.
+
+![Cross-checks](docs/screenshots/crosscheck.png)
+![Fact checks](docs/screenshots/factchecks.png)
+
+*(Fictional fact-checkers, claims and shows.)*
 
 ---
 
@@ -366,14 +469,22 @@ features turn on immediately.
 ## Ask it from your own assistant (MCP)
 
 Radar exposes a **Model Context Protocol** endpoint at `/api/mcp` — *streamable HTTP*, the
-transport Microsoft Copilot Studio speaks and Claude accepts for remote servers. Six
+transport Microsoft Copilot Studio speaks and Claude accepts for remote servers. Eleven
 read-only tools (`radar_projects`, `radar_overview`, `radar_mentions`, `radar_trends`,
-`radar_narratives`, `radar_briefs`) return what the pipeline already computed, so nothing
-there spends AI budget or data-source credits.
+`radar_narratives`, `radar_briefs`, `radar_kpis`, `radar_reliability`, `radar_fact_checks`,
+`radar_trials`, `radar_crosscheck`) return what the pipeline already computed, so nothing
+there spends AI budget or data-source credits. A library of nine **ready-made prompts** (monthly and weekly
+reports, daily digest, executive brief, alert and response, competitive benchmark, critical
+analysis, news against evidence…) ships with the server and shows up in the
+client's prompt menu, carrying the same data rules Radar applies in its own pages.
 
-Set `RADAR_MCP_TOKEN` to enable it: **without that variable the endpoint is off, not open**
-— an endpoint that exposes the whole archive must never stay public by forgetfulness.
-Clients authenticate with `Authorization: Bearer <token>` or `x-api-key`.
+The **MCP** page (Setup) manages it: turn it on by generating a token from the app — or set
+`RADAR_MCP_TOKEN` — test the endpoint, copy the configuration for Claude Code, Claude Desktop
+and Copilot Studio, and read every tool and prompt. **Without a token the endpoint is off,
+not open** — an endpoint that exposes the whole archive must never stay public by
+forgetfulness. Clients authenticate with `Authorization: Bearer <token>` or `x-api-key`.
+
+![MCP](docs/screenshots/mcp.png)
 
 Worth knowing if your source is Talkwalker: **Lumen ships its own official MCP server** for
 asking questions in a chat session. Radar's endpoint answers a different need — the
@@ -390,12 +501,16 @@ hub that groups them by the question they answer, so the menu stays readable.
 | Page | What it does |
 |---|---|
 | Dashboard | KPIs, volume per source, sentiment, emerging topics, latest brief |
+| Queries | The AI query builder: a sentence becomes building blocks and N editable queries, tested on real news before saving, with boolean syntax to copy; a lens on Talkwalker projects |
 | Listening | Stream of every mention with filters (source, sentiment, language, period, text) — filter by a source to open its **deep-dive**, or land on a curated set of posts from a narrative |
 | Source deep-dive | One channel vs the whole project: volume, sentiment, topics and top authors, each a verifiable subset of the totals |
 | Import | Create a project that ingests Excel/CSV files instead of scraping — many files, many sheets, each shaped differently. Guided step by step, with a spot check that puts your rows next to what is in the archive |
 | Measures | The aggregate series a spreadsheet brings — follower growth, publishing mix, engagement rate — as *who · what · when · how much* |
 | People | Personal branding: the team at a glance, audience growth per person and a focus on any single one, built from the sheets that are about people |
 | Studio Graph | Build your own chart: choose the X, Y and Z axes from your project's real fields, the shape and the palette. Saved charts appear in the insights hub, the custom report and every export |
+| KPIs & reliability | Standard indicators with formulas, previous period, and a judgement on how reliable each one is |
+| Facts & checks | Cross-checks, fact checks, clinical trials and podcasts next to the conversation |
+| MCP | Turn on, test and connect Radar's MCP server; the tools and the prompt library |
 | Media | News grouped into stories (AI clustering) + most active outlets |
 | Benchmark | Share of voice, trends and comparative sentiment across configurable entities |
 | Audience | Most active communities, languages, influential authors, topics by community |
@@ -462,10 +577,15 @@ Every connector is a small, isolated file (`lib/connectors/`) — see
 | Facebook | premium | Social & messaging | Your own linked pages |
 | TikTok | premium | Social & messaging | Research API |
 | YouTube | freekey | Video | Videos by keyword |
+| Lemmy | free | Social & messaging | Federated discussions (the open Reddit alternative) |
+| NewsData.io | freekey | General & news | News from 80k+ sources, with language and country filters |
+| Podcast Index | freekey | Audio | Podcast episodes by keyword |
+| Talkwalker (Lumen) | premium | Listening platform | Reads the topics of your Talkwalker project, within a daily credit ceiling |
 
 Plus, outside the mention model entirely: **App Store**, **Google Places** and **Yelp**
 (review ratings), **football-data.org** and **Alpha Vantage** (Sport), **Google Trends**
-(Share of search) and the **MediaWiki API** (Wikipedia edit monitoring) — see
+(Share of search), the **MediaWiki API** (Wikipedia edit monitoring), **Google Fact Check
+Tools** and **ClinicalTrials.gov** (Facts & checks) — see
 [Beyond mentions](#beyond-mentions--signals-talkwalker-doesnt-have) above.
 
 ## Architecture

@@ -127,6 +127,14 @@ function collectNamedNodes(root: unknown): Map<string, string> {
  * Nessuna delle due consuma credits.
  */
 export async function listTalkwalkerTopics(projectId: string): Promise<{ id: string; label: string }[]> {
+  // Demo pubblica: topic di fantasia, nessuna chiamata a Talkwalker.
+  if (process.env.DEMO_MODE === '1') {
+    return [
+      { id: 'brand', label: 'Brand – all mentions' }, { id: 'leadership', label: 'CEO & leadership' },
+      { id: 'esg', label: 'ESG & sustainability' }, { id: 'crisis', label: 'Crisis watch' },
+      { id: 'products', label: 'Products & launches' },
+    ];
+  }
   const token = cfg('TALKWALKER_ACCESS_TOKEN');
   if (!token || !projectId) return [];
   const base = (cfg('TALKWALKER_BASE_URL') ?? 'https://api.talkwalker.com').replace(/\/+$/, '');

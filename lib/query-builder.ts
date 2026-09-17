@@ -71,6 +71,15 @@ export type BuildResult = {
 /** La proposta di piano per una richiesta: dal modello, o dalle regole se il modello manca. */
 export async function buildPlan(brief: string, project: ProjectLike): Promise<BuildResult> {
   const text = brief.trim().slice(0, 2000);
+  // Demo pubblica: l'AI è spenta. La richiesta d'esempio riceve la proposta
+  // che il costruttore produce per lei; le altre, la lettura a regole.
+  if (process.env.DEMO_MODE === '1') {
+    const { DEMO_PLAN } = await import('@/lib/db/demo-extra');
+    if (/aurora/i.test(text)) {
+      return { plan: { ...DEMO_PLAN, brief: text }, warnings: ['Public demo: this AI proposal was generated in advance for the example request.'] };
+    }
+    return { plan: planFromRules(text), warnings: ['Public demo: AI is off, so this is the rule-based reading. Try the Aurora Mobility example to see the AI proposal.'] };
+  }
   const langs = project.languages.length ? project.languages.join(', ') : 'it, en';
   const user = `Project: ${project.name}
 Languages: ${langs}
@@ -102,7 +111,11 @@ export type QueryProbe = {
   /** Il termine dell'ancora che da solo porta la maggior parte dei risultati. */
   dominant?: { term: string; share: number };
 };
-export type PlanProbe = { edition: string; days: number; terms: TermProbe[]; queries: QueryProbe[]; at: string };
+export type PlanProbe = {
+  edition: string; days: number; terms: TermProbe[]; queries: QueryProbe[]; at: string;
+  /** Demo pubblica: risultati simulati, non letti da Google News. */
+  simulated?: boolean;
+};
 
 const PROBE_DAYS = 7;
 const MAX_ITEMS = 100;
@@ -158,6 +171,7 @@ async function pool<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>): P
  */
 export async function probePlan(plan: QueryPlan, project: ProjectLike): Promise<PlanProbe> {
   const ed = edition(project);
+  if (process.env.DEMO_MODE === '1') return simulatedProbe(plan, ed.code);
   const terms = plan.concepts
     .filter((c) => c.role !== 'noise')
     .flatMap((c) => c.terms.map((term) => ({ conceptId: c.id, term })))
@@ -188,6 +202,38 @@ export async function probePlan(plan: QueryPlan, project: ProjectLike): Promise<
   });
 
   return { edition: ed.code, days: PROBE_DAYS, terms: termProbes, queries: queryProbes, at: new Date().toISOString() };
+}
+
+/**
+ * La prova sul campo della demo: numeri stabili ricavati dal testo dei
+ * termini e titoli d'esempio di fantasia. Dichiarata come simulata, perché
+ * un'azienda inventata su Google News non troverebbe niente.
+ */
+function simulatedProbe(plan: QueryPlan, code: string): PlanProbe {
+  const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const byTerm: Record<string, number> = { sciopero: 100, protesta: 100, 'city council': 100, 'speed limit': 64, Ruota: 100, 'Aurora app': 0 };
+  const terms = plan.concepts.filter((c) => c.role !== 'noise').flatMap((c) => c.terms.map((term) => {
+    const hits = byTerm[term] ?? (hash(term) % 60) + 4;
+    return { conceptId: c.id, term, hits, capped: hits >= 100, samples: [] };
+  }));
+  const samples: Record<string, string[]> = {
+    aurora: ['Aurora Mobility expands its scooter fleet to three new cities', 'Aurora e-bikes top a user satisfaction survey'],
+    'aurora-strike': ['Riders strike halts Aurora Mobility deliveries in Milan', 'Sciopero dei rider: presidio davanti alla sede di Aurora Mobility'],
+    'aurora-bans': ['City council weighs an e-scooter ban that would hit Aurora scooters'],
+    'aurora-volta': ['Aurora Mobility and Volta Ride trade blows over pricing'],
+    volta: ['Volta Ride launches a monthly subscription', 'Volta scooters return to the streets after a safety recall'],
+    ruota: ['Ruota bike opens its first hub in Turin', 'Ruota raises a Series B round', 'Ruota app: the new map is live'],
+    metrolink: [],
+  };
+  const hitsByQuery: Record<string, number> = { aurora: 47, 'aurora-strike': 12, 'aurora-bans': 5, 'aurora-volta': 3, volta: 21, ruota: 100, metrolink: 0 };
+  const queries = compilePlan(plan).map((q) => ({
+    queryId: q.id,
+    hits: hitsByQuery[q.id] ?? (hash(q.id) % 30) + 1,
+    capped: (hitsByQuery[q.id] ?? 0) >= 100,
+    samples: (samples[q.id] ?? []).map((title) => ({ title, source: 'City Wire', url: 'https://example.com' })),
+    dominant: q.id === 'ruota' ? { term: 'Ruota', share: 94 } : undefined,
+  }));
+  return { edition: code, days: PROBE_DAYS, terms, queries, at: new Date().toISOString(), simulated: true };
 }
 
 // --- Il piano del progetto --------------------------------------------------------

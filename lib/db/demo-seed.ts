@@ -422,5 +422,9 @@ Overall tone is mildly positive, led by developer communities on Reddit and Blue
   await db.insert(schema.meta).values({ key: 'source_status', value: status }).onConflictDoNothing();
   await db.insert(schema.meta).values({ key: 'last_ingest_at', value: nowIso }).onConflictDoNothing();
 
+  // I tre tipi di progetto e il piano d'ascolto, con un'azienda di fantasia.
+  const { seedDemoExtra } = await import('./demo-extra');
+  await seedDemoExtra(db);
+
   return { linkIds, storyId: story.id };
 }

@@ -79,7 +79,8 @@ export default async function QueryPage({ searchParams }: {
         initialPlan={current?.plan ?? null}
         saved={current?.saved ?? false}
         stats={stats}
-        aiAvailable={ai}
+        // Demo pubblica: la proposta AI della richiesta d'esempio è pronta.
+        aiAvailable={ai || process.env.DEMO_MODE === '1'}
         lang={lang}
         initialBrief={project.semanticContext ?? ''}
       />

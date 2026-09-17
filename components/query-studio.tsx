@@ -168,7 +168,10 @@ export function QueryStudio({ projectId, initialPlan, saved, stats, aiAvailable,
     for (const q of probe.queries) {
       const def = plan.queries.find((x) => x.id === q.queryId);
       if (!def) continue;
-      if (q.hits === 0) advice.push({ tone: 'warn', text: L(`“${def.name}” non trova niente in una settimana: la combinazione è stretta. Aggiungi sinonimi al contesto, o accetta che sia una query “sentinella” che si accende solo quando succede qualcosa.`, `“${def.name}” finds nothing in a week: the combination is narrow. Add synonyms to the context, or keep it as a “sentinel” query that only lights up when something happens.`) });
+      // Una query di un solo concetto non ha una combinazione da allargare:
+      // lì il problema sono i termini, o semplicemente il silenzio.
+      if (q.hits === 0 && def.all.length > 1) advice.push({ tone: 'warn', text: L(`“${def.name}” non trova niente in una settimana: la combinazione è stretta. Aggiungi sinonimi al contesto, o accetta che sia una query “sentinella” che si accende solo quando succede qualcosa.`, `“${def.name}” finds nothing in a week: the combination is narrow. Add synonyms to the context, or keep it as a “sentinel” query that only lights up when something happens.`) });
+      if (q.hits === 0 && def.all.length === 1) advice.push({ tone: 'warn', text: L(`“${def.name}” non trova niente in una settimana: controlla come si scrive il nome, o tienila come “sentinella” per quando se ne parlerà.`, `“${def.name}” finds nothing in a week: check how the name is written, or keep it as a “sentinel” for when it gets talked about.`) });
       if (q.dominant) advice.push({ tone: 'warn', text: L(`In “${def.name}” il termine “${q.dominant.term}” porta da solo il ${q.dominant.share}% dei risultati: controlla che non sia troppo generico o ambiguo.`, `In “${def.name}” the term “${q.dominant.term}” alone brings ${q.dominant.share}% of results: check it is not too generic or ambiguous.`) });
     }
     if (!advice.length) advice.push({ tone: 'ok', text: L('Tutti i termini e tutte le query trovano risultati. Controlla i titoli di esempio: sono quello che ti aspetti?', 'Every term and query finds results. Check the sample headlines: are they what you expect?') });
@@ -324,6 +327,7 @@ export function QueryStudio({ projectId, initialPlan, saved, stats, aiAvailable,
                           {pr.hits < 0
                             ? L('Prova non riuscita per questa query.', 'Test failed for this query.')
                             : L(`Google News, ultimi ${probe!.days} giorni: ${pr.hits}${pr.capped ? '+' : ''} notizie`, `Google News, last ${probe!.days} days: ${pr.hits}${pr.capped ? '+' : ''} stories`)}
+                          {probe!.simulated && <span className="text-slate-500"> {L('(demo: risultati simulati)', '(demo: simulated results)')}</span>}
                           {pr.dominant && <span className="text-amber-300"> · {L(`“${pr.dominant.term}” pesa il ${pr.dominant.share}%`, `“${pr.dominant.term}” weighs ${pr.dominant.share}%`)}</span>}
                         </p>
                         <ul className="mt-1 flex flex-col gap-0.5">

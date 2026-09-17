@@ -54,6 +54,7 @@ export async function savePlanAction(projectId: number, plan: QueryPlan): Promis
   const p = await editable(projectId);
   if (!p) return { error: 'Non puoi modificare questo progetto.' };
   if (p.mode === 'upload') return { error: 'Un progetto che importa file non ha query.' };
+  if (process.env.DEMO_MODE === '1') return { error: 'Public demo: saving is off. Self-host Radar to activate your own queries.' };
   try {
     const saved = await savePlan(projectId, plan);
     after(async () => {

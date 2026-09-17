@@ -32,7 +32,8 @@ function Code({ text }: { text: string }) {
 
 export default async function McpPage() {
   const lang: Lang = (await getLocale()) === 'it' ? 'it' : 'en';
-  if (!isAdmin(await getCurrentUser())) {
+  // Nella demo pubblica la pagina si vede, ma il token non si può generare.
+  if (!isAdmin(await getCurrentUser()) && process.env.DEMO_MODE !== '1') {
     return <EmptyState message={L(lang, 'Pagina riservata agli amministratori.', 'Available to admins.')} />;
   }
   const h = await headers();
@@ -75,7 +76,7 @@ export default async function McpPage() {
             {active
               ? L(lang, 'Acceso', 'On')
               : L(lang, 'Spento: nessun token', 'Off: no token')}
-            {active && field && (
+            {active && field && process.env.DEMO_MODE !== '1' && (
               <span className="text-[11px] text-slate-500">
                 · {L(lang, 'token', 'token')} {field.display}
                 {field.fromEnv ? L(lang, ' (da variabile d’ambiente)', ' (from environment variable)') : L(lang, ' (salvato in Radar)', ' (saved in Radar)')}
