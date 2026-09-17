@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getDb, setMeta, getMeta } from '@/lib/db';
 import { backfillCountries, countryFromDomain, countryFromUrl, toCountryCode } from '@/lib/country-codes';
 import { mentions, projects, benchmarkEntities } from '@/lib/db/schema';
@@ -7,6 +7,7 @@ import { setTelegramChannels } from '@/lib/connectors/telegram';
 import { setRssFeeds } from '@/lib/connectors/rss';
 import { hydrateConnectorCredentials } from '@/lib/connector-credentials';
 import type { RawMention, ListeningQuery } from '@/lib/connectors/types';
+import { compilePlan, matchesQuery, queriesMatching, validatePlan, type CompiledQuery } from '@/lib/query-plan';
 
 export type SourceStatus = Record<string, {
   ok: boolean; count: number; error?: string; at: string;
@@ -127,7 +128,25 @@ async function rotateTerms(terms: string[], key: string): Promise<string[]> {
   return [...terms.slice(pos), ...terms.slice(0, pos)];
 }
 
-type Job = { connectorId: string; fetch: () => Promise<RawMention[]>; scope: 'project' | 'entity'; label?: string };
+type Job = {
+  connectorId: string; fetch: () => Promise<RawMention[]>;
+  scope: 'project' | 'entity' | 'query';
+  label?: string;
+  /** Per le query del piano: quale query ha prodotto questi risultati. */
+  query?: CompiledQuery;
+};
+
+// Con un piano d'ascolto le query sono fino a otto. Sulle fonti a quota
+// stretta, otto ricerche per giro moltiplicherebbero le richieste per otto:
+// lì le query si alternano, poche per volta, e nell'arco di qualche giro
+// passano tutte. Le fonti generose le fanno tutte a ogni giro.
+const QUERIES_PER_RUN_ON_TIGHT = 2;
+async function rotateQueries(list: CompiledQuery[], key: string): Promise<CompiledQuery[]> {
+  if (list.length <= QUERIES_PER_RUN_ON_TIGHT) return list;
+  const offset = (await getMeta<number>(key)) ?? 0;
+  await setMeta(key, offset + QUERIES_PER_RUN_ON_TIGHT);
+  return Array.from({ length: QUERIES_PER_RUN_ON_TIGHT }, (_, i) => list[(offset + i) % list.length]);
+}
 
 // Con una ricerca per concorrente, un progetto con una dozzina di entità
 // manda facilmente 40-70 richieste alla stessa manciata di fonti generaliste.
@@ -200,12 +219,23 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
   const status: SourceStatus = (await getMeta<SourceStatus>('source_status')) ?? {};
   let inserted = 0;
 
+  // Il piano d'ascolto, se il progetto ne ha uno: sostituisce la query unica
+  // a tre campi e la ricerca separata dei concorrenti.
+  const plan = project.queryPlan ? validatePlan(project.queryPlan).plan : null;
+  const compiled = plan ? compilePlan(plan) : null;
+  // In un progetto Talkwalker il piano è una lente, non una ricerca: la
+  // ricerca resta quella scritta in Talkwalker (e i suoi crediti non si
+  // toccano); il piano serve solo a etichettare i documenti arrivati.
+  const searchPlan = project.mode === 'talkwalker' ? null : compiled;
+
   const lc = (s: string) => s.toLowerCase();
   // Filtro booleano centralizzato: AND e NOT valgono per tutte le fonti, anche
   // quelle la cui API non supporta gli operatori. `scope` decide se il
   // vincolo AND del progetto si applica: non ha senso per una ricerca fatta
   // sulle keyword di un concorrente, non del tema del progetto.
-  const matchesBoolean = (m: RawMention, scope: Job['scope']) => {
+  const matchesBoolean = (m: RawMention, scope: Job['scope'], query?: CompiledQuery) => {
+    // Le query del piano hanno la loro regola, la stessa usata per etichettare.
+    if (scope === 'query' && query) return matchesQuery(query, `${m.title ?? ''} ${m.content}`);
     const text = lc(`${m.title ?? ''} ${m.content}`);
     if (scope === 'project' && q.allTerms.length && !q.allTerms.every((t) => text.includes(lc(t)))) return false;
     if (q.excludeTerms.some((t) => text.includes(lc(t)))) return false;
@@ -241,7 +271,29 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
   const entities = await db.select().from(benchmarkEntities).where(eq(benchmarkEntities.projectId, project.id));
 
   const jobs: Job[] = [];
-  for (const c of enabled) {
+  if (searchPlan) {
+    for (const c of enabled) {
+      // Tutte le query a ogni giro solo sulle fonti veloci e generose. GDELT
+      // no, anche se regge una query unica per intero: risponde 429 a una
+      // raffica e ogni tentativo aspetta fino a 45 secondi — con otto query
+      // la raccolta di un solo progetto superava da sola il minuto e mezzo.
+      const queries = BATCH_FULLY.has(c.id) && c.id !== 'gdelt'
+        ? searchPlan
+        : await rotateQueries(searchPlan, `ingest_query_rotation_${project.id}_${c.id}`);
+      for (const cq of queries) {
+        const base: ListeningQuery = { ...q, anyTerms: cq.anchor, allTerms: [], excludeTerms: cq.exclude, groups: cq.groups };
+        if (BATCH_FULLY.has(c.id)) {
+          for (const batch of chunk(cq.anchor, CONNECTOR_TERM_CAP[c.id] ?? Infinity)) {
+            jobs.push({ connectorId: c.id, scope: 'query', label: cq.name, query: cq, fetch: () => c.fetchMentions({ ...base, anyTerms: batch }) });
+          }
+        } else {
+          const rotated = await rotateTerms(cq.anchor, `ingest_rotation_project_${project.id}_${c.id}_${cq.id}`);
+          jobs.push({ connectorId: c.id, scope: 'query', label: cq.name, query: cq, fetch: () => c.fetchMentions({ ...base, anyTerms: rotated }) });
+        }
+      }
+    }
+  }
+  for (const c of searchPlan ? [] : enabled) {
     if (BATCH_FULLY.has(c.id)) {
       // Copertura piena nello stesso ciclo: un blocco di termini per chiamata.
       for (const batch of chunk(q.anyTerms, CONNECTOR_TERM_CAP[c.id] ?? Infinity)) {
@@ -253,7 +305,8 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
       jobs.push({ connectorId: c.id, scope: 'project', fetch: () => c.fetchMentions({ ...q, anyTerms: rotated }) });
     }
   }
-  for (const entity of entities) {
+  // Con un piano, i concorrenti sono query come le altre: nessuna ricerca doppia.
+  for (const entity of searchPlan ? [] : entities) {
     if (entity.keywords.length === 0) continue;
     for (const c of enabled) {
       if (!ENTITY_SEARCH_CONNECTORS.has(c.id)) continue; // niente ricerca-concorrente su GDELT, quota stretta o a pagamento
@@ -280,7 +333,7 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
       continue;
     }
     const now = Date.now();
-    const afterBoolean = r.mentions.filter((m) => matchesBoolean(m, job.scope));
+    const afterBoolean = r.mentions.filter((m) => matchesBoolean(m, job.scope, job.query));
     const afterDate = afterBoolean
       // Scarta date invalide o future (feed a volte sballati) e più vecchie di 90 giorni
       .filter((m) => !Number.isNaN(m.publishedAt.getTime())
@@ -314,20 +367,50 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
         engagement: m.engagement,
         engagementScore: rawEngagementScore(m),
         reach: m.reach,
+        // Tutte le query del piano che la menzione soddisfa, non solo quella
+        // che l'ha trovata: un articolo su "X e la protesta" è anche un
+        // articolo su X.
+        queryIds: compiled ? queriesMatching(compiled, `${m.title ?? ''} ${m.content}`) : [],
       }));
     let count = 0;
     // Inserimento a blocchi con dedup sull'indice UNIQUE (project, source, external_id) —
     // dedup naturale anche fra la ricerca del progetto e quella di un concorrente,
     // se lo stesso articolo viene trovato da entrambe.
-    for (let j = 0; j < rows.length; j += 100) {
-      const chunk = rows.slice(j, j + 100);
-      if (chunk.length === 0) continue;
-      const res = await db.insert(mentions).values(chunk).onConflictDoNothing().returning({ id: mentions.id });
-      count += res.length;
+    // La stessa fonte può restituire due volte lo stesso contenuto nella
+    // stessa risposta: in un blocco con ON CONFLICT DO UPDATE è un errore
+    // ("cannot affect row a second time"), verificato dal vivo. Si fondono
+    // prima, unendo le etichette.
+    const unique = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) {
+      const key = `${r.source}|${r.externalId}`;
+      const prev = unique.get(key);
+      unique.set(key, prev ? { ...prev, queryIds: [...new Set([...prev.queryIds, ...r.queryIds])] } : r);
     }
-    if (rows.length > 0 && count !== rows.length) {
+    const deduped = [...unique.values()];
+    for (let j = 0; j < deduped.length; j += 100) {
+      const chunk = deduped.slice(j, j + 100);
+      if (chunk.length === 0) continue;
+      if (compiled) {
+        // Una menzione già in archivio può essere trovata da una query nuova:
+        // le sue etichette si uniscono invece di restare quelle di allora.
+        // xmax = 0 distingue le righe inserite da quelle aggiornate.
+        const res = await db.insert(mentions).values(chunk)
+          .onConflictDoUpdate({
+            target: [mentions.projectId, mentions.source, mentions.externalId],
+            set: {
+              queryIds: sql`(select coalesce(jsonb_agg(distinct x), '[]'::jsonb) from jsonb_array_elements(${mentions.queryIds} || excluded.query_ids) as x)`,
+            },
+          })
+          .returning({ inserted: sql<boolean>`(xmax = 0)` });
+        count += res.filter((x) => x.inserted).length;
+      } else {
+        const res = await db.insert(mentions).values(chunk).onConflictDoNothing().returning({ id: mentions.id });
+        count += res.length;
+      }
+    }
+    if (deduped.length > 0 && count !== deduped.length) {
       const lbl = `${job.connectorId}/${job.scope}${job.label ? ` "${job.label}"` : ''}`;
-      console.log(`[ingest] ${lbl}: ${rows.length} valide → ${count} inserite (${rows.length - count} già in archivio)`);
+      console.log(`[ingest] ${lbl}: ${deduped.length} valide → ${count} inserite (${deduped.length - count} già in archivio)`);
     }
     inserted += count;
     agg.set(job.connectorId, { ok: true, count: prevAgg.count + count });

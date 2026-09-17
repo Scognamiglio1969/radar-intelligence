@@ -3,6 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { eq } from 'drizzle-orm';
 import { getDb, setMeta } from '@/lib/db';
 import { benchmarkEntities, projects, shareLinks } from '@/lib/db/schema';
@@ -66,10 +67,9 @@ function parseKeywords(raw: string): string[] {
 
 function parseProjectForm(formData: FormData) {
   return {
+    // La query non passa più da qui: la costruisce la pagina Query. Se questi
+    // campi restassero, salvare il progetto azzererebbe le parole chiave.
     name: String(formData.get('name') ?? '').trim(),
-    keywords: parseKeywords(String(formData.get('keywords') ?? '')),
-    allTerms: parseKeywords(String(formData.get('allTerms') ?? '')),
-    excludeTerms: parseKeywords(String(formData.get('excludeTerms') ?? '')),
     languages: formData.getAll('languages').map(String),
     countries: formData.getAll('countries').map(String),
     telegramChannels: parseKeywords(String(formData.get('telegramChannels') ?? ''))
@@ -77,7 +77,6 @@ function parseProjectForm(formData: FormData) {
     rssFeeds: [...new Set(String(formData.get('rssFeeds') ?? '')
       .split(/[\s,]+/).map((s) => s.trim()).filter((s) => /^https?:\/\//i.test(s)))].slice(0, 15),
     brandVoice: String(formData.get('brandVoice') ?? '').trim().slice(0, 500) || null,
-    semanticContext: String(formData.get('semanticContext') ?? '').trim().slice(0, 600) || null,
     visibility: formData.get('shared') ? 'shared' : 'private',
   };
 }
@@ -93,11 +92,7 @@ async function assertCanEdit(projectId: number): Promise<boolean> {
   return p?.ownerId === user.id;
 }
 
-/**
- * Salva il progetto e genera i termini di ricerca (OR) dall'area semantica:
- * l'AI traduce la descrizione in keyword multilingua, unite a quelle esistenti.
- */
-export async function saveAndExpandProject(formData: FormData) {
+export async function updateProject(formData: FormData) {
   const db = await getDb();
   const id = Number(formData.get('id'));
   const data = parseProjectForm(formData);
@@ -106,56 +101,34 @@ export async function saveAndExpandProject(formData: FormData) {
   await db.update(projects)
     .set({ ...data, languages: data.languages.length ? data.languages : ['it', 'en'] })
     .where(eq(projects.id, id));
-
-  if (data.semanticContext) {
-    const { callClaude, claudeAvailable, MODELS } = await import('@/lib/claude');
-    if (await claudeAvailable()) {
-      const langs = (data.languages.length ? data.languages : ['it', 'en']).join(', ');
-      const text = await callClaude(
-        MODELS.haiku, 'espansione_progetto',
-        `Turn the description of a topic to monitor into EFFECTIVE search terms for news and social, in these languages: ${langs}.
-Short terms (1-3 words), concrete, the way people actually write. Respond ONLY with a JSON array of 6-10 strings.`,
-        `Topic: ${data.semanticContext}`,
-        400,
-      );
-      if (text) {
-        try {
-          const start = text.indexOf('[');
-          const generated = (JSON.parse(text.slice(start, text.lastIndexOf(']') + 1)) as string[])
-            .map((t) => String(t).trim()).filter((t) => t.length >= 3);
-          const merged = [...new Set([...data.keywords, ...generated])].slice(0, 10);
-          await db.update(projects).set({ keywords: merged }).where(eq(projects.id, id));
-        } catch { /* risposta non parsabile: restano i termini manuali */ }
-      }
-    }
-  }
   revalidatePath('/', 'layout');
 }
 
-export async function updateProject(formData: FormData) {
-  const db = await getDb();
-  const id = Number(formData.get('id'));
-  const data = parseProjectForm(formData);
-  if (!id || !data.name || data.keywords.length === 0) return;
-  if (!(await assertCanEdit(id))) return;
-  await db.update(projects)
-    .set({ ...data, languages: data.languages.length ? data.languages : ['it', 'en'] })
-    .where(eq(projects.id, id));
-  revalidatePath('/', 'layout');
-}
-
+/**
+ * Crea un progetto di ascolto e porta alla costruzione delle query.
+ *
+ * Il progetto nasce senza query: la richiesta scritta qui diventa il punto
+ * di partenza della pagina Query, dove si trasforma in query da provare.
+ */
 export async function createProject(formData: FormData) {
   const { getCurrentUser } = await import('@/lib/auth');
   const db = await getDb();
   const user = await getCurrentUser();
   if (!user) return;
   const data = parseProjectForm(formData);
-  if (!data.name || data.keywords.length === 0) return;
+  if (!data.name) return;
+  const brief = String(formData.get('semanticContext') ?? '').trim().slice(0, 600) || null;
   const [created] = await db.insert(projects)
-    .values({ ...data, ownerId: user.id, languages: data.languages.length ? data.languages : ['it', 'en'] })
+    .values({
+      ...data, semanticContext: brief, keywords: [],
+      ownerId: user.id, languages: data.languages.length ? data.languages : ['it', 'en'],
+    })
     .returning();
+  // Il progetto nuovo diventa quello attivo: la pagina Query e il resto
+  // dell'app devono parlare di lui, non di quello aperto prima.
+  (await cookies()).set('sr_project', String(created.id), { path: '/', maxAge: 31536000 });
   revalidatePath('/', 'layout');
-  redirect(`/settings?p=${created.id}`);
+  redirect(`/query?project=${created.id}&new=1`);
 }
 
 /**

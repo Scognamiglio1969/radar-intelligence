@@ -7,6 +7,14 @@ export interface ListeningQuery {
   allTerms: string[];
   /** NOT — nessuno di questi termini */
   excludeTerms: string[];
+  /**
+   * AND di gruppi OR: ogni gruppo deve comparire con almeno un termine.
+   * Arriva dalle query del piano ("Azienda X" E uno fra "sciopero",
+   * "protesta", "manifestazione"). Le fonti che capiscono la sintassi
+   * booleana lo mettono nella ricerca; per le altre lo applica il filtro
+   * centrale di lib/ingest.
+   */
+  groups?: string[][];
   languages: string[];
   /** Codici paese ISO (IT, US, …): applicato alle fonti che lo supportano (news) */
   countries: string[];
@@ -64,6 +72,9 @@ const quote = (t: string) => (t.includes(' ') ? `"${t.replace(/"/g, '')}"` : t.r
 export function booleanQuery(q: ListeningQuery): string {
   const parts: string[] = [];
   if (q.anyTerms.length) parts.push(`(${q.anyTerms.map(quote).join(' OR ')})`);
+  for (const g of q.groups ?? []) {
+    if (g.length) parts.push(g.length === 1 ? quote(g[0]) : `(${g.map(quote).join(' OR ')})`);
+  }
   parts.push(...q.allTerms.map(quote));
   parts.push(...q.excludeTerms.map((t) => `-${quote(t)}`));
   return parts.join(' ');

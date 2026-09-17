@@ -63,13 +63,27 @@ export function languageCode(lang?: string): string | undefined {
 export function newsdataQuery(q: ListeningQuery, max = MAX_QUERY): string {
   const quote = (t: string) => (t.includes(' ') ? `"${t.replace(/"/g, '')}"` : t.replace(/"/g, ''));
   const terms: string[] = [];
+  // Spazio riservato ai gruppi del piano: almeno il loro primo termine deve
+  // entrare, altrimenti "Azienda X e la protesta" diventa "Azienda X".
+  const reserve = (q.groups ?? []).reduce((sum, g) => sum + (g[0] ? quote(g[0]).length + 5 : 0), 0);
   for (const t of q.anyTerms) {
     const next = [...terms, quote(t)];
-    if (`(${next.join(' OR ')})`.length > max) break;
+    if (`(${next.join(' OR ')})`.length > max - reserve && terms.length) break;
     terms.push(quote(t));
   }
   if (!terms.length) return '';
   let out = terms.length > 1 ? `(${terms.join(' OR ')})` : terms[0];
+  // I gruppi del piano, finché stanno nei cento caratteri: un gruppo si
+  // accorcia ai suoi primi termini invece di saltare del tutto.
+  for (const g of q.groups ?? []) {
+    let piece = '';
+    for (let k = g.length; k >= 1; k--) {
+      const part = k === 1 ? quote(g[0]) : `(${g.slice(0, k).map(quote).join(' OR ')})`;
+      if (`${out} AND ${part}`.length <= max) { piece = part; break; }
+    }
+    if (!piece) break;
+    out = `${out} AND ${piece}`;
+  }
   for (const t of q.allTerms) {
     const next = `${out} AND ${quote(t)}`;
     if (next.length > max) break;

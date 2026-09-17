@@ -435,6 +435,10 @@ const DDL = [
   )`,
   `CREATE INDEX IF NOT EXISTS clinical_trials_project ON clinical_trials (project_id, status)`,
   `ALTER TABLE projects ADD COLUMN IF NOT EXISTS evidence_terms JSONB NOT NULL DEFAULT '[]'`,
+  // Il piano d'ascolto e le query che hanno trovato ogni menzione.
+  `ALTER TABLE projects ADD COLUMN IF NOT EXISTS query_plan JSONB`,
+  `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS query_ids JSONB NOT NULL DEFAULT '[]'`,
+  `CREATE INDEX IF NOT EXISTS mentions_query_ids ON mentions USING gin (query_ids)`,
 ];
 
 async function ensureSchema(db: DB) {

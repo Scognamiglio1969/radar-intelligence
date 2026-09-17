@@ -120,6 +120,8 @@ export type ListeningFilters = {
   ids?: number[];
   /** Articoli di testata o post social: leggerli separati è il punto. */
   kind?: 'article' | 'post';
+  /** Solo le menzioni trovate da una query del piano d'ascolto. */
+  queryId?: string;
   sortBy?: 'data' | 'engagement' | 'rilevanza';
 };
 
@@ -160,6 +162,7 @@ export async function listeningData(projectId: number, f: ListeningFilters) {
     if (c) conds.push(c);
   }
   if (f.ids?.length) conds.push(inArray(mentions.id, f.ids));
+  if (f.queryId) conds.push(sql`${mentions.queryIds} ? ${f.queryId}`);
   const where = and(...conds);
 
   const orderBy = f.sortBy === 'engagement'

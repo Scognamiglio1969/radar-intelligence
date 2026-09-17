@@ -43,6 +43,12 @@ export const projects = pgTable('projects', {
    * "Juventus" o "Bitcoin" in un registro di studi clinici trovano solo rumore.
    */
   evidenceTerms: jsonb('evidence_terms').$type<string[]>().notNull().default([]),
+  /**
+   * Il piano d'ascolto: concetti e query costruiti dalla richiesta in
+   * linguaggio naturale (lib/query-plan). Null = progetto con la vecchia
+   * query a tre campi, che resta valida finché il piano non viene salvato.
+   */
+  queryPlan: jsonb('query_plan').$type<import('@/lib/query-plan').QueryPlan>(),
   // Proprietario del progetto (chi lo ha creato); null = legacy/condiviso a tutti
   ownerId: integer('owner_id'),
   // 'private' = solo il proprietario e l'admin; 'shared' = tutto il team lo vede
@@ -133,6 +139,8 @@ export const mentions = pgTable('mentions', {
    * Etichetta scelta dall'utente → valore della riga.
    */
   custom: jsonb('custom').$type<Record<string, string>>(),
+  /** Le query del piano che hanno trovato questa menzione. */
+  queryIds: jsonb('query_ids').$type<string[]>().notNull().default([]),
   analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
   storyId: integer('story_id'),
   // Da quale file importato proviene questa mention. Senza questo legame non

@@ -13,7 +13,7 @@ import type { projects as projectsTable } from '@/lib/db/schema';
 import { EditableEntity } from '@/components/editable-entity';
 import {
   addEntity, createProject, createImportProject, createTalkwalkerProject, createShareLink, deleteEntity,
-  revokeShareLink, saveAndExpandProject, setOwnBrand, updateEntity, updateProject, updateImportProject,
+  revokeShareLink, setOwnBrand, updateEntity, updateProject, updateImportProject,
   updateTalkwalkerProject,
 } from './actions';
 import { listTalkwalkerTopics } from '@/lib/connectors/talkwalker';
@@ -148,7 +148,7 @@ export default async function SettingsPage({ searchParams }: {
                   <TalkwalkerNotice />
                   <p className="text-xs text-slate-500">Once created, you can narrow it down to specific topics of that Talkwalker project.</p>
                   <div className="mt-2 flex items-center gap-3 border-t border-[var(--border)] pt-4">
-                    <SubmitButton className={btnCls} pendingLabel="Creating project…">Create project</SubmitButton>
+                    <SubmitButton className={btnCls} pendingLabel="Creating project…">Create and build the queries →</SubmitButton>
                     <Link href="/settings?p=new" className="text-xs text-slate-500 hover:text-slate-300">← back</Link>
                   </div>
                 </form>
@@ -174,7 +174,7 @@ export default async function SettingsPage({ searchParams }: {
                   <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-300"><Radar className="size-4 text-sky-400" /> New listening project</h2>
                   <ProjectFields project={null} />
                   <div className="mt-2 flex items-center gap-3 border-t border-[var(--border)] pt-4">
-                    <SubmitButton className={btnCls} pendingLabel="Creating project…">Create project</SubmitButton>
+                    <SubmitButton className={btnCls} pendingLabel="Creating project…">Create and build the queries →</SubmitButton>
                     <Link href="/settings?p=new" className="text-xs text-slate-500 hover:text-slate-300">← back</Link>
                   </div>
                 </form>
@@ -227,10 +227,6 @@ export default async function SettingsPage({ searchParams }: {
                     <ProjectFields project={selected} />
                     <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-4">
                       <SubmitButton className={btnCls} pendingLabel="Saving…">Save changes</SubmitButton>
-                      <SubmitButton formAction={saveAndExpandProject} pendingLabel="Generating terms…"
-                        className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 transition hover:bg-violet-500/20">
-                        ✨ Save and generate terms from the topic description
-                      </SubmitButton>
                     </div>
                   </form>
                 )}
@@ -240,6 +236,7 @@ export default async function SettingsPage({ searchParams }: {
                 <h3 className="mb-1 text-sm font-semibold text-slate-300">Benchmark entities</h3>
                 <p className="mb-3 text-xs text-slate-500">
                   Brands or competitors to compare on the Benchmark page: mentions citing these keywords are attributed to the entity.
+                  Saving a query plan updates the subject and the competitors here automatically; the others stay as they are.
                   Mark one with the <Star className="inline size-3 -translate-y-px text-amber-400" /> to set it as <span className="text-amber-300">your brand</span> —
                   this unlocks the Brand Health Index (your brand vs the market and the competitors).
                 </p>
@@ -415,35 +412,33 @@ function ProjectFields({ project }: { project: Project | null }) {
         <input type="checkbox" name="shared" defaultChecked={project?.visibility === 'shared'} className="accent-sky-500" />
         Share this project with the whole team (read-only for others)
       </label>
-      <label className="text-xs text-slate-400">
-        <span className="text-violet-300">✨ Topic description</span> — describe in plain language what you want to monitor:
-        it generates search terms via AI and guides the relevance stars
-        <textarea name="semanticContext" defaultValue={project?.semanticContext ?? ''} rows={2}
-          className={`${inputCls} mt-1 resize-y`}
-          placeholder="e.g. The electric-car market in Europe: incentives, charging stations, batteries, prices and Chinese competition" />
-      </label>
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)]/40 px-4 py-3">
-        <p className="mb-3 text-xs text-slate-500">
-          Search query — combines the three fields: (at least one) AND (all) AND (none of the excluded)
-        </p>
-        <div className="flex flex-col gap-3">
-          <label className="text-xs text-slate-400">
-            Terms — <span className="text-sky-300">at least one (OR)</span>, comma-separated
-            <input name="keywords" defaultValue={project?.keywords.join(', ')} className={`${inputCls} mt-1`}
-              placeholder="e.g. electric car, electric vehicle, EV" required />
-          </label>
-          <label className="text-xs text-slate-400">
-            Terms — <span className="text-emerald-300">all required (AND)</span>
-            <input name="allTerms" defaultValue={(project?.allTerms ?? []).join(', ')} className={`${inputCls} mt-1`}
-              placeholder="e.g. battery (optional)" />
-          </label>
-          <label className="text-xs text-slate-400">
-            Terms — <span className="text-red-300">to exclude (NOT)</span>
-            <input name="excludeTerms" defaultValue={(project?.excludeTerms ?? []).join(', ')} className={`${inputCls} mt-1`}
-              placeholder="e.g. used, rental (optional)" />
-          </label>
+      {project ? (
+        // La query non si scrive più qui: ha una pagina sua, dove si
+        // costruisce a parole, si prova e si modifica.
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-sky-500/25 bg-sky-500/[0.05] px-4 py-3">
+          <div className="min-w-0 flex-1 text-xs text-slate-300">
+            <p className="font-medium text-sky-200">What this project listens to</p>
+            <p className="mt-0.5 text-slate-400">
+              {project.queryPlan
+                ? `${project.queryPlan.queries.filter((q) => q.enabled).length} active queries built from: “${project.queryPlan.brief.slice(0, 140)}${project.queryPlan.brief.length > 140 ? '…' : ''}”`
+                : project.keywords.length
+                  ? `Old-style query (${project.keywords.slice(0, 4).join(', ')}${project.keywords.length > 4 ? '…' : ''}). Open the query builder to turn it into building blocks.`
+                  : 'No query yet: the project collects nothing until you build one.'}
+            </p>
+          </div>
+          <Link href={`/query?project=${project.id}`}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-sky-400">
+            Open the query builder
+          </Link>
         </div>
-      </div>
+      ) : (
+        <label className="text-xs text-slate-400">
+          <span className="text-sky-300">What do you want to monitor?</span> — in plain words; next step, Radar turns it into queries you can test and edit
+          <textarea name="semanticContext" rows={3}
+            className={`${inputCls} mt-1 resize-y`}
+            placeholder="e.g. The company Acme in relation to worker protests, and its competitors Alfa, Beta and Gamma" />
+        </label>
+      )}
       <fieldset className="text-xs text-slate-400">
         Languages (news editions and search)
         <div className="mt-1.5 flex flex-wrap gap-3">

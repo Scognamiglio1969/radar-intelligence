@@ -46,7 +46,9 @@ export default async function ListeningPage({ searchParams }: {
     ids: sp.ids ? sp.ids.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0) : undefined,
     kind: (sp.tipo === 'article' || sp.tipo === 'post' ? sp.tipo : undefined) as 'article' | 'post' | undefined,
     sortBy: (sp.ordina as 'data' | 'engagement' | 'rilevanza' | undefined) ?? 'data',
+    queryId: sp.query,
   };
+  const planQueries = (project.queryPlan?.queries ?? []).filter((q) => q.enabled);
   const data = await listeningData(project.id, filters);
   const coverage = await articleCoverage(project.id);
   // Le fonti del FILTRO sono quelle che il progetto contiene davvero: un
@@ -65,6 +67,7 @@ export default async function ListeningPage({ searchParams }: {
     giorni: sp.giorni, rilevanza: sp.rilevanza, autore: sp.autore, autori: sp.autori, ids: sp.ids,
     tipo: sp.tipo,
     ordina: sp.ordina,
+    query: sp.query,
   };
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
 
@@ -86,6 +89,10 @@ export default async function ListeningPage({ searchParams }: {
           { value: 'article', label: t('ui.articles', 'articles') },
           { value: 'post', label: t('ui.posts', 'posts') },
         ]} param="tipo" current={current} />
+        {planQueries.length > 0 && (
+          <FilterGroup label="Query" items={planQueries.map((q) => ({ value: q.id, label: q.name }))}
+            param="query" current={current} />
+        )}
         <FilterGroup label={t('ui.source', 'Source')} items={sources.map((s) => ({ value: s.id, label: sourceLabel(s.id) }))}
           param="fonte" current={current} />
         <FilterGroup label={t('ui.sentiment', 'Sentiment')} items={SENTIMENTS.map((s) => ({ value: s, label: s }))}
@@ -125,7 +132,7 @@ export default async function ListeningPage({ searchParams }: {
           </span>
         )}
 
-        {(sp.tipo || sp.fonte || sp.sentiment || sp.lingua || sp.q || sp.st || sp.giorni || sp.rilevanza || sp.autore || sp.autori || sp.ids || sp.ordina) && (
+        {(sp.query || sp.tipo || sp.fonte || sp.sentiment || sp.lingua || sp.q || sp.st || sp.giorni || sp.rilevanza || sp.autore || sp.autori || sp.ids || sp.ordina) && (
           <Link href="/listening"
             className="flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-3.5 py-1.5 font-semibold text-sky-300 transition hover:bg-sky-500/25">
             ↺ {t('ui.showAll', 'Show all')}

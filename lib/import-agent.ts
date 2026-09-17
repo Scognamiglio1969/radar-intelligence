@@ -468,7 +468,7 @@ export function validateReading(raw: unknown, d: Dossier): AgentReading {
  * cosa. Si chiudono le stringhe e le parentesi rimaste aperte, e si tiene
  * quello che c'era.
  */
-function repairJson(raw: string): unknown {
+export function repairJson(raw: string): unknown {
   let inString = false;
   let escaped = false;
   const stack: string[] = [];
