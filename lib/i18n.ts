@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { DICT, DEFAULT_LOCALE, localeTag, type Locale } from '@/lib/i18n-dict';
+import { DEFAULT_LOCALE, tFor, localeTag, type Locale, type Translator } from '@/lib/i18n-dict';
 
 // Parte SERVER della doppia lingua (legge i cookie). Il dizionario e gli helper
 // condivisi stanno in i18n-dict.ts, così possono usarli anche i componenti client.
@@ -11,10 +11,9 @@ export async function getLocale(): Promise<Locale> {
 }
 
 /** Traduttore per i componenti server. La chiave non tradotta resta in inglese. */
-export async function getT(): Promise<(key: string, fallback: string) => string> {
+export async function getT(): Promise<Translator> {
   const locale = await getLocale();
-  const dict = DICT[locale];
-  return (key: string, fallback: string) => dict[key] ?? fallback;
+  return tFor(locale);
 }
 
 declare global {

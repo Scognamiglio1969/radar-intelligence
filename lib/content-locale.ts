@@ -25,6 +25,5 @@ export async function setContentLocale(locale: ContentLocale): Promise<void> {
  * (sentiment, stance, quadranti…) così il parsing e la logica non si rompono.
  */
 export function localeDirective(locale: ContentLocale): string {
-  if (locale === 'en') return '';
   return `\n\nIMPORTANT: Write every human-readable text value — titles, descriptions, summaries, explanations, narratives, answers — in ${NAMES[locale]}. Keep all JSON keys and controlled enum/category values (sentiment labels, stance, quadrant names, risk levels, etc.) exactly in English.`;
 }

@@ -69,7 +69,7 @@ export function KpiCard({ label, value, hint, exact }: {
 
 /** 1234 → "1.2k", 1250000 → "1.3M" (en-US). */
 export function fmtCompact(n: number): string {
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  return new Intl.NumberFormat(docLocale(), { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
 export function SourceBadge({ source }: { source: string }) {
@@ -127,7 +127,7 @@ export function fmtDate(d: Date | string) {
 }
 
 export function fmtNum(n: number) {
-  return n.toLocaleString('en-US');
+  return n.toLocaleString(docLocale());
 }
 
 type Mention = typeof mentions.$inferSelect;

@@ -3,6 +3,7 @@ import { getCurrentProject } from '@/lib/data';
 import { collectExportData, slugify } from '@/lib/export-data';
 import { CADENCE, getEdition } from '@/lib/periodic-report';
 import { buildReportPdf } from '@/lib/report-pdf';
+import { getContentLocale } from '@/lib/content-locale';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -24,13 +25,14 @@ export async function GET(req: Request) {
   const spec = CADENCE.get(edition.cadence);
   const days = spec?.days ?? 30;
   const fresh = await collectExportData(project, days);
+  const locale = await getContentLocale();
   // La tesi è quella congelata nell'edizione, non quella corrente: altrimenti
   // il PDF stamperebbe un Point of View diverso da quello che la nota di
   // provenienza, stampata due centimetri sotto, dichiara.
   const data = { ...fresh, pov: { facts: fresh.pov.facts, pov: edition.pov } };
   const buffer = await buildReportPdf({
-    project, data, days, pages: edition.pages,
-    subtitle: `Report ${spec?.label.toLowerCase() ?? edition.cadence} — ${edition.periodStart} / ${edition.periodEnd}`,
+    project, data, days, pages: edition.pages, locale,
+    subtitle: locale === 'it' ? `Report ${spec?.label.toLowerCase() ?? edition.cadence} — ${edition.periodStart} / ${edition.periodEnd}` : `${edition.cadence} report — ${edition.periodStart} / ${edition.periodEnd}`,
   });
 
   return new NextResponse(new Uint8Array(buffer), {

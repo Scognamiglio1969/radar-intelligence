@@ -1,6 +1,8 @@
 import PDFDocument from 'pdfkit';
 import { SOURCE_META } from '@/lib/connectors';
-import { AI_DISCLOSURE_LONG, AI_DISCLOSURE_META, AI_DISCLOSURE_SHORT } from '@/lib/ai-disclosure';
+import { aiDisclosure } from '@/lib/ai-disclosure';
+import type { ContentLocale } from '@/lib/content-locale';
+import { formatDate } from '@/lib/i18n-dict';
 import { briefToBlocks, sourceLabel, type ExportData, type Project } from '@/lib/export-data';
 import type { SectionId } from '@/lib/export-sections';
 import {
@@ -693,6 +695,7 @@ type BuildOptions = {
   /** I grafici di Studio Graph citati dalle pagine, già eseguiti. */
   studio?: Map<number, StudioRendered>;
   subtitle?: string;
+  locale?: ContentLocale;
 };
 
 /**
@@ -761,6 +764,8 @@ function renderStudio(c: Ctx, chart: StudioRendered, reportDays: number) {
 
 export async function buildReportPdf(opts: BuildOptions): Promise<Buffer> {
   const { project, data, days, sections, pages, subtitle, studio } = opts;
+  const locale = opts.locale ?? 'en';
+  const disclosure = aiDisclosure(locale);
 
   const doc = new PDFDocument({
     size: 'A4',
@@ -770,8 +775,8 @@ export async function buildReportPdf(opts: BuildOptions): Promise<Buffer> {
       Title: `Radar — ${sanitize(project.name)}`,
       Author: 'Radar By Scognamiglio 2026',
       // Marcatura leggibile da una macchina (AI Act art. 50, par. 2).
-      Subject: sanitize(AI_DISCLOSURE_META.subject),
-      Keywords: sanitize(AI_DISCLOSURE_META.keywords),
+      Subject: sanitize(disclosure.meta.subject),
+      Keywords: sanitize(disclosure.meta.keywords),
     },
   });
   const chunks: Buffer[] = [];
@@ -789,8 +794,8 @@ export async function buildReportPdf(opts: BuildOptions): Promise<Buffer> {
   doc.moveDown(0.5);
   doc.font('Helvetica').fontSize(13).fillColor(MUTED).text(sanitize(subtitle ?? 'Media intelligence report'), { align: 'center' });
   doc.moveDown(0.5);
-  doc.fontSize(10).text(new Date().toLocaleDateString('en-US', { dateStyle: 'full' }), { align: 'center' });
-  doc.fontSize(9).text(`Data from the last ${days} days · Query: ${sanitize(project.keywords.join(', '))}`, { align: 'center' });
+  doc.fontSize(10).text(formatDate(locale, new Date(), { dateStyle: 'full' }), { align: 'center' });
+  doc.fontSize(9).text(locale === 'it' ? `Dati degli ultimi ${days} giorni · Query: ${sanitize(project.keywords.join(', '))}` : `Data from the last ${days} days · Query: ${sanitize(project.keywords.join(', '))}`, { align: 'center' });
   doc.addPage();
 
   if (pages) {
@@ -853,7 +858,7 @@ export async function buildReportPdf(opts: BuildOptions): Promise<Buffer> {
   doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text('NOTE', c.left, doc.y, { characterSpacing: 1.5 });
   doc.moveDown(0.3);
   doc.font('Helvetica').fontSize(8).fillColor(MUTED)
-    .text(sanitize(AI_DISCLOSURE_LONG), c.left, doc.y, { width: c.contentW, align: 'justify' });
+    .text(sanitize(disclosure.long), c.left, doc.y, { width: c.contentW, align: 'justify' });
 
   // ---- Piè di pagina con numeri di pagina ----
   const range = doc.bufferedPageRange();
@@ -865,10 +870,10 @@ export async function buildReportPdf(opts: BuildOptions): Promise<Buffer> {
     const fy = doc.page.height - 40;
     // Informativa art. 50 ripetuta su ogni pagina: leggibile, non nascosta.
     doc.font('Helvetica').fontSize(6.5).fillColor(MUTED)
-      .text(sanitize(AI_DISCLOSURE_SHORT), c.left, fy - 11, { width: c.contentW, lineBreak: false });
+      .text(sanitize(disclosure.short), c.left, fy - 11, { width: c.contentW, lineBreak: false });
     doc.fontSize(8);
     doc.text(`Radar · By Scognamiglio 2026 — ${sanitize(project.name)}`, c.left, fy, { width: c.contentW * 0.7, lineBreak: false });
-    doc.text(`pag. ${i + 1} / ${range.count}`, c.right - 120, fy, { width: 120, align: 'right', lineBreak: false });
+    doc.text(`${locale === 'it' ? 'pag.' : 'page'} ${i + 1} / ${range.count}`, c.right - 120, fy, { width: 120, align: 'right', lineBreak: false });
   }
 
   doc.end();

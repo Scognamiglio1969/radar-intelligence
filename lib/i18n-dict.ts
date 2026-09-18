@@ -23,7 +23,7 @@ export const LOCALES: { code: Locale; flag: string; label: string }[] = [
 export const DEFAULT_LOCALE: Locale = 'en';
 
 /** Traduzioni: solo le stringhe italiane. Manca una chiave → resta l'inglese. */
-const IT: Record<string, string> = {
+const IT = {
   // ── Navigazione
   'nav.monitor': 'Monitoraggio',
   'nav.analyze': 'Analisi',
@@ -255,6 +255,25 @@ const IT: Record<string, string> = {
   'tabs.sources': 'Fonti',
   'tabs.budget': 'Budget',
   'tabs.credits': 'Crediti e note legali',
+  'account.sessionExpired': 'Sessione scaduta, accedi di nuovo.',
+  'account.name': 'Nome',
+  'account.role': 'Ruolo',
+  'account.admin': 'Amministratore',
+  'account.member': 'Membro',
+  'account.aiActive': 'attiva',
+  'account.aiPending': 'in attesa di attivazione',
+  'account.temporaryPassword': 'Stai usando una password temporanea: impostane una tua per continuare in sicurezza.',
+  'account.changePassword': 'Cambia password',
+  'account.currentPassword': 'Password attuale',
+  'account.newPassword': 'Nuova password (minimo 8 caratteri)',
+  'account.repeatPassword': 'Ripeti la nuova password',
+  'account.passwordUpdated': 'Password aggiornata.',
+  'account.updatePassword': 'Aggiorna password',
+  'account.passwordIncorrect': 'La password attuale non è corretta.',
+  'account.passwordTooShort': 'La nuova password deve contenere almeno 8 caratteri.',
+  'account.passwordMismatch': 'Le due password non coincidono.',
+  'newBadge.label': 'dati nuovi',
+  'newBadge.title': 'Aggiornato il {date}: non era presente durante la tua ultima visita',
 
   'page.media.title2': 'Monitoraggio media',
   'page.audience.title2': 'Analisi del pubblico',
@@ -288,17 +307,38 @@ const IT: Record<string, string> = {
   'landing.open': 'Apri Radar',
   'landing.tour': '▶ Guarda il tour',
   'landing.seeFeatures': 'Scopri le funzioni',
-};
+} satisfies Record<string, string>;
 
-export const DICT: Record<Locale, Record<string, string>> = { en: {}, it: IT };
+/** Every known translation key. Keeping this as a literal union catches typos in
+ * new code without breaking older call sites which still supply English copy as
+ * their fallback. */
+export type TranslationKey = keyof typeof IT;
+export type Translator = (key: TranslationKey | (string & {}), fallback?: string) => string;
+
+// English copy historically lived at call sites. Mirror all keys here so both
+// dictionaries have strict key parity while that copy is moved incrementally.
+// An empty value deliberately delegates to the English fallback supplied by the
+// caller; it is never rendered.
+const EN = Object.fromEntries(Object.keys(IT).map((key) => [key, ''])) as Record<TranslationKey, string>;
+export const DICT = { en: EN, it: IT } satisfies Record<Locale, Record<TranslationKey, string>>;
 
 /** Versione sincrona per i componenti client, che ricevono già il locale. */
-export function tFor(locale: Locale) {
+export function tFor(locale: Locale): Translator {
   const dict = DICT[locale];
-  return (key: string, fallback: string) => dict[key] ?? fallback;
+  return (key, fallback = key) => dict[key as TranslationKey] || fallback;
 }
 
 /** Formattazione date coerente con la lingua scelta. */
 export function localeTag(locale: Locale): string {
   return locale === 'it' ? 'it-IT' : 'en-US';
+}
+
+export type DateValue = Date | string | number;
+
+export function formatDate(locale: Locale, value: DateValue, options?: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat(localeTag(locale), options).format(new Date(value));
+}
+
+export function formatNumber(locale: Locale, value: number, options?: Intl.NumberFormatOptions): string {
+  return new Intl.NumberFormat(localeTag(locale), options).format(value);
 }

@@ -3,20 +3,22 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { UserCog, Users, Database, Wallet, Scale } from 'lucide-react';
+import { useI18n } from '@/components/i18n-provider';
 
 const TABS = [
-  { href: '/impostazioni/account', label: 'My account', icon: UserCog, adminOnly: false },
-  { href: '/impostazioni/team', label: 'Team', icon: Users, adminOnly: true },
-  { href: '/impostazioni/fonti', label: 'Sources', icon: Database, adminOnly: false },
-  { href: '/impostazioni/budget', label: 'Budget', icon: Wallet, adminOnly: false },
-  { href: '/impostazioni/credits', label: 'Credits & Legal', icon: Scale, adminOnly: false },
+  { href: '/impostazioni/account', key: 'tabs.account', label: 'My account', icon: UserCog, adminOnly: false },
+  { href: '/impostazioni/team', key: 'tabs.team', label: 'Team', icon: Users, adminOnly: true },
+  { href: '/impostazioni/fonti', key: 'tabs.sources', label: 'Sources', icon: Database, adminOnly: false },
+  { href: '/impostazioni/budget', key: 'tabs.budget', label: 'Budget', icon: Wallet, adminOnly: false },
+  { href: '/impostazioni/credits', key: 'tabs.credits', label: 'Credits & Legal', icon: Scale, adminOnly: false },
 ] as const;
 
 export function SettingsTabs({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
+  const { t } = useI18n();
   return (
     <div className="mb-5 flex flex-wrap gap-1 border-b border-[var(--border)]">
-      {TABS.filter((t) => !t.adminOnly || isAdmin).map(({ href, label, icon: Icon }) => {
+      {TABS.filter((tab) => !tab.adminOnly || isAdmin).map(({ href, key, label, icon: Icon }) => {
         const active = pathname === href;
         return (
           <Link
@@ -29,7 +31,7 @@ export function SettingsTabs({ isAdmin }: { isAdmin: boolean }) {
             }`}
           >
             <Icon className="size-4" />
-            {label}
+            {t(key, label)}
           </Link>
         );
       })}

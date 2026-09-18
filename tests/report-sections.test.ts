@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { ALL_SECTION_IDS, EXPORT_SECTIONS } from '../lib/export-sections';
 import { sectionFacts } from '../lib/custom-report';
 import { SECTION_RENDERERS } from '../lib/report-pdf';
@@ -49,7 +50,7 @@ test('ogni sezione del catalogo sa produrre cifre per il commento AI', () => {
   const handled = new Set(
     // Le sezioni gestite sono quelle che compaiono come `case` nel sorgente:
     // è il modo diretto di verificare che nessuna sia stata dimenticata.
-    require('node:fs').readFileSync(new URL('../lib/custom-report.ts', import.meta.url), 'utf8')
+    readFileSync(new URL('../lib/custom-report.ts', import.meta.url), 'utf8')
       .match(/case '([a-zA-Z]+)':/g)?.map((m: string) => m.slice(6, -2)) ?? [],
   );
   for (const id of ALL_SECTION_IDS) {
