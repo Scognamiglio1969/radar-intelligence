@@ -439,6 +439,23 @@ const DDL = [
   `ALTER TABLE projects ADD COLUMN IF NOT EXISTS query_plan JSONB`,
   `ALTER TABLE mentions ADD COLUMN IF NOT EXISTS query_ids JSONB NOT NULL DEFAULT '[]'`,
   `CREATE INDEX IF NOT EXISTS mentions_query_ids ON mentions USING gin (query_ids)`,
+  // Reach di un handle via treg (serie storica: una riga per rilevazione).
+  `CREATE TABLE IF NOT EXISTS handle_stats (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    platform TEXT NOT NULL,
+    handle TEXT NOT NULL,
+    display_name TEXT,
+    followers INTEGER NOT NULL,
+    following INTEGER,
+    posts_count INTEGER,
+    likes INTEGER,
+    verified BOOLEAN NOT NULL DEFAULT false,
+    bio TEXT,
+    served_by TEXT,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS handle_stats_lookup ON handle_stats (project_id, platform, handle, fetched_at DESC)`,
 ];
 
 async function ensureSchema(db: DB) {
