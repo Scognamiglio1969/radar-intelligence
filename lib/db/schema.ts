@@ -1,5 +1,5 @@
 import {
-  pgTable, serial, text, integer, real, jsonb, timestamp, date,
+  pgTable, serial, text, integer, real, jsonb, timestamp, date, boolean,
 } from 'drizzle-orm/pg-core';
 
 export type Engagement = {
@@ -224,6 +224,26 @@ export const influencerProfiles = pgTable('influencer_profiles', {
   source: text('source').notNull(),
   profileMd: text('profile_md').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Reach di un handle su una piattaforma, raccolta via treg (profile endpoint).
+// Serie storica: una riga per ogni rilevazione, così i follower nel tempo sono
+// un trend, non un singolo numero. È il "reach collector" che l'ascolto basato
+// su menzioni non dà (i follower sono un dato di profilo, non di post).
+export const handleStats = pgTable('handle_stats', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull(),
+  platform: text('platform').notNull(),       // x | instagram | tiktok
+  handle: text('handle').notNull(),           // senza @, minuscolo
+  displayName: text('display_name'),
+  followers: integer('followers').notNull(),
+  following: integer('following'),
+  postsCount: integer('posts_count'),
+  likes: integer('likes'),                     // solo TikTok (like totali del profilo)
+  verified: boolean('verified').notNull().default(false),
+  bio: text('bio'),
+  servedBy: text('served_by'),                 // provider treg che ha risposto
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // Idee di contenuto generate dal Content Studio
