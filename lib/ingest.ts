@@ -116,6 +116,19 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+// Un testo troncato a metà di un'emoji lascia un surrogato UTF-16 isolato:
+// il driver Neon HTTP lo invia così e Neon rifiuta l'intero blocco ("unexpected
+// end of hex escape"), facendo fallire tutto il giro. toWellFormed() lo sostituisce
+// con U+FFFD; si scende anche nei campi JSONB, le Date restano intatte.
+export function wellFormed<T>(v: T): T {
+  if (typeof v === 'string') return v.toWellFormed() as T;
+  if (Array.isArray(v)) return v.map(wellFormed) as T;
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, wellFormed(x)])) as T;
+  }
+  return v;
+}
+
 // Sulle fonti a quota stretta, invece di spezzare (rischioso), si ruota la
 // finestra di termini usata ad ogni ingest (offset salvato in meta) così,
 // nell'arco di alcuni cicli, tutti i termini passano almeno una volta.
@@ -386,7 +399,7 @@ export async function ingestProject(project: typeof projects.$inferSelect) {
       const prev = unique.get(key);
       unique.set(key, prev ? { ...prev, queryIds: [...new Set([...prev.queryIds, ...r.queryIds])] } : r);
     }
-    const deduped = [...unique.values()];
+    const deduped = [...unique.values()].map(wellFormed);
     for (let j = 0; j < deduped.length; j += 100) {
       const chunk = deduped.slice(j, j + 100);
       if (chunk.length === 0) continue;
